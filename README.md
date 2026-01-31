@@ -1,13 +1,15 @@
-# 🚀 Automação Fedora & Gestão de Dados
+# SpeedScan 🚀
 
-Repositório de scripts Shell criados para otimizar a infraestrutura e garantir a integridade de dados no Fedora KDE.
+O **SpeedScan** é uma ferramenta de otimização e diagnóstico para Fedora Linux, desenvolvida para simplificar a manutenção do sistema.
 
-## 🛠️ Scripts Incluídos
+### ✨ Funcionalidades:
+- 🧹 **Limpeza de Cache:** Remove arquivos temporários do DNF.
+- 🏎️ **Performance:** Configura 2GB de Memória ZRAM automaticamente.
+- 🖥️ **Fix de Interface:** Resolve lentidões de fontes (comum no OnlyOffice).
+- 🖱️ **Fix de Hardware:** Comando dedicado para resolver o problema do 'mouse fantasma' (i2c_hid_acpi).
 
-* **`definir-dns.sh`**: Configura automaticamente o DNS do Google para maior estabilidade de conexão.
-* **`caçador-de-erros.sh`**: Analisa logs do sistema em busca de falhas críticas nas últimas 2 horas.
-* **`sys-report.sh`**: Dashboard em texto com métricas de memória, tempo de atividade e armazenamento.
-* **`SpeedScan.sh`**: Realiza limpeza de cache e diagnóstico rápido de performance.
-
-## 📊 Visão de BI
-Este projeto demonstra minha capacidade de automatizar a coleta de métricas e monitorar a saúde do sistema, competências essenciais para a confiabilidade em projetos de Business Intelligence.
+### 🛠️ Como usar:
+Basta abrir o terminal e digitar:
+```bash
+speedscan
+```
