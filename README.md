@@ -1,6 +1,6 @@
 # 🚀 SpeedScan Pro - Beta 0.1
 
-O **SpeedScan Pro** é uma ferramenta de otimização para sistemas Linux (focado em Fedora) desenvolvida com Python e a biblioteca CustomTkinter. Ele centraliza tarefas de limpeza e manutenção em uma interface moderna e intuitiva.
+O **SpeedScan Pro** é uma ferramenta de otimização para sistemas Linux (focado em Fedora) desenvolvida com Python e a biblioteca CustomTkinter. Ele centraliza tarefas de manutenção em uma interface moderna e intuitiva.
 
 ## 🛠 Funcionalidades
 - 🌐 **Alteração de DNS:** Troca rápida para Google ou Cloudflare.
