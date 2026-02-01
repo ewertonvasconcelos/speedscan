@@ -1,20 +1,18 @@
-# 🚀 SpeedScan Beta 0.1
+# 🚀 SpeedScan Pro - Beta 0.1
 
-O **SpeedScan** é uma ferramenta de otimização e diagnóstico desenvolvida para usuários de Fedora Linux. O objetivo é manter o sistema leve, rápido e corrigir problemas comuns de hardware de forma automática.
+O **SpeedScan Pro** é uma ferramenta de otimização para sistemas Linux (focado em Fedora) desenvolvida com Python e a biblioteca CustomTkinter. Ele centraliza tarefas de limpeza e manutenção em uma interface moderna e intuitiva.
 
-## 🛠️ Ferramentas Incluídas:
-* **SpeedScan.sh**: O motor principal. Limpa caches, otimiza fontes e configura a ZRAM.
-* **speedscan_app.py**: Interface visual para facilitar o uso.
-* **fazer_touchpad.sh**: Script de correção para o Touchpad (i2c_hid_acpi).
-* **error-hunter.sh**: Caçador de erros nos logs do sistema.
-* **set-dns.sh**: Configuração rápida de DNS para melhor conexão.
-* **sys-report.sh**: Relatório completo de saúde do hardware.
+## 🛠 Funcionalidades
+- 🌐 **Alteração de DNS:** Troca rápida para Google ou Cloudflare.
+- 🧹 **Limpeza de Cache:** Remove arquivos temporários do usuário.
+- 📦 **Limpeza de Apps:** Executa a faxina nos pacotes DNF.
+- 🚀 **Otimização de RAM:** Libera memória cache do sistema.
+- 🌡 **Monitoramento:** Acompanhamento de CPU e Uso de Disco em tempo real.
+- 🔐 **Segurança:** Execução de comandos via `pkexec` com feedback visual de logs.
 
-## 💻 Como utilizar
-Para iniciar a central de comando, basta digitar no terminal:
+## 🚀 Como Executar
+
+### Pré-requisitos
+Certifique-se de ter o Python instalado e a biblioteca necessária:
 ```bash
-speedscan
-```
-
----
-*Desenvolvido por Ewerton Vasconcelos*
+pip install -r requirements.txt
