@@ -37,12 +37,23 @@ class SpeedScanPro(ctk.CTk):
         ctk.CTkLabel(self.content, text="Painel de Controle", font=("Inter", 30, "bold")).grid(row=0, column=0, pady=(10, 20))
         self.grid_btns = ctk.CTkFrame(self.content, fg_color="transparent")
         self.grid_btns.grid(row=1, column=0, pady=10)
-        items = [("DNS", "DNS_ACTION", "#0369a1", "🌐"), ("Status CPU", "top -bn1 | head -n 20", "#b45309", "🌡"), ("Limpar Cache", "rm -rfv ~/.cache/*", "#b91c1c", "🧹"), ("Otimização", "sync; echo 3 > /proc/sys/vm/drop_caches", "#15803d", "🚀"), ("Limpar Apps", "dnf clean all || apt clean", "#334155", "📦"), ("Uso de Disco", "df -h", "#7e22ce", "📊")]
+        
+        # COMANDOS ATUALIZADOS COM ECHO PARA MOSTRAR NOS DETALHES
+        items = [
+            ("DNS", "DNS_ACTION", "#0369a1", "🌐"),
+            ("Status CPU", "top -bn1 | head -n 20", "#b45309", "🌡"),
+            ("Limpar Cache", "rm -rfv ~/.cache/* && echo '--- Limpeza de Cache concluída com sucesso! ---'", "#b91c1c", "🧹"),
+            ("Otimização", "sync; echo 3 > /proc/sys/vm/drop_caches && echo '--- RAM Otimizada! ---'", "#15803d", "🚀"),
+            ("Limpar Apps", "dnf clean all && echo '--- Cache de pacotes DNF limpo! ---'", "#334155", "📦"),
+            ("Uso de Disco", "df -h", "#7e22ce", "📊")
+        ]
+        
         r, c = 0, 0
         for name, cmd, color, icon in items:
             card = ctk.CTkButton(self.grid_btns, text=f"{icon}\n\n{name}", width=230, height=130, corner_radius=22, fg_color=color, font=("Inter", 16, "bold"), command=lambda x=cmd: self.handle_action(x))
             card.grid(row=r, column=c, padx=15, pady=15); c += 1
             if c > 2: c = 0; r += 1
+        
         self.header_bar = ctk.CTkFrame(self.content, fg_color="transparent", height=40)
         self.toggle_btn = ctk.CTkButton(self.header_bar, text="Detalhes ▲", width=120, height=32, fg_color="transparent", text_color="#94a3b8", hover_color="#1e293b", font=("Inter", 14, "bold"), command=self.toggle_console)
         self.toggle_btn.pack()
@@ -67,18 +78,23 @@ class SpeedScanPro(ctk.CTk):
             process = subprocess.Popen(f"pkexec bash -c '{cmd}'", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
             self.log_box.configure(state="normal"); self.log_box.delete("0.0", "end")
             first_output = True
-            while True:
-                line = process.stdout.readline()
-                if not line and process.poll() is not None: break
-                if line:
-                    if first_output and not self.details_btn_exists:
-                        self.after(0, self.reveal_details_button)
-                        first_output = False
-                    self.log_box.insert("end", line); self.log_box.see("end")
+            
+            # Lê a saída em tempo real
+            for line in iter(process.stdout.readline, ""):
+                if first_output and not self.details_btn_exists:
+                    self.after(0, self.reveal_details_button)
+                    first_output = False
+                self.log_box.insert("end", line)
+                self.log_box.see("end")
+            
+            process.stdout.close()
+            return_code = process.wait()
+            
             stderr = process.stderr.read()
             if stderr:
                 if not self.details_btn_exists: self.after(0, self.reveal_details_button)
-                self.log_box.insert("end", f"\nStatus: {stderr}")
+                self.log_box.insert("end", f"\nErro/Status: {stderr}")
+            
             self.log_box.configure(state="disabled")
         except Exception as e: print(f"Erro: {e}")
 
@@ -92,8 +108,8 @@ class SpeedScanPro(ctk.CTk):
         for widget in self.content.winfo_children(): widget.destroy()
     def dns_dialog(self):
         dialog = ctk.CTkToplevel(self); dialog.title("DNS"); dialog.geometry("300x200"); dialog.attributes("-topmost", True)
-        ctk.CTkButton(dialog, text="Google", command=lambda: [self.handle_action("echo 'nameserver 8.8.8.8' > /etc/resolv.conf"), dialog.destroy()]).pack(pady=10)
-        ctk.CTkButton(dialog, text="Cloudflare", command=lambda: [self.handle_action("echo 'nameserver 1.1.1.1' > /etc/resolv.conf"), dialog.destroy()]).pack(pady=10)
+        ctk.CTkButton(dialog, text="Google", command=lambda: [self.handle_action("echo 'nameserver 8.8.8.8' > /etc/resolv.conf && echo 'DNS alterado para Google!'"), dialog.destroy()]).pack(pady=10)
+        ctk.CTkButton(dialog, text="Cloudflare", command=lambda: [self.handle_action("echo 'nameserver 1.1.1.1' > /etc/resolv.conf && echo 'DNS alterado para Cloudflare!'"), dialog.destroy()]).pack(pady=10)
 
 if __name__ == "__main__":
     app = SpeedScanPro(); app.mainloop()
