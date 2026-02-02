@@ -1,6 +1,6 @@
-# 🚀 SpeedScan Pro - Beta 0.1
+# 🚀 SpeedScan - Beta 0.1
 
-O **SpeedScan Pro** é uma ferramenta desenvolvida em Python e CustomTkinter focada na **otimização total do seu sistema**. Ele centraliza tarefas essenciais de manutenção e limpeza em uma interface moderna, rápida e intuitiva.
+O **SpeedScan** é uma ferramenta desenvolvida em Python e CustomTkinter focada na **otimização total do seu sistema**. Ele centraliza tarefas essenciais de manutenção e limpeza em uma interface moderna, rápida e intuitiva.
 
 ## 🛠 Funcionalidades
 - 🌐 **Alteração de DNS:** Troca rápida para Google ou Cloudflare para uma navegação mais estável.

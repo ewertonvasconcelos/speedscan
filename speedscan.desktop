@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=SpeedScan
 Comment=Otimizador Global de Sistema
-Exec=konsole -e speedscan
+Exec=konsole --hold -e speedscan
 Icon=utilities-terminal
 Terminal=false
 Type=Application

@@ -7,7 +7,7 @@ ctk.set_appearance_mode("Dark")
 class SpeedScanPro(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("SpeedScan Pro - Beta 0.1")
+        self.title("SpeedScan - Beta 0.1")
         self.geometry("1100x850")
         self.configure(fg_color="#0f172a")
         
@@ -129,7 +129,7 @@ class SpeedScanPro(ctk.CTk):
         self.details_btn_exists = True
 
     def show_settings(self): self.clear_frame(); ctk.CTkLabel(self.content, text="Ajustes", font=("Inter", 28, "bold")).pack(pady=40)
-    def show_about(self): self.clear_frame(); ctk.CTkLabel(self.content, text="Sobre", font=("Inter", 28, "bold")).pack(pady=40); ctk.CTkLabel(self.content, text="SpeedScan Pro\nEwerton Vasconcelos", font=("Inter", 18)).pack()
+    def show_about(self): self.clear_frame(); ctk.CTkLabel(self.content, text="Sobre", font=("Inter", 28, "bold")).pack(pady=40); ctk.CTkLabel(self.content, text="SpeedScan\nEwerton Vasconcelos", font=("Inter", 18)).pack()
     
     def clear_frame(self):
         for widget in self.content.winfo_children(): widget.destroy()
