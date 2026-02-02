@@ -5,4 +5,4 @@ Exec=konsole -e speedscan
 Icon=utilities-terminal
 Terminal=false
 Type=Application
-Categories=System;Maintainance;
+Categories=System;Settings;
