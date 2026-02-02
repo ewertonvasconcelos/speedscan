@@ -1,144 +1,62 @@
 import customtkinter as ctk
+import os
+import platform
+import psutil
 import subprocess
-import threading
 
-ctk.set_appearance_mode("Dark")
-
-class SpeedScanPro(ctk.CTk):
+class SpeedScan(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("SpeedScan - Beta 0.1")
-        self.geometry("1100x850")
-        self.configure(fg_color="#0f172a")
-        
+        self.title("SpeedScan - Central de Comando")
+        self.geometry("950x600")
+        ctk.set_appearance_mode("dark")
+
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
-        
-        self.console_visible = False
-        self.details_btn_exists = False 
 
-        # --- SIDEBAR ---
-        self.sidebar = ctk.CTkFrame(self, width=240, corner_radius=0, fg_color="#1e293b")
+        # Barra Lateral
+        self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        ctk.CTkLabel(self.sidebar, text="SPEEDSCAN", font=("Inter", 24, "bold"), text_color="#38bdf8").grid(row=0, column=0, padx=20, pady=40)
-        self.create_nav("Dashboard", 1, "📊", self.show_dashboard)
-        self.create_nav("Ajustes", 2, "⚙️", self.show_settings)
-        self.create_nav("Sobre", 3, "ℹ️", self.show_about)
-
-        self.content = ctk.CTkFrame(self, corner_radius=25, fg_color="transparent")
-        self.content.grid(row=0, column=1, padx=25, pady=25, sticky="nsew")
-        self.show_dashboard()
-
-    def create_nav(self, text, row, icon, cmd):
-        btn = ctk.CTkButton(self.sidebar, text=f"{icon}  {text}", anchor="w", height=45, fg_color="transparent", hover_color="#334155", font=("Inter", 15), command=cmd)
-        btn.grid(row=row, column=0, padx=15, pady=8, sticky="ew")
-
-    def show_dashboard(self):
-        self.clear_frame()
-        self.content.columnconfigure(0, weight=1)
-        self.details_btn_exists = False 
         
-        ctk.CTkLabel(self.content, text="Painel de Controle", font=("Inter", 30, "bold")).grid(row=0, column=0, pady=(10, 20))
-        
-        self.grid_btns = ctk.CTkFrame(self.content, fg_color="transparent")
-        self.grid_btns.grid(row=1, column=0, pady=10)
-        
-        items = [
-            ("DNS", "DNS_ACTION", "#0369a1", "🌐"),
-            ("Status CPU", "top -bn1 | head -n 20", "#b45309", "🌡"),
-            ("Limpar Cache", "rm -rfv ~/.cache/* && echo '--- Cache limpo! ---'", "#b91c1c", "🧹"),
-            ("Otimização", "sync; echo 3 > /proc/sys/vm/drop_caches && echo '--- RAM Otimizada! ---'", "#15803d", "🚀"),
-            ("Limpar Apps", "dnf clean all && echo '--- DNF limpo! ---'", "#334155", "📦"),
-            ("Uso de Disco", "df -h", "#7e22ce", "📊")
-        ]
-        
-        r, c = 0, 0
-        for name, cmd, color, icon in items:
-            card = ctk.CTkButton(self.grid_btns, text=f"{icon}\n\n{name}", width=230, height=130, corner_radius=22, fg_color=color, font=("Inter", 16, "bold"), 
-                                 command=lambda x=cmd: self.handle_action(x))
-            card.grid(row=r, column=c, padx=15, pady=15); c += 1
-            if c > 2: c = 0; r += 1
-        
-        # Elementos de Log
-        self.header_bar = ctk.CTkFrame(self.content, fg_color="transparent", height=40)
-        self.toggle_btn = ctk.CTkButton(self.header_bar, text="Detalhes ▲", width=120, height=32, fg_color="transparent", text_color="#94a3b8", hover_color="#1e293b", font=("Inter", 14, "bold"), command=self.toggle_console)
-        self.toggle_btn.pack()
-        
-        self.log_box = ctk.CTkTextbox(self.content, fg_color="#1e293b", text_color="#10b981", font=("Monospace", 12), state="disabled", height=250)
+        ctk.CTkLabel(self.sidebar, text="SPEEDSCAN", font=("Inter", 24, "bold"), text_color="#38bdf8").pack(pady=30)
 
-    def toggle_console(self):
-        if not self.console_visible:
-            # ABRIR: Mostra o log e muda o ícone do botão
-            self.log_box.grid(row=3, column=0, sticky="ew", padx=40, pady=(10, 0))
-            self.toggle_btn.configure(text="Detalhes ▼")
-            self.console_visible = True
-        else:
-            # FECHAR (Minimizar): Esconde o log E remove o botão da tela
-            self.log_box.grid_forget()
-            self.header_bar.grid_forget()
-            self.console_visible = False
-            self.details_btn_exists = False # Permite que ele "nasça" de novo após novo script
-
-    def handle_action(self, action):
-        # Sempre esconde o log anterior ao iniciar nova tarefa
-        self.log_box.grid_forget()
-        self.header_bar.grid_forget()
-        self.console_visible = False
-        self.details_btn_exists = False
+        self.add_menu_button("Saúde do Sistema", self.show_status)
+        self.add_menu_button("Instalar Apps Windows", lambda: self.install_package("wine winetricks"))
+        self.add_menu_button("Suporte Android", lambda: self.install_package("waydroid"))
+        self.add_menu_button("Jogos (Steam/Heroic)", lambda: self.install_package("steam heroic-games-launcher-bin"))
         
-        self.log_box.configure(state="normal")
-        self.log_box.delete("0.0", "end")
-        self.log_box.configure(state="disabled")
+        ctk.CTkLabel(self.sidebar, text="---", text_color="gray").pack(pady=10)
         
-        if action == "DNS_ACTION": 
-            self.dns_dialog()
-        else: 
-            threading.Thread(target=self.run_cmd, args=(action,), daemon=True).start()
+        self.btn_clean = ctk.CTkButton(self.sidebar, text="OTIMIZAR AGORA", fg_color="#16a34a", hover_color="#15803d", font=("Inter", 14, "bold"), command=self.run_clean)
+        self.btn_clean.pack(pady=20, padx=20)
 
-    def run_cmd(self, cmd):
-        try:
-            process = subprocess.Popen(f"pkexec bash -c '{cmd}'", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
-            
-            first_output = True
-            for line in iter(process.stdout.readline, ""):
-                if first_output:
-                    if not self.details_btn_exists:
-                        self.after(0, self.reveal_details_button)
-                        first_output = False
-                self.update_log(line)
-            
-            process.stdout.close()
-            process.wait()
-            
-            stderr = process.stderr.read()
-            if stderr:
-                self.update_log(f"\nStatus: {stderr}")
-                if not self.details_btn_exists: self.after(0, self.reveal_details_button)
-                
-        except Exception as e: 
-            print(f"Erro: {e}")
+        # Área de Conteúdo
+        self.content = ctk.CTkFrame(self, fg_color="#1e293b", corner_radius=15)
+        self.content.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        
+        self.label_info = ctk.CTkLabel(self.content, text="Aguardando comando...", font=("Inter", 16))
+        self.label_info.pack(expand=True)
 
-    def update_log(self, text):
-        self.log_box.configure(state="normal")
-        self.log_box.insert("end", text)
-        self.log_box.see("end")
-        self.log_box.configure(state="disabled")
+    def add_menu_button(self, text, command):
+        btn = ctk.CTkButton(self.sidebar, text=text, font=("Inter", 13), fg_color="transparent", border_width=1, command=command)
+        btn.pack(pady=8, padx=20, fill="x")
 
-    def reveal_details_button(self):
-        self.header_bar.grid(row=2, column=0, sticky="e", padx=40, pady=(20, 0))
-        self.details_btn_exists = True
+    def show_status(self):
+        mem = psutil.virtual_memory()
+        status = f"📊 Memória RAM: {mem.percent}% em uso\n💻 Sistema: {platform.system()} (Solus)\n\nHardware pronto para novas instalações."
+        self.label_info.configure(text=status)
 
-    def show_settings(self): self.clear_frame(); ctk.CTkLabel(self.content, text="Ajustes", font=("Inter", 28, "bold")).pack(pady=40)
-    def show_about(self): self.clear_frame(); ctk.CTkLabel(self.content, text="Sobre", font=("Inter", 28, "bold")).pack(pady=40); ctk.CTkLabel(self.content, text="SpeedScan\nEwerton Vasconcelos", font=("Inter", 18)).pack()
-    
-    def clear_frame(self):
-        for widget in self.content.winfo_children(): widget.destroy()
+    def install_package(self, package):
+        self.label_info.configure(text=f"Solicitando autorização para instalar: {package}...")
+        # pkexec abre a janela de senha do sistema (GUI)
+        comando = f"pkexec eopkg it {package} -y"
+        threading_cmd = f"({comando}) &"
+        os.system(threading_cmd)
 
-    def dns_dialog(self):
-        dialog = ctk.CTkToplevel(self); dialog.title("DNS"); dialog.geometry("300x200"); dialog.attributes("-topmost", True)
-        ctk.CTkButton(dialog, text="Google", command=lambda: [self.handle_action("echo 'nameserver 8.8.8.8' > /etc/resolv.conf && echo 'DNS Google OK'"), dialog.destroy()]).pack(pady=10)
-        ctk.CTkButton(dialog, text="Cloudflare", command=lambda: [self.handle_action("echo 'nameserver 1.1.1.1' > /etc/resolv.conf && echo 'DNS Cloudflare OK'"), dialog.destroy()]).pack(pady=10)
+    def run_clean(self):
+        # Para a limpeza, mantemos o terminal para você ver o progresso dos arquivos sendo apagados
+        subprocess.Popen(["konsole", "-e", "speedscan"])
 
 if __name__ == "__main__":
-    app = SpeedScanPro()
+    app = SpeedScan()
     app.mainloop()
