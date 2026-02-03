@@ -1,0 +1,13 @@
+id: com.ewertonvasconcelos.SpeedScan
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+command: SpeedScan
+modules:
+  - name: speedscan
+    buildsystem: simple
+    build-commands:
+      - install -D SpeedScan /app/bin/SpeedScan
+    sources:
+      - type: file
+        path: dist/SpeedScan

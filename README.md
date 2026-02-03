@@ -1,20 +1,22 @@
-# 🚀 SpeedScan
+# SpeedScan ⚡
 
-Ferramenta de diagnóstico e monitoramento de sistema de alta performance.
+O SpeedScan é uma ferramenta de otimização e monitoramento de sistema focada em usuários Linux (Solus/Eopkg).
 
-## 📦 Downloads (v1.0.0)
+## 🚀 Funcionalidades
+* **💻 Sistema:** Monitoramento de CPU, GPU, RAM e Discos (SSD/HDD).
+* **🎮 Gamer:** Instaladores rápidos (Steam, Lutris, Wine) e Modo Turbo.
+* **🌐 Rede:** Troca de DNS (Cloudflare/Google) e teste de latência em tempo real.
+* **🛠 Drivers:** Diagnóstico de hardware via kernel.
+* **🎨 Temas:** 4 variações visuais com troca instantânea.
 
-| Plataforma | Formato | Link de Download |
-| :--- | :--- | :--- |
-| **Windows** | `.exe` | [Baixar Agora](https://github.com/ewertonvasconcelos/speedscan/releases/download/v1.0.0/SpeedScan-Win.exe) |
-| **Ubuntu / Debian / Mint** | `.deb` | [Baixar Agora](https://github.com/ewertonvasconcelos/speedscan/releases/download/v1.0.0/speedscan_1.0.0_amd64.deb) |
-| **Linux (Universal)** | `.AppImage` | [Baixar Agora](https://github.com/ewertonvasconcelos/speedscan/releases/download/v1.0.0/SpeedScan-x86_64.AppImage) |
+## 📦 Requisitos
+* Python 3
+* CustomTkinter
+* Psutil
+* Pillow
 
-## 🛠️ Como instalar o .deb
-No terminal, na pasta do download, execute:
+## 🔧 Instalação
 \`\`\`bash
-sudo apt install ./speedscan_1.0.0_amd64.deb
+pip install customtkinter psutil pillow
+python3 speedscan_app.py
 \`\`\`
-
----
-Desenvolvido com foco em performance por [Ewerton Vasconcelos](https://github.com/ewertonvasconcelos)

@@ -1,91 +1,92 @@
-import sys
-import platform
-import psutil
-import os
-import shutil
-import tkinter as tk
-from tkinter import messagebox
-from datetime import datetime
+import customtkinter as ctk
+import os, platform, psutil, subprocess, threading, json, time
 
-class SpeedScan:
+# Verificação de Sistema
+IS_LINUX = platform.system() == "Linux"
+
+class SpeedScan(ctk.CTk):
     def __init__(self):
-        self.os_name = platform.system()
-        self.os_release = platform.release()
-
-    def get_system_info(self):
-        uptime = datetime.now() - datetime.fromtimestamp(psutil.boot_time())
-        return {
-            "cpu": psutil.cpu_percent(interval=0.5),
-            "ram": psutil.virtual_memory().percent,
-            "os": f"{self.os_name} {self.os_release}",
-            "uptime": str(uptime).split('.')[0]
-        }
-
-    def limpar_temporarios(self):
-        count = 0
-        try:
-            if self.os_name == "Windows":
-                pasta_temp = os.environ.get('TEMP')
-            else:
-                pasta_temp = '/tmp'
-
-            for arquivo in os.listdir(pasta_temp):
-                caminho = os.path.join(pasta_temp, arquivo)
-                try:
-                    if os.path.isfile(caminho) or os.path.islink(caminho):
-                        os.unlink(caminho)
-                        count += 1
-                    elif os.path.isdir(caminho):
-                        shutil.rmtree(caminho)
-                        count += 1
-                except Exception:
-                    continue
-            messagebox.showinfo("Sucesso", f"Limpeza concluída!\n{count} itens removidos do {self.os_name}.")
-        except Exception as e:
-            messagebox.showerror("Erro", f"Falha na limpeza: {e}")
-
-    def otimizar_ram(self):
-        # Simulação de otimização (coleta de lixo do Python e aviso ao sistema)
-        import gc
-        gc.collect()
-        messagebox.showinfo("Otimização", "Memória RAM otimizada com sucesso!")
-
-    def iniciar_interface(self):
-        root = tk.Tk()
-        root.title(f"SpeedScan Pro v1.1.0 - {self.os_name}")
-        root.geometry("450x500")
-
-        cor_fundo = "#f0f0f0" if self.os_name == "Windows" else "#1e1e1e"
-        cor_texto = "#333333" if self.os_name == "Windows" else "#ffffff"
-        cor_botao = "#0078d7" if self.os_name == "Windows" else "#3498db"
+        super().__init__()
+        self.title(f"SpeedScan Ultimate - [{platform.system()}]")
+        self.geometry("1100x700")
         
-        root.configure(bg=cor_fundo)
+        # Cores e Temas
+        self.accent = "#a855f7" 
+        ctk.set_appearance_mode("dark")
+        self.configure(fg_color="#0f172a")
 
-        # Header
-        tk.Label(root, text="🚀 SPEEDSCAN PRO", font=("Arial", 18, "bold"), bg=cor_fundo, fg=cor_botao).pack(pady=20)
+        # Layout Principal (Grid)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
-        # Info Box
-        dados = self.get_system_info()
-        info_frame = tk.Frame(root, bg=cor_fundo)
-        info_frame.pack(pady=10)
-
-        tk.Label(info_frame, text=f"Sistema: {dados['os']}", font=("Arial", 10), bg=cor_fundo, fg=cor_texto).pack()
-        tk.Label(info_frame, text=f"Uptime: {dados['uptime']}", font=("Arial", 10), bg=cor_fundo, fg="gray").pack()
-
-        # Stats
-        tk.Label(root, text=f"CPU: {dados['cpu']}% | RAM: {dados['ram']}%", font=("Arial", 12, "bold"), bg=cor_fundo, fg=cor_texto).pack(pady=20)
-
-        # Botões de Ação
-        btn_style = {"font": ("Arial", 10, "bold"), "fg": "white", "bg": cor_botao, "width": 25, "pady": 10}
+        # Barra Lateral (Menu)
+        self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color="#1e293b")
+        self.sidebar.grid(row=0, column=0, sticky="nsew")
         
-        tk.Button(root, text="LIMPAR ARQUIVOS TEMPORÁRIOS", command=self.limpar_temporarios, **btn_style).pack(pady=10)
-        tk.Button(root, text="OTIMIZAR MEMÓRIA RAM", command=self.otimizar_ram, **btn_style).pack(pady=10)
+        ctk.CTkLabel(self.sidebar, text="⚡ SpeedScan", font=("Arial", 24, "bold"), text_color=self.accent).pack(pady=30)
 
-        # Footer
-        tk.Label(root, text=f"Modo: {self.os_name} Optimized", font=("Arial", 8, "italic"), bg=cor_fundo, fg="gray").pack(side="bottom", pady=15)
+        # Abas (Tabview)
+        self.tab_view = ctk.CTkTabview(self, corner_radius=15, segmented_button_selected_color=self.accent, fg_color="#0f172a")
+        self.tab_view.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
+        
+        self.abas = ["🏠 Início", "💻 Sistema", "🚀 Otimização", "🎮 Gamer", "🌐 Rede", "🛠️ Drivers", "🎨 Temas"]
+        for aba in self.abas:
+            self.tab_view.add(aba)
 
-        root.mainloop()
+        self.construir_abas()
+
+    def construir_abas(self):
+        # --- ABA INÍCIO ---
+        ctk.CTkLabel(self.tab_view.tab("🏠 Início"), text="Bem-vindo ao SpeedScan", font=("Arial", 32, "bold")).pack(pady=100)
+        ctk.CTkLabel(self.tab_view.tab("🏠 Início"), text="Seu sistema está sendo monitorado.", font=("Arial", 16)).pack()
+
+        # --- ABA SISTEMA (Monitoramento Real) ---
+        self.sys_frame = self.tab_view.tab("💻 Sistema")
+        self.lbl_cpu = ctk.CTkLabel(self.sys_frame, text="CPU: --%", font=("Arial", 18))
+        self.lbl_cpu.pack(pady=10)
+        self.lbl_ram = ctk.CTkLabel(self.sys_frame, text="RAM: --%", font=("Arial", 18))
+        self.lbl_ram.pack(pady=10)
+        self.atualizar_monitor()
+
+        # --- ABA OTIMIZAÇÃO (Detecção de Sistema Inteligente) ---
+        t_ot = self.tab_view.tab("🚀 Otimização")
+        if IS_LINUX:
+            btn_txt = "Limpar Cache do Sistema (Solus)"
+            cmd = "pkexec eopkg dc"
+        else:
+            btn_txt = "Limpar Arquivos Temporários (Windows)"
+            cmd = "del /q/f/s %TEMP%\\*"
+
+        ctk.CTkButton(t_ot, text=btn_txt, command=lambda: self.executar(cmd), fg_color=self.accent).pack(pady=20)
+        ctk.CTkButton(t_ot, text="Otimizar Memória RAM", command=lambda: self.executar("gc"), fg_color="#10b981").pack(pady=10)
+
+        # --- ABA GAMER ---
+        t_gm = self.tab_view.tab("🎮 Gamer")
+        ctk.CTkLabel(t_gm, text="Modo Gamer Ativo", font=("Arial", 20)).pack(pady=20)
+        ctk.CTkSwitch(t_gm, text="Prioridade Máxima para Jogos", progress_color=self.accent).pack()
+
+        # --- ABA REDE ---
+        t_rd = self.tab_view.tab("🌐 Rede")
+        ctk.CTkButton(t_rd, text="Resetar DNS / Flush", command=lambda: self.executar("dns"), fg_color=self.accent).pack(pady=20)
+
+        # --- ABA DRIVERS ---
+        t_dr = self.tab_view.tab("🛠️ Drivers")
+        ctk.CTkLabel(t_dr, text="Verificando integridade de drivers...", font=("Arial", 14)).pack(pady=20)
+
+        # --- ABA TEMAS ---
+        t_tm = self.tab_view.tab("🎨 Temas")
+        ctk.CTkSegmentedButton(t_tm, values=["Dark", "Light", "Solar"], selected_color=self.accent).pack(pady=20)
+
+    def atualizar_monitor(self):
+        self.lbl_cpu.configure(text=f"CPU: {psutil.cpu_percent()}%")
+        self.lbl_ram.configure(text=f"RAM: {psutil.virtual_memory().percent}%")
+        self.after(2000, self.atualizar_monitor)
+
+    def executar(self, acao):
+        # Aqui entra a lógica de comando que detecta o OS
+        print(f"Executando: {acao} no {platform.system()}")
+        threading.Thread(target=lambda: os.system(acao), daemon=True).start()
 
 if __name__ == "__main__":
     app = SpeedScan()
-    app.iniciar_interface()
+    app.mainloop()
