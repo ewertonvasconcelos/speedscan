@@ -1,0 +1,16 @@
+# Python temporários
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller (Arquivos de Build)
+build/
+dist/
+*.spec
+
+# Sistema e Logs
+.DS_Store
+*.log
+
+# Opcional: Se não quiser subir os instaladores pesados no futuro
+# installers/
