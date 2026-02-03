@@ -1,18 +1,23 @@
-# 🚀 SpeedScan - Beta 0.1
+# ⚡ SpeedScan - Otimização & Diagnóstico Profundo
 
-O **SpeedScan** é uma ferramenta desenvolvida em Python e CustomTkinter focada na **otimização total do seu sistema**. Ele centraliza tarefas essenciais de manutenção e limpeza em uma interface moderna, rápida e intuitiva.
+O **SpeedScan** é uma suíte de ferramentas desenvolvida em Python e CustomTkinter, projetada para centralizar a governança, manutenção e monitoramento de sistemas Linux. Focado em performance máxima, ele entrega diagnósticos detalhados de hardware e automação de tarefas críticas em uma interface moderna e intuitiva.
 
-## 🛠 Funcionalidades
-- 🌐 **Alteração de DNS:** Troca rápida para Google ou Cloudflare para uma navegação mais estável.
-- 🧹 **Limpeza de Cache:** Remove arquivos temporários que ocupam espaço desnecessário.
-- 📦 **Limpeza de Apps:** Executa a faxina completa nos pacotes do gerenciador do sistema.
-- 🚀 **Otimização de RAM:** Libera memória cache instantaneamente para ganhar performance.
-- 🌡 **Monitoramento:** Acompanhamento de CPU e Uso de Disco em tempo real.
-- 🔐 **Segurança:** Comandos executados com privilégios administrativos e feedback visual completo.
+---
 
-## 🚀 Como Executar
+## 🛠️ Funcionalidades de Alto Nível
 
-### Pré-requisitos
-Certifique-se de ter o Python instalado e a biblioteca necessária:
+* **💻 Diagnóstico de Hardware:** Varredura detalhada de GPU (Modelo/Driver), CPU, Barramentos de Disco (NVMe/SATA) e Saúde da Bateria.
+* **🎮 Ecossistema Gamer:** Instalador automatizado para Steam, Lutris, Wine, MangoHud e Goverlay, incluindo o exclusivo **Modo Turbo Gamer**.
+* **🌐 Governança de Rede:** Monitoramento de latência (Ping) em tempo real e troca dinâmica de DNS (Cloudflare/Google).
+* **🚀 Otimização de Performance:** Limpeza profunda de cache de pacotes, otimização de RAM/Swap e verificação de integridade do sistema.
+* **🛠️ Gestão de Drivers:** Visualização rápida de dispositivos PCI, USB, módulos de Kernel e logs de Firmware.
+* **🎨 Customização Dinâmica:** Suporte a múltiplos temas (Dark, Light, Grey) com interface responsiva.
+
+---
+
+## 🚀 Instalação Rápida (Universal)
+
+O SpeedScan detecta sua distribuição automaticamente (Solus, Fedora, Ubuntu, Arch) e configura o ambiente para você.
+
 ```bash
-pip install -r requirements.txt
+curl -sSL [https://raw.githubusercontent.com/ewertonvasconcelos/speedscan/main/install.sh](https://raw.githubusercontent.com/ewertonvasconcelos/speedscan/main/install.sh) | bash
