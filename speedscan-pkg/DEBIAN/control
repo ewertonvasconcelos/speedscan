@@ -1,0 +1,7 @@
+Package: speedscan
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: Ewerton Vasconcelos <ewertonvasconcelosdossantos@gmail.com>
+Description: Ferramenta de diagnóstico e otimização de sistema SpeedScan.

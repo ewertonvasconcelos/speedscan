@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=SpeedScan
+Exec=/usr/bin/speedscan
+Icon=speedscan
+Type=Application
+Categories=Utility;
+Terminal=false
