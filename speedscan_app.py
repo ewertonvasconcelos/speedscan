@@ -25,7 +25,7 @@ class SpeedScan(ctk.CTk):
         super().__init__()
         self.config = conf
         self.update_theme_vars()
-        self.title("SpeedScan - SEMPRE O MÁXIMO!")
+        self.title("SpeedScan")
         self.geometry(self.config.get("geometry", "1200x950"))
         self.configure(fg_color=self.bg_color)
         
@@ -82,18 +82,15 @@ class SpeedScan(ctk.CTk):
             btn.configure(text="Detalhes ⌄"); self.consoles_visible[target] = False
 
     def setup_tabs(self):
-        # 💻 SISTEMA
         self.scroll_sys = ctk.CTkScrollableFrame(self.tab_view.tab("💻 Sistema"), fg_color="transparent")
         self.scroll_sys.pack(fill="both", expand=True); self.update_sys_info()
 
-        # 🚀 OTIMIZAÇÃO
         self.t_ot = self.tab_view.tab("🚀 Otimização")
         for n, c in [("Limpeza de Cache Profunda", "sudo eopkg dc"), ("Otimizar RAM/Swap", "sudo swapoff -a && sudo swapon -a"), ("Verificar Erros", "sudo eopkg check")]:
             self.create_btn(self.t_ot, n, lambda cmd=c: self.run_action(cmd, "ot")).pack(pady=10)
         self.btn_ot = ctk.CTkButton(self.t_ot, text="Detalhes ⌄", fg_color="transparent", text_color=self.accent, command=lambda: self.toggle_console("ot"))
         self.log_ot = ctk.CTkTextbox(self.t_ot, height=200, fg_color=self.side_bg, text_color="#10b981")
 
-        # 🎮 GAMER
         self.t_gm = self.tab_view.tab("🎮 Gamer")
         self.btn_turbo = self.create_btn(self.t_gm, "🔥 ATIVAR MODO TURBO GAMER", self.toggle_turbo, color="#e11d48")
         self.btn_turbo.pack(pady=15)
@@ -105,7 +102,6 @@ class SpeedScan(ctk.CTk):
         self.btn_gm = ctk.CTkButton(self.t_gm, text="Detalhes ⌄", fg_color="transparent", text_color=self.accent, command=lambda: self.toggle_console("gm"))
         self.log_gm = ctk.CTkTextbox(self.t_gm, height=200, fg_color=self.side_bg, text_color="#10b981")
 
-        # 🌐 REDE
         self.t_net = self.tab_view.tab("🌐 Rede")
         self.create_btn(self.t_net, "Testar Latência (Ping)", self.toggle_ping_ui).pack(pady=10)
         self.ping_frame = ctk.CTkFrame(self.t_net, fg_color=self.side_bg, corner_radius=12)
@@ -118,7 +114,6 @@ class SpeedScan(ctk.CTk):
         self.btn_net = ctk.CTkButton(self.t_net, text="Detalhes ⌄", fg_color="transparent", text_color=self.accent, command=lambda: self.toggle_console("net"))
         self.log_net = ctk.CTkTextbox(self.t_net, height=150, fg_color=self.side_bg, text_color="#10b981")
 
-        # 🛠 DRIVERS
         self.t_drv = self.tab_view.tab("🛠 Drivers")
         self.scroll_drv = ctk.CTkScrollableFrame(self.t_drv, fg_color="transparent", height=450)
         self.scroll_drv.pack(fill="both", expand=True)
@@ -127,7 +122,6 @@ class SpeedScan(ctk.CTk):
         self.btn_drv = ctk.CTkButton(self.t_drv, text="Detalhes ⌄", fg_color="transparent", text_color=self.accent, command=lambda: self.toggle_console("drv"))
         self.log_drv = ctk.CTkTextbox(self.t_drv, height=200, fg_color=self.side_bg, text_color="#10b981")
 
-        # 🎨 TEMAS
         self.t_tm = self.tab_view.tab("🎨 Temas")
         for name, key in [("Padrão", "default"), ("Cinza", "grey"), ("Escuro", "dark"), ("Claro", "light")]:
             self.create_btn(self.t_tm, name, lambda k=key: self.set_theme(k)).pack(pady=10)
@@ -176,14 +170,10 @@ class SpeedScan(ctk.CTk):
 
     def update_sys_info(self):
         for w in self.scroll_sys.winfo_children(): w.destroy()
-        
-        # --- VARREDURA DE GPU (MARCA E SOFTWARE/DRIVER) ---
         gpu_raw = os.popen("lspci -k | grep -A 3 -i 'vga\\|3d'").read()
         gpu_brand = "Intel" if "Intel" in gpu_raw else ("Nvidia" if "Nvidia" in gpu_raw else "AMD")
         gpu_model = os.popen("lspci | grep -i 'vga\\|3d' | cut -d: -f3").read().strip()
         gpu_driver = os.popen("glxinfo | grep 'OpenGL core profile version string'").read().split(':')[-1].strip() or "Mesa Driver"
-        
-        # --- VARREDURA DE DISCOS (MODELO, TIPO E BARRAMENTO) ---
         disk_lines = os.popen("lsblk -d -o NAME,MODEL,SIZE,ROTA,TRAN").read().strip().split('\n')[1:]
         disk_summary = ""
         for line in disk_lines:
@@ -194,10 +184,6 @@ class SpeedScan(ctk.CTk):
                 bus = p[-3] if len(p) > 4 else ("NVMe" if "nvme" in name else "SATA")
                 tech = "HDD" if rota == "1" else "SSD"
                 disk_summary += f"• {model} [{bus} {tech}] - {size}\n"
-
-        # --- SOFTWARE VERSIONS ---
-        python_v = platform.python_version()
-        ctk_v = ctk.__version__
         
         info = [
             ("💻 DISPOSITIVO", platform.node()),
@@ -209,11 +195,10 @@ class SpeedScan(ctk.CTk):
             ("🔧 GPU DRIVER", gpu_driver),
             ("📟 RAM", f"{psutil.virtual_memory().total/(1024**3):.2f} GB"),
             ("💽 DISCOS", disk_summary.strip()),
-            ("🐍 PYTHON", python_v),
-            ("🎨 CUSTOMTKINTER", ctk_v),
+            ("🐍 PYTHON", platform.python_version()),
+            ("🎨 CUSTOMTKINTER", ctk.__version__),
             ("🔋 BATERIA", f"{psutil.sensors_battery().percent}%" if psutil.sensors_battery() else "AC Power")
         ]
-
         for l, v in info:
             f = ctk.CTkFrame(self.scroll_sys, fg_color="transparent")
             f.pack(fill="x", padx=40, pady=10)
