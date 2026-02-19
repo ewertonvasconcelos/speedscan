@@ -1,0 +1,1087 @@
+#!/usr/bin/env python3
+# SpeedScan - Versão Multiplataforma (Linux, Windows, macOS)
+# Uso: python3 core/speedscan_app.py
+
+import customtkinter as ctk
+import os
+import platform
+import psutil
+import subprocess
+import threading
+import json
+import time
+import sys
+import re
+from PIL import Image, ImageDraw
+from datetime import datetime
+
+# Configurações
+CONFIG_FILE = os.path.expanduser("~/.speedscan_conf")
+ICON_PATH = os.path.expanduser("~/speedscan/icon.png")
+
+def get_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except:
+            pass
+    return {
+        "theme": "default",
+        "username": "ewerton",
+        "language": "pt_BR",
+        "ui_scale": "auto",
+        "open_file_in_tab": False
+    }
+
+conf = get_config()
+
+themes = {
+    "default": {"mode": "dark", "bg": "#1e293b", "side": "#0f172a", "acc": "#a855f7", "text": "#ffffff"},
+    "grey":    {"mode": "light", "bg": "#d1d5db", "side": "#374151", "acc": "#4b5563", "text": "#111827"},
+    "dark":    {"mode": "dark", "bg": "#080808", "side": "#000000", "acc": "#10b981", "text": "#ffffff"},
+    "light":   {"mode": "light", "bg": "#ffffff", "side": "#f8fafc", "acc": "#2563eb", "text": "#0f172a"}
+}
+
+languages = {
+    "pt_BR": "Português Brasileiro",
+    "en_US": "English (US)",
+    "es_ES": "Español"
+}
+
+scales = {
+    "auto": "Automático",
+    "100": "100%",
+    "125": "125%",
+    "150": "150%"
+}
+
+# Lista de IAs sugeridas
+AI_SUGGESTIONS = [
+    "DeepSeek",
+    "OpenAI GPT-4",
+    "Google Gemini",
+    "Claude (Anthropic)",
+    "Llama 3 (Meta)",
+    "Mistral AI",
+    "Cohere",
+    "Local (Ollama)",
+    "Configurar IA Local"
+]
+
+class SpeedScan(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.SO = platform.system()  # 'Linux', 'Windows', 'Darwin'
+        self.config = conf
+        self.update_theme_vars()
+        self.title("SpeedScan")
+        self.geometry("1200x950")
+        self.minsize(1000, 700)
+        self.configure(fg_color=self.bg_color)
+
+        self.apply_ui_scale()
+
+        # Variáveis de estado
+        self.turbo_active = False
+        self.consoles_visible = {}
+        self.ping_active = False
+        self.current_module = "sistema"
+        self.sidebar_buttons = {}
+        self.detail_buttons = {}
+
+        # Layout
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # Sidebar
+        self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=self.side_bg)
+        self.sidebar.grid(row=0, column=0, sticky="nsew")
+        self.sidebar.grid_propagate(False)
+
+        # Container principal
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_rowconfigure(0, weight=1)
+
+        self.frames = {}
+
+        self.create_sidebar()
+        self.create_frames()
+
+        self.show_frame("sistema")
+
+        self.bind_all("<MouseWheel>", self._on_mousewheel)
+
+        threading.Thread(target=self.hardware_monitor, daemon=True).start()
+
+    # ---------- Função para arredondar imagem ----------
+    def round_image(self, path, size=(96, 96), radius=20):
+        try:
+            img = Image.open(path).convert("RGBA")
+            img = img.resize(size, Image.Resampling.LANCZOS)
+            mask = Image.new("L", size, 0)
+            draw = ImageDraw.Draw(mask)
+            draw.rounded_rectangle((0, 0) + size, radius=radius, fill=255)
+            result = Image.new("RGBA", size)
+            result.paste(img, (0, 0), mask)
+            return ctk.CTkImage(result, size=size)
+        except Exception as e:
+            print(f"Erro ao arredondar imagem: {e}")
+            return None
+
+    # ---------- Temas e escala ----------
+    def update_theme_vars(self):
+        t = themes.get(self.config["theme"], themes["default"])
+        ctk.set_appearance_mode(t["mode"])
+        self.bg_color = t["bg"]
+        self.side_bg = t["side"]
+        self.acc_color = t["acc"]
+        self.text_color = t["text"]
+        # Cor mais clara para cards internos
+        self.light_bg = self._lighten_color(self.bg_color, 0.2)
+
+    def _lighten_color(self, hex_color, factor=0.2):
+        hex_color = hex_color.lstrip('#')
+        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+        r = min(255, int(r + (255 - r) * factor))
+        g = min(255, int(g + (255 - g) * factor))
+        b = min(255, int(b + (255 - b) * factor))
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def apply_ui_scale(self):
+        scale = self.config.get("ui_scale", "auto")
+        if scale == "auto":
+            ctk.set_widget_scaling(1.0)
+        else:
+            ctk.set_widget_scaling(float(scale) / 100)
+
+    # ---------- Sidebar ----------
+    def create_sidebar(self):
+        top_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        top_frame.pack(side="top", fill="x", pady=(30, 10))
+
+        icon_image = None
+        if os.path.exists(ICON_PATH):
+            icon_image = self.round_image(ICON_PATH, size=(96, 96), radius=20)
+
+        if icon_image:
+            btn_speed = ctk.CTkButton(
+                top_frame,
+                image=icon_image,
+                text="",
+                width=96,
+                height=96,
+                corner_radius=25,
+                fg_color="transparent",
+                hover_color=self.acc_color,
+                command=lambda: self.show_frame("sistema")
+            )
+            btn_speed.pack()
+        else:
+            btn_speed = ctk.CTkButton(
+                top_frame,
+                text="⚡",
+                width=96,
+                height=96,
+                corner_radius=25,
+                fg_color="transparent",
+                hover_color=self.acc_color,
+                font=("Inter", 48),
+                command=lambda: self.show_frame("sistema")
+            )
+            btn_speed.pack()
+
+        center_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        center_frame.pack(side="top", fill="both", expand=True, pady=20)
+
+        ctk.CTkLabel(center_frame, text="").pack(expand=True)
+
+        self.sidebar_buttons["otimizacao"] = self.add_sidebar_btn(center_frame, "🚀", "Otimização", "otimizacao")
+        self.sidebar_buttons["rede"] = self.add_sidebar_btn(center_frame, "🌐", "Rede", "rede")
+        self.sidebar_buttons["drivers"] = self.add_sidebar_btn(center_frame, "🛠️", "Drivers", "drivers")
+        self.sidebar_buttons["agente"] = self.add_sidebar_btn(center_frame, "🤖", "Agente IA", "agente")
+
+        ctk.CTkLabel(center_frame, text="").pack(expand=True)
+
+        bottom_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        bottom_frame.pack(side="bottom", fill="x", pady=20)
+
+        self.sidebar_buttons["config"] = self.add_sidebar_btn(bottom_frame, "⚙️", "Configurações", "config")
+        self.sidebar_buttons["sobre"] = self.add_sidebar_btn(bottom_frame, "ℹ️", "Sobre", "sobre")
+
+    def add_sidebar_btn(self, parent, icon, text, target):
+        frame = ctk.CTkFrame(parent, fg_color="transparent")
+        frame.pack(pady=5, fill="x", padx=10)
+        btn = ctk.CTkButton(
+            frame,
+            text=f"{icon}  {text}",
+            anchor="w",
+            height=40,
+            fg_color="transparent",
+            hover_color=self.acc_color,
+            font=("Inter", 13),
+            corner_radius=10,
+            command=lambda: self.show_frame(target)
+        )
+        btn.pack(fill="x")
+        return btn
+
+    def show_frame(self, target):
+        for frame in self.frames.values():
+            frame.pack_forget()
+        self.frames[target].pack(fill="both", expand=True)
+        self.current_module = target
+
+        for key, btn in self.sidebar_buttons.items():
+            if key == target:
+                btn.configure(fg_color=self.acc_color)
+            else:
+                btn.configure(fg_color="transparent")
+
+        # Se for a aba sistema, forçar atualização imediata
+        if target == "sistema":
+            self.update_sys_info()
+
+    # ---------- Criação dos frames ----------
+    def create_frames(self):
+        self.frames["sistema"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_sistema_frame(self.frames["sistema"])
+
+        self.frames["otimizacao"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_otimizacao_frame(self.frames["otimizacao"])
+
+        self.frames["rede"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_rede_frame(self.frames["rede"])
+
+        self.frames["drivers"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_drivers_frame(self.frames["drivers"])
+
+        self.frames["agente"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_agente_frame(self.frames["agente"])
+
+        self.frames["config"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_config_frame(self.frames["config"])
+
+        self.frames["sobre"] = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.create_sobre_frame(self.frames["sobre"])
+
+    # ---------- Sistema (cards de informações) ----------
+    def create_sistema_frame(self, parent):
+        ctk.CTkLabel(parent, text="Informações do Sistema", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 30))
+
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="both", expand=True)
+        for i in range(3):
+            grid.columnconfigure(i, weight=1)
+
+        info_fields = [
+            ("💻 Hostname", "hostname", self._get_hostname),
+            ("💿 Distribuição", "distro", self._get_distro),
+            ("🐧 Kernel", "kernel", self._get_kernel),
+            ("🖥️ CPU", "cpu", self._get_cpu),
+            ("📟 RAM", "ram", self._get_ram),
+            ("🎮 GPU", "gpu", self._get_gpu),
+            ("💽 Discos", "disks", self._get_disks),
+            ("⏱️ Uptime", "uptime", self._get_uptime),
+            ("🔋 Bateria", "battery", self._get_battery)
+        ]
+
+        self.sys_labels = {}
+
+        for i, (label, key, func) in enumerate(info_fields):
+            row, col = divmod(i, 3)
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10, border_width=1, border_color=self.acc_color)
+            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            card.grid_propagate(False)
+            card.configure(height=150)
+
+            ctk.CTkLabel(card, text=label, font=("Inter", 14, "bold"), text_color=self.acc_color).pack(pady=(10, 5))
+
+            value_label = ctk.CTkLabel(
+                card,
+                text="...",
+                font=("Consolas", 11),
+                text_color=self.text_color,
+                wraplength=180,
+                justify="left"
+            )
+            value_label.pack(expand=True, fill="both", padx=5, pady=(0, 10))
+            self.sys_labels[key] = value_label
+
+        self.update_sys_info()
+
+    def update_sys_info(self):
+        try:
+            self.sys_labels["hostname"].configure(text=self._get_hostname())
+            self.sys_labels["distro"].configure(text=self._get_distro())
+            self.sys_labels["kernel"].configure(text=self._get_kernel())
+            self.sys_labels["cpu"].configure(text=self._get_cpu())
+            self.sys_labels["ram"].configure(text=self._get_ram())
+            self.sys_labels["gpu"].configure(text=self._get_gpu())
+            self.sys_labels["disks"].configure(text=self._get_disks())
+            self.sys_labels["uptime"].configure(text=self._get_uptime())
+            self.sys_labels["battery"].configure(text=self._get_battery())
+        except Exception as e:
+            print(f"Erro ao atualizar informações: {e}")
+
+    # ---------- Métodos de coleta de informações (multiplataforma) ----------
+    def _get_hostname(self):
+        return platform.node()
+
+    def _get_distro(self):
+        if self.SO == "Linux":
+            try:
+                with open("/etc/os-release") as f:
+                    for line in f:
+                        if line.startswith("PRETTY_NAME="):
+                            return line.split("=")[1].strip().strip('"')
+            except:
+                pass
+        return platform.system() + " " + platform.release()
+
+    def _get_kernel(self):
+        return platform.release()
+
+    def _get_cpu(self):
+        try:
+            if self.SO == "Linux":
+                out = subprocess.check_output("grep -m1 'model name' /proc/cpuinfo | cut -d: -f2", shell=True, text=True).strip()
+                if out:
+                    return out
+            elif self.SO == "Windows":
+                out = subprocess.check_output("wmic cpu get name", shell=True, text=True).strip().split('\n')[1]
+                if out:
+                    return out
+            elif self.SO == "Darwin":
+                out = subprocess.check_output("sysctl -n machdep.cpu.brand_string", shell=True, text=True).strip()
+                if out:
+                    return out
+        except:
+            pass
+        return f"{psutil.cpu_count()} núcleos ({psutil.cpu_percent()}%)"
+
+    def _get_ram(self):
+        mem = psutil.virtual_memory()
+        return f"{mem.used // 1048576} MB / {mem.total // 1048576} MB ({mem.percent}%)"
+
+    def _get_gpu(self):
+        try:
+            if self.SO == "Linux":
+                out = subprocess.check_output("lspci | grep -i 'vga\\|3d' | cut -d: -f3-", shell=True, text=True).strip()
+                if out:
+                    return out
+            elif self.SO == "Windows":
+                out = subprocess.check_output("wmic path win32_VideoController get name", shell=True, text=True).strip().split('\n')[1]
+                if out:
+                    return out
+            elif self.SO == "Darwin":
+                out = subprocess.check_output("system_profiler SPDisplaysDataType | grep Chipset", shell=True, text=True).strip()
+                if out:
+                    return out
+        except:
+            pass
+        return "Não detectado"
+
+    def _get_disks(self):
+        try:
+            if self.SO == "Linux":
+                out = subprocess.check_output("lsblk -d -o MODEL,SIZE | tail -n +2 | head -2", shell=True, text=True).strip()
+                if out:
+                    return out.replace('\n', ' | ')
+            # Fallback para Windows/macOS (usando psutil)
+            disks = []
+            for part in psutil.disk_partitions():
+                if part.fstype:
+                    usage = psutil.disk_usage(part.mountpoint)
+                    disks.append(f"{part.device} ({usage.total // 1073741824} GB)")
+            return " | ".join(disks[:2])
+        except:
+            return "N/A"
+
+    def _get_uptime(self):
+        try:
+            uptime_seconds = time.time() - psutil.boot_time()
+            return str(datetime.timedelta(seconds=int(uptime_seconds)))
+        except:
+            return "N/A"
+
+    def _get_battery(self):
+        try:
+            battery = psutil.sensors_battery()
+            if battery:
+                return f"{battery.percent:.1f}%"
+            else:
+                return "AC Power"
+        except:
+            return "AC Power"
+
+    # ---------- Otimização (12 cards) ----------
+    def create_otimizacao_frame(self, parent):
+        ctk.CTkLabel(parent, text="Otimização", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 20))
+
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="both", expand=True, pady=10)
+        for i in range(3):
+            grid.columnconfigure(i, weight=1)
+
+        cards = [
+            ("🧹 Limpeza de Cache", "cache", "ot", False),
+            ("🔄 Reset de Swap", "swap", "ot", False),
+            ("✅ Verificar Erros", "check", "ot", False),
+            ("🔥 Modo Turbo", "turbo", "ot", False),
+            ("Steam", "steam", "gm", True),
+            ("Lutris", "lutris", "gm", True),
+            ("Heroic Launcher", "heroic", "gm", True),
+            ("Bottles", "bottles", "gm", True),
+            ("Wine", "wine", "gm", True),
+            ("MangoHud", "mangohud", "gm", True),
+            ("Goverlay", "goverlay", "gm", True),
+            ("🎮 Emulador Dolphin", "dolphin", "ot", True),
+        ]
+
+        for idx, (title, cmd, tag, is_install) in enumerate(cards):
+            row, col = divmod(idx, 3)
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10, border_width=1, border_color=self.acc_color)
+            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            card.grid_propagate(False)
+            card.configure(height=150)
+
+            ctk.CTkLabel(card, text=title, font=("Inter", 14, "bold"), text_color=self.acc_color).pack(pady=(10, 5))
+            btn_text = "Instalar" if is_install else "Executar"
+            btn = ctk.CTkButton(
+                card,
+                text=btn_text,
+                fg_color=self.acc_color,
+                command=lambda c=cmd, t=tag, ti=title: self.run_optimization_action(c, t, ti)
+            )
+            btn.pack(pady=5)
+
+        self._add_console(parent, "ot")
+
+    def run_optimization_action(self, cmd, tag, title):
+        if cmd == "turbo":
+            self.toggle_turbo()
+        elif cmd == "dolphin":
+            self.install_dolphin()
+        elif cmd in ["steam", "lutris", "heroic", "bottles", "wine", "mangohud", "goverlay"]:
+            self.install_package(cmd, tag)
+        else:
+            self.run_system_action(cmd, tag)
+
+    def install_package(self, pkg, tag):
+        if self.SO == "Linux":
+            if os.path.exists("/etc/eopkg/repositories"):  # Solus
+                self.run_action(f"sudo eopkg it {pkg} -y", tag)
+            elif os.path.exists("/etc/debian_version"):  # Debian/Ubuntu
+                self.run_action(f"sudo apt install -y {pkg}", tag)
+            elif os.path.exists("/etc/redhat-release"):  # Fedora/RHEL
+                self.run_action(f"sudo dnf install -y {pkg}", tag)
+            else:
+                self.run_action(f"echo 'Instalação automática não suportada para {pkg}'", tag)
+        elif self.SO == "Windows":
+            self.run_action(f"winget install {pkg}", tag)
+        elif self.SO == "Darwin":
+            self.run_action(f"brew install {pkg}", tag)
+        else:
+            self.run_action(f"echo 'Sistema não suportado'", tag)
+
+    def run_system_action(self, cmd, tag):
+        if self.SO == "Linux":
+            if cmd == "cache":
+                self.run_action("sudo eopkg dc && sudo eopkg clean", tag)
+            elif cmd == "swap":
+                self.run_action("sudo swapoff -a && sudo swapon -a", tag)
+            elif cmd == "check":
+                self.run_action("sudo eopkg check", tag)
+            else:
+                self.run_action(f"echo 'Comando {cmd} não implementado'", tag)
+        else:
+            self.run_action(f"echo 'Ação {cmd} não disponível neste SO'", tag)
+
+    def install_dolphin(self):
+        distro = self._get_distro().lower()
+        if self.SO == "Linux":
+            if "ubuntu" in distro or "debian" in distro:
+                install_cmd = "sudo apt install dolphin-emu -y"
+            elif "fedora" in distro:
+                install_cmd = "sudo dnf install dolphin-emu -y"
+            elif "arch" in distro:
+                install_cmd = "sudo pacman -S dolphin-emu --noconfirm"
+            elif "opensuse" in distro:
+                install_cmd = "sudo zypper install dolphin-emu -y"
+            else:
+                install_cmd = "echo 'Distro não suportada para instalação automática'"
+        elif self.SO == "Windows":
+            install_cmd = "winget install dolphin-emu"
+        elif self.SO == "Darwin":
+            install_cmd = "brew install dolphin-emu"
+        else:
+            install_cmd = "echo 'Sistema não suportado'"
+        self.run_action(install_cmd, "ot")
+        log = getattr(self, "log_ot")
+        log.insert("end", "\n\nDOLPHIN INSTALADO COM SUCESSO!\n")
+        log.insert("end", "Para configurar, execute 'dolphin-emu' no terminal.\n")
+
+    # ---------- Rede (9 cards) ----------
+    def create_rede_frame(self, parent):
+        ctk.CTkLabel(parent, text="Rede", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 20))
+
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="both", expand=True, pady=10)
+        for i in range(3):
+            grid.columnconfigure(i, weight=1)
+
+        cards = [
+            ("📡 Ping", "ping", "net", False),
+            ("☁️ Cloudflare DNS", "1.1.1.1", "net", True),
+            ("🔵 Google DNS", "8.8.8.8", "net", True),
+            ("🛡️ AdGuard DNS", "94.140.14.14", "net", True),
+            ("🔄 DNS Automático", "auto", "net", True),
+            ("🌐 Testar Velocidade", "speedtest", "net", False),
+            ("🔌 Diagnóstico Placa", "ethtool", "net", False),
+            ("🔄 Renovar IP", "dhclient", "net", False),
+            ("🧭 Portas Abertas", "ports", "net", False),
+        ]
+
+        for idx, (title, cmd, tag, is_dns) in enumerate(cards):
+            row, col = divmod(idx, 3)
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10, border_width=1, border_color=self.acc_color)
+            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            card.grid_propagate(False)
+            card.configure(height=150)
+
+            ctk.CTkLabel(card, text=title, font=("Inter", 14, "bold"), text_color=self.acc_color).pack(pady=(10, 5))
+            if cmd == "ping":
+                btn = ctk.CTkButton(
+                    card,
+                    text="Iniciar",
+                    fg_color=self.acc_color,
+                    command=self.toggle_ping
+                )
+                btn.pack(pady=5)
+                self.ping_label = ctk.CTkLabel(card, text="-- ms", font=("Consolas", 14), text_color="#10b981")
+                self.ping_label.pack()
+            else:
+                btn_text = "Aplicar" if is_dns else "Executar"
+                btn = ctk.CTkButton(
+                    card,
+                    text=btn_text,
+                    fg_color=self.acc_color,
+                    command=lambda c=cmd, t=tag, d=is_dns: self.run_network_action(c, t, d)
+                )
+                btn.pack(pady=5)
+
+        self._add_console(parent, "net")
+
+    def run_network_action(self, cmd, tag, is_dns):
+        if cmd == "ping":
+            self.toggle_ping()
+        elif cmd == "speedtest":
+            self.run_action("curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 -", tag)
+        elif cmd == "ethtool":
+            if self.SO == "Linux":
+                iface = subprocess.getoutput("ip route | grep default | awk '{print $5}' | head -1")
+                if iface:
+                    self.run_action(f"ethtool {iface}", tag)
+                else:
+                    self.run_action("echo 'Interface não encontrada'", tag)
+            else:
+                self.run_action("echo 'Comando ethtool disponível apenas no Linux'", tag)
+        elif cmd == "dhclient":
+            if self.SO == "Linux":
+                self.run_action("sudo dhclient -v -r && sudo dhclient -v", tag)
+            else:
+                self.run_action("echo 'Renovação de IP via DHCPClient não suportada neste SO'", tag)
+        elif cmd == "ports":
+            self.scan_ports_interactive()
+        elif is_dns:
+            self.apply_dns(cmd, tag)
+        else:
+            self.run_action(cmd, tag)
+
+    def apply_dns(self, dns, tag):
+        if self.SO == "Linux":
+            iface = subprocess.getoutput("nmcli -t -f DEVICE,STATE dev | grep connected | cut -d: -f1 | head -n1")
+            if iface:
+                if dns == "auto":
+                    cmd = f"nmcli dev mod {iface} ipv4.dns ''"
+                else:
+                    cmd = f"nmcli dev mod {iface} ipv4.dns '{dns}'"
+                self.run_action(cmd, tag)
+            else:
+                self.run_action("echo 'Interface de rede não encontrada'", tag)
+        elif self.SO == "Windows":
+            iface = subprocess.getoutput("wmic nic where netenabled=true get NetConnectionID | findstr /v NetConnectionID").strip()
+            if iface:
+                if dns == "auto":
+                    cmd = f'netsh interface ip set dns "{iface}" dhcp'
+                else:
+                    cmd = f'netsh interface ip set dns "{iface}" static {dns}'
+                self.run_action(cmd, tag)
+            else:
+                self.run_action("echo 'Interface não encontrada'", tag)
+        elif self.SO == "Darwin":
+            service = subprocess.getoutput("networksetup -listallnetworkservices | grep -v 'An asterisk' | head -1")
+            if service:
+                if dns == "auto":
+                    cmd = f"networksetup -setdnsservers '{service}' empty"
+                else:
+                    cmd = f"networksetup -setdnsservers '{service}' {dns}"
+                self.run_action(cmd, tag)
+            else:
+                self.run_action("echo 'Serviço de rede não encontrado'", tag)
+        else:
+            self.run_action("echo 'Configuração de DNS não suportada neste SO'", tag)
+
+    def scan_ports_interactive(self):
+        log = getattr(self, "log_net")
+        log.delete("1.0", "end")
+        log.insert("end", "Escaneando portas abertas...\n")
+        try:
+            if self.SO == "Linux":
+                output = subprocess.check_output("ss -tuln | tail -n +2", shell=True, text=True)
+            elif self.SO == "Windows":
+                output = subprocess.check_output("netstat -an | findstr LISTENING", shell=True, text=True)
+            elif self.SO == "Darwin":
+                output = subprocess.check_output("lsof -i -P -n | grep LISTEN", shell=True, text=True)
+            else:
+                output = ""
+            lines = output.strip().split('\n')
+            ports = []
+            for line in lines:
+                if self.SO == "Windows":
+                    parts = line.split()
+                    if len(parts) > 1:
+                        addr = parts[1]
+                        if ':' in addr:
+                            port = addr.split(':')[-1]
+                            ports.append(("TCP", port))
+                else:
+                    # Linux/macOS parsing simplificado
+                    pass
+            if not ports:
+                log.insert("end", "Nenhuma porta aberta encontrada.\n")
+                return
+            log.insert("end", "Portas abertas:\n")
+            for i, (proto, port) in enumerate(ports):
+                log.insert("end", f"[{i+1}] {proto} {port}\n")
+            log.insert("end", "\nPara fechar, use o firewall apropriado.\n")
+        except Exception as e:
+            log.insert("end", f"Erro ao escanear: {e}\n")
+
+    # ---------- Drivers (9 cards) ----------
+    def create_drivers_frame(self, parent):
+        ctk.CTkLabel(parent, text="Drivers", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 20))
+
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="both", expand=True, pady=10)
+        for i in range(3):
+            grid.columnconfigure(i, weight=1)
+
+        cards = [
+            ("🖥️ PCI (Vídeo/Rede)", "pci", "drv", False),
+            ("📦 Atualizar Sistema", "update", "drv", False),
+            ("🔌 USB Conectados", "usb", "drv", False),
+            ("🧩 Módulos Kernel", "modules", "drv", False),
+            ("⚙️ CPU Detalhada", "cpu_info", "drv", False),
+            ("⚠️ Firmware Erros", "firmware", "drv", False),
+            ("🎮 Drivers de Vídeo", "video_drv", "drv", False),
+            ("🌐 Drivers de Rede", "net_drv", "drv", False),
+            ("🔄 Atualizações Automáticas", "auto_update", "drv", False),
+        ]
+
+        for idx, (title, cmd, tag, _) in enumerate(cards):
+            row, col = divmod(idx, 3)
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10, border_width=1, border_color=self.acc_color)
+            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            card.grid_propagate(False)
+            card.configure(height=150)
+
+            ctk.CTkLabel(card, text=title, font=("Inter", 14, "bold"), text_color=self.acc_color).pack(pady=(10, 5))
+            btn = ctk.CTkButton(
+                card,
+                text="Executar",
+                fg_color=self.acc_color,
+                command=lambda c=cmd, t=tag: self.run_driver_action(c, t)
+            )
+            btn.pack(pady=5)
+
+        self._add_console(parent, "drv")
+
+    def run_driver_action(self, cmd, tag):
+        if cmd == "pci":
+            self.run_system_cmd("lspci -nnk" if self.SO == "Linux" else "system_profiler SPHardwareDataType" if self.SO == "Darwin" else "wmic path win32_VideoController get name", tag)
+        elif cmd == "update":
+            if self.SO == "Linux":
+                self.run_action("sudo dnf upgrade -y || sudo apt upgrade -y", tag)
+            elif self.SO == "Windows":
+                self.run_action("winget upgrade --all", tag)
+            elif self.SO == "Darwin":
+                self.run_action("brew upgrade", tag)
+        elif cmd == "usb":
+            self.run_system_cmd("lsusb" if self.SO == "Linux" else "system_profiler SPUSBDataType" if self.SO == "Darwin" else "wmic path Win32_USBControllerDevice get *", tag)
+        elif cmd == "modules":
+            self.run_system_cmd("lsmod" if self.SO == "Linux" else "kextstat" if self.SO == "Darwin" else "driverquery", tag)
+        elif cmd == "cpu_info":
+            self.run_system_cmd("lscpu" if self.SO == "Linux" else "sysctl -a | grep machdep.cpu" if self.SO == "Darwin" else "wmic cpu get name", tag)
+        elif cmd == "firmware":
+            self.run_system_cmd("sudo dmesg | grep -i firmware" if self.SO == "Linux" else "ioreg -l | grep -i firmware" if self.SO == "Darwin" else "echo 'Firmware info not available'", tag)
+        elif cmd == "video_drv":
+            self.install_video_drivers()
+        elif cmd == "net_drv":
+            self.install_network_drivers()
+        elif cmd == "auto_update":
+            self.setup_auto_updates()
+        else:
+            self.run_action(f"echo 'Comando {cmd} não reconhecido'", tag)
+
+    def run_system_cmd(self, cmd, tag):
+        self.run_action(cmd, tag)
+
+    def install_video_drivers(self):
+        log = getattr(self, "log_drv")
+        log.delete("1.0", "end")
+        log.insert("end", "Detectando GPU...\n")
+        try:
+            if self.SO == "Linux":
+                lspci = subprocess.check_output("lspci | grep -i 'vga\\|3d'", shell=True, text=True)
+                if "NVIDIA" in lspci:
+                    log.insert("end", "GPU NVIDIA detectada. Instalando driver proprietário...\n")
+                    cmd = "sudo dnf install nvidia-driver -y" if "fedora" in self._get_distro().lower() else "sudo apt install nvidia-driver -y"
+                elif "AMD" in lspci:
+                    log.insert("end", "GPU AMD detectada. Instalando driver amdgpu...\n")
+                    cmd = "sudo dnf install xorg-x11-drv-amdgpu -y" if "fedora" in self._get_distro().lower() else "sudo apt install xserver-xorg-video-amdgpu -y"
+                elif "Intel" in lspci:
+                    log.insert("end", "GPU Intel detectada. Driver já incluso no kernel.\n")
+                    cmd = "echo 'Driver Intel já presente'"
+                else:
+                    log.insert("end", "GPU não identificada.\n")
+                    return
+                self.run_action(cmd, "drv")
+            elif self.SO == "Windows":
+                log.insert("end", "No Windows, os drivers de vídeo são gerenciados pelo Windows Update.\n")
+                self.run_action("echo 'Use o Gerenciador de Dispositivos para atualizar'", "drv")
+            elif self.SO == "Darwin":
+                log.insert("end", "No macOS, os drivers são atualizados via atualização do sistema.\n")
+                self.run_action("softwareupdate --list", "drv")
+        except Exception as e:
+            log.insert("end", f"Erro: {e}\n")
+
+    def install_network_drivers(self):
+        log = getattr(self, "log_drv")
+        log.delete("1.0", "end")
+        log.insert("end", "Verificando placa de rede...\n")
+        try:
+            if self.SO == "Linux":
+                lspci = subprocess.check_output("lspci | grep -i ethernet", shell=True, text=True)
+                if "Realtek" in lspci:
+                    log.insert("end", "Placa Realtek detectada. Instalando driver r8168...\n")
+                    cmd = "sudo dnf install r8168 -y" if "fedora" in self._get_distro().lower() else "sudo apt install r8168-dkms -y"
+                else:
+                    log.insert("end", "Placa não Realtek. Driver padrão já deve funcionar.\n")
+                    cmd = "echo 'Nenhuma ação necessária'"
+                self.run_action(cmd, "drv")
+            else:
+                log.insert("end", "Detecção de drivers de rede disponível apenas no Linux.\n")
+        except Exception as e:
+            log.insert("end", f"Erro: {e}\n")
+
+    def setup_auto_updates(self):
+        log = getattr(self, "log_drv")
+        log.delete("1.0", "end")
+        if self.SO == "Linux":
+            if "fedora" in self._get_distro().lower():
+                log.insert("end", "Instalando e configurando dnf-automatic...\n")
+                self.run_action("sudo dnf install dnf-automatic -y && sudo systemctl enable --now dnf-automatic.timer", "drv")
+            elif "ubuntu" in self._get_distro().lower() or "debian" in self._get_distro().lower():
+                log.insert("end", "Configurando unattended-upgrades...\n")
+                self.run_action("sudo apt install unattended-upgrades -y && sudo dpkg-reconfigure -plow unattended-upgrades", "drv")
+            else:
+                log.insert("end", "Sistema não suportado para atualizações automáticas.\n")
+        elif self.SO == "Windows":
+            log.insert("end", "Configurando Windows Update para automático...\n")
+            self.run_action("wuauclt /detectnow /updatenow", "drv")
+        elif self.SO == "Darwin":
+            log.insert("end", "Configurando atualizações automáticas do macOS...\n")
+            self.run_action("sudo softwareupdate --schedule on", "drv")
+        else:
+            log.insert("end", "Sistema não suportado.\n")
+
+    # ---------- Agente IA (9 cards) ----------
+    def create_agente_frame(self, parent):
+        ctk.CTkLabel(parent, text="Agente de IA", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(pady=(0, 30))
+
+        ctk.CTkLabel(parent, text="Conecte um modelo de IA:", font=("Inter", 16), text_color=self.text_color).pack(pady=10)
+
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="both", expand=True, pady=10)
+        for i in range(3):
+            grid.columnconfigure(i, weight=1)
+
+        for idx, ia in enumerate(AI_SUGGESTIONS):
+            row, col = divmod(idx, 3)
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10, border_width=1, border_color=self.acc_color)
+            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            card.grid_propagate(False)
+            card.configure(height=150)
+
+            ctk.CTkLabel(card, text=ia, font=("Inter", 14, "bold"), text_color=self.acc_color).pack(pady=(10, 5))
+            if ia == "Configurar IA Local":
+                btn = ctk.CTkButton(
+                    card,
+                    text="Configurar",
+                    fg_color=self.acc_color,
+                    command=self.configure_local_ai
+                )
+            else:
+                btn = ctk.CTkButton(
+                    card,
+                    text="Conectar",
+                    fg_color=self.acc_color,
+                    command=lambda i=ia: self.connect_ai(i)
+                )
+            btn.pack(pady=5)
+
+        self.ai_status = ctk.CTkLabel(parent, text="", font=("Inter", 12), text_color=self.acc_color)
+        self.ai_status.pack(pady=20)
+
+    def connect_ai(self, ia_name):
+        self.ai_status.configure(text=f"Conectado a {ia_name} (simulação)")
+
+    def configure_local_ai(self):
+        if not hasattr(self, "log_agente"):
+            self._add_console(self.frames["agente"], "agente")
+        log = getattr(self, "log_agente")
+        log.delete("1.0", "end")
+        log.insert("end", "Configurando IA local...\n")
+        log.insert("end", "Instalando Ollama...\n")
+        self.run_action("curl -fsSL https://ollama.com/install.sh | sh", "agente")
+        log.insert("end", "Após instalação, execute 'ollama run llama2' para testar.\n")
+
+    # ---------- Configurações ----------
+    def create_config_frame(self, parent):
+        ctk.CTkLabel(parent, text="Configurações", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 30))
+
+        frame_user = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_user.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_user, text="Nome de usuário", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        self.entry_user = ctk.CTkEntry(frame_user, placeholder_text="Seu nome", width=300)
+        self.entry_user.insert(0, self.config.get("username", "ewerton"))
+        self.entry_user.pack(anchor="w", pady=5)
+        btn_reset_user = ctk.CTkButton(frame_user, text="Voltar para o padrão", fg_color="transparent", text_color=self.acc_color, command=lambda: self.entry_user.delete(0, "end") or self.entry_user.insert(0, "ewerton"))
+        btn_reset_user.pack(anchor="w")
+
+        frame_lang = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_lang.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_lang, text="Idioma de Interface", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        self.lang_var = ctk.StringVar(value=languages.get(self.config.get("language", "pt_BR"), "Português Brasileiro"))
+        lang_menu = ctk.CTkOptionMenu(frame_lang, values=list(languages.values()), variable=self.lang_var, width=300)
+        lang_menu.pack(anchor="w", pady=5)
+
+        frame_scale = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_scale.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_scale, text="Escala da interface *", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        self.scale_var = ctk.StringVar(value=scales.get(self.config.get("ui_scale", "auto"), "Automático"))
+        scale_menu = ctk.CTkOptionMenu(frame_scale, values=list(scales.values()), variable=self.scale_var, width=300)
+        scale_menu.pack(anchor="w", pady=5)
+
+        frame_theme = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_theme.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_theme, text="Tema da interface", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        self.theme_var = ctk.StringVar(value=self.config.get("theme", "default"))
+        theme_names = ["Padrão (Roxo)", "Cinza Profissional", "Escuro Total", "Claro Clean"]
+        theme_menu = ctk.CTkOptionMenu(frame_theme, values=theme_names, width=300)
+        idx = ["default", "grey", "dark", "light"].index(self.config.get("theme", "default"))
+        theme_menu.set(theme_names[idx])
+        theme_menu.pack(anchor="w", pady=5)
+
+        frame_tab = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_tab.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_tab, text="Abrir arquivo", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        self.tab_var = ctk.StringVar(value="Na guia" if self.config.get("open_file_in_tab", False) else "Nova janela")
+        tab_menu = ctk.CTkOptionMenu(frame_tab, values=["Na guia", "Nova janela"], variable=self.tab_var, width=300)
+        tab_menu.pack(anchor="w", pady=5)
+
+        ctk.CTkLabel(parent, text="* - As alterações serão aplicadas após reiniciar o aplicativo", font=("Inter", 10), text_color="#888888").pack(anchor="w", pady=20)
+
+        btn_apply = ctk.CTkButton(parent, text="Aplicar", fg_color=self.acc_color, command=self.apply_config, width=200, height=40)
+        btn_apply.pack(pady=20)
+
+    def apply_config(self):
+        self.config["username"] = self.entry_user.get()
+        selected_lang = self.lang_var.get()
+        for k, v in languages.items():
+            if v == selected_lang:
+                self.config["language"] = k
+                break
+        selected_scale = self.scale_var.get()
+        for k, v in scales.items():
+            if v == selected_scale:
+                self.config["ui_scale"] = k
+                break
+        theme_map = ["default", "grey", "dark", "light"]
+        theme_idx = ["Padrão (Roxo)", "Cinza Profissional", "Escuro Total", "Claro Clean"].index(self.theme_var.get())
+        self.config["theme"] = theme_map[theme_idx]
+        self.config["open_file_in_tab"] = (self.tab_var.get() == "Na guia")
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(self.config, f)
+
+        # Reinicia o aplicativo para aplicar tema e escala
+        python = sys.executable
+        os.execl(python, python, *sys.argv)
+
+    # ---------- Sobre ----------
+    def create_sobre_frame(self, parent):
+        parent.grid_rowconfigure(0, weight=1)
+        parent.grid_columnconfigure(0, weight=1)
+
+        card = ctk.CTkFrame(parent, fg_color=self.light_bg, corner_radius=15, border_width=2, border_color=self.acc_color)
+        card.grid(row=0, column=0, padx=50, pady=50, sticky="nsew")
+        card.grid_propagate(False)
+        card.configure(width=600, height=500)
+
+        ctk.CTkLabel(card, text="⚡ SpeedScan", font=("Inter", 36, "bold"), text_color=self.acc_color).pack(pady=(40, 10))
+        ctk.CTkLabel(card, text="Versão Beta 0.9.0", font=("Inter", 14), text_color="#888888").pack()
+
+        info_text = (
+            "Desenvolvedor: Ewerton Vasconcelos\n"
+            "Tecnologias: Python, CustomTkinter, psutil\n"
+            "Repositório: github.com/ewertonvasconcelos/speedscan\n\n"
+            "Este software está em fase de desenvolvimento.\n"
+            "Não foi lançado oficialmente.\n\n"
+            "Funcionalidades:\n"
+            "• Monitoramento de hardware em tempo real\n"
+            "• Otimização de sistema (cache, swap, turbo)\n"
+            "• Instalação de apps gamers (Steam, Lutris, Dolphin)\n"
+            "• Configuração de DNS e rede\n"
+            "• Diagnóstico e atualização de drivers\n"
+            "• Conexão com modelos de IA\n"
+            "• Temas personalizáveis\n\n"
+            "© 2026 Ewerton Vasconcelos. Todos os direitos reservados."
+        )
+        ctk.CTkLabel(card, text=info_text, font=("Inter", 12), justify="left", text_color=self.text_color).pack(pady=20, padx=30)
+
+    # ---------- Utilitários (consoles inteligentes) ----------
+    def _add_console(self, parent, tag):
+        btn = ctk.CTkButton(
+            parent,
+            text="Detalhes ⌄",
+            fg_color="transparent",
+            text_color=self.acc_color,
+            hover_color=self.acc_color,
+            corner_radius=20,
+            command=lambda: self.toggle_console(tag)
+        )
+        setattr(self, f"detail_btn_{tag}", btn)
+
+        log = ctk.CTkTextbox(parent, height=150, fg_color="#000000", text_color="#10b981", font=("Consolas", 11))
+        setattr(self, f"log_{tag}", log)
+        self.consoles_visible[tag] = False
+
+    def show_details_button(self, tag):
+        btn = getattr(self, f"detail_btn_{tag}")
+        if not btn.winfo_ismapped():
+            btn.pack(anchor="e", pady=5)
+        btn.configure(text="Detalhes ⌄")
+
+    def hide_details_button(self, tag):
+        btn = getattr(self, f"detail_btn_{tag}")
+        if btn.winfo_ismapped():
+            btn.pack_forget()
+
+    def toggle_console(self, tag):
+        log = getattr(self, f"log_{tag}")
+        btn = getattr(self, f"detail_btn_{tag}")
+        if self.consoles_visible.get(tag, False):
+            log.pack_forget()
+            btn.pack_forget()
+            self.consoles_visible[tag] = False
+        else:
+            log.pack(fill="x", pady=5, before=btn)
+            btn.configure(text="Detalhes ⌃")
+            self.consoles_visible[tag] = True
+
+    def run_action(self, cmd, tag):
+        log = getattr(self, f"log_{tag}")
+        log.delete("1.0", "end")
+        self.hide_details_button(tag)
+        self.consoles_visible[tag] = False
+        threading.Thread(target=self._execute, args=(cmd, log, tag), daemon=True).start()
+
+    def _execute(self, cmd, log, tag):
+        if self.SO == "Linux" and "sudo" in cmd:
+            full_cmd = f"pkexec bash -c '{cmd}'"
+        else:
+            full_cmd = cmd
+        proc = subprocess.Popen(full_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        for line in proc.stdout:
+            self.after(0, lambda l=line: self._update_log(log, l))
+        proc.wait()
+        self.after(0, lambda: self._update_log(log, "\n-- COMANDO FINALIZADO --\n"))
+        self.after(0, lambda: self.show_details_button(tag))
+
+    def _update_log(self, log, text):
+        log.insert("end", text)
+        log.see("end")
+
+    # ---------- Funções específicas ----------
+    def toggle_turbo(self):
+        self.turbo_active = not self.turbo_active
+        if self.SO == "Linux":
+            cmd = "sudo cpupower frequency-set -g performance" if self.turbo_active else "sudo cpupower frequency-set -g powersave"
+        elif self.SO == "Windows":
+            # No Windows, podemos alterar o plano de energia
+            guid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c" if self.turbo_active else "381b4222-f694-41f0-9685-ff5bb260df2e"
+            cmd = f"powercfg /setactive {guid}"
+        elif self.SO == "Darwin":
+            # No macOS, não há um comando direto, apenas avisamos
+            cmd = "echo 'Modo Turbo não disponível no macOS'"
+        else:
+            cmd = "echo 'Sistema não suportado'"
+        self.run_action(cmd, "ot")
+
+    def toggle_ping(self):
+        if not self.ping_active:
+            self.ping_active = True
+            threading.Thread(target=self._ping_loop, daemon=True).start()
+        else:
+            self.ping_active = False
+
+    def _ping_loop(self):
+        while self.ping_active:
+            try:
+                param = "-n" if self.SO == "Windows" else "-c"
+                p = subprocess.run(
+                    ["ping", param, "1", "-W", "1", "8.8.8.8"],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if "time=" in p.stdout or "tempo=" in p.stdout or "ms" in p.stdout:
+                    # Expressão regular para capturar o tempo em diferentes idiomas
+                    match = re.search(r'time[=<](\d+\.?\d*)', p.stdout) or re.search(r'tempo[=<](\d+\.?\d*)', p.stdout) or re.search(r'(\d+\.?\d*)ms', p.stdout)
+                    res = match.group(1) if match else "Erro"
+                else:
+                    res = "Erro"
+                self.after(0, lambda r=res: self.ping_label.configure(text=f"{r} ms"))
+            except:
+                self.after(0, lambda: self.ping_label.configure(text="-- ms"))
+            time.sleep(2)
+
+    # ---------- Hardware monitor ----------
+    def hardware_monitor(self):
+        while True:
+            if self.current_module == "sistema":
+                self.after(0, self.update_sys_info)
+            time.sleep(3)
+
+    def _on_mousewheel(self, event):
+        current = self.frames[self.current_module]
+        if isinstance(current, ctk.CTkScrollableFrame):
+            current._parent_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+if __name__ == "__main__":
+    app = SpeedScan()
+    app.mainloop()
