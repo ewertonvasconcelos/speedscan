@@ -1,44 +1,48 @@
-# SpeedScan ⚡
+# ⚡ SpeedScan
 
-O **SpeedScan** é uma central de otimização e diagnóstico de hardware de alta performance, desenvolvida especialmente para o ecossistema Linux (Solus/Eopkg). Com uma interface moderna e modular, ele une monitoramento em tempo real com ferramentas de automação gamer e rede.
+![Versão](https://img.shields.io/badge/version-0.9.0--beta-blue)
+![Licença](https://img.shields.io/badge/license-MIT-green)
+![Plataformas](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android-lightgrey)
 
----
+SpeedScan é uma ferramenta de diagnóstico e otimização de sistemas desenvolvida em Python com CustomTkinter. Oferece monitoramento em tempo real, otimização de desempenho, configuração de rede e diagnóstico de drivers, tudo em uma interface moderna e intuitiva.
 
-## 🚀 Funcionalidades Principais
+## ✨ Funcionalidades
 
-| Módulo | Descrição |
-| :--- | :--- |
-| **💻 Sistema** | Monitoramento detalhado de CPU, GPU, RAM e saúde de Discos (SSD/HDD). |
-| **🎮 Gamer** | Modo Turbo (CPU Performance) e instaladores rápidos: Steam, Lutris, Wine e Bottles. |
-| **🌐 Rede** | Teste de latência (Ping) e troca rápida de DNS (Cloudflare, Google, Auto). |
-| **🛠 Drivers** | Diagnóstico via Kernel e listagem de dispositivos PCI/USB. |
-| **🎨 Temas** | 4 estilos visuais (Dark, Grey, Light, Default) com troca instantânea. |
-| **📦 Biblioteca** | Gerenciador local de instaladores .AppImage, .deb e .exe. |
+- **Monitoramento do Sistema**: CPU, RAM, GPU, discos, uptime e bateria
+- **Otimização**: Limpeza de cache, reset de swap, verificação de erros
+- **Modo Turbo**: Ajusta o governador de CPU para máxima performance (Linux) ou plano de energia (Windows)
+- **Rede**: Teste de ping, configuração de DNS (Cloudflare, Google, AdGuard), traceroute, informações Wi-Fi
+- **Drivers**: Diagnóstico de hardware, atualização de drivers de vídeo/rede
+- **Agente IA**: Conexão com modelos de IA (DeepSeek, GPT, Gemini, etc.) e configuração local (Ollama)
+- **Temas**: Personalização com temas dark/light e reinicialização instantânea
 
----
+## 📸 Capturas de Tela
 
-## 🛠 Requisitos do Sistema
+| Sistema | Otimização | Rede |
+|--------|------------|------|
+| ![Sistema](screenshots/sistema.png) | ![Otimização](screenshots/otimizacao.png) | ![Rede](screenshots/rede.png) |
 
-Para rodar o SpeedScan, você precisará de:
-* **Linguagem:** Python 3.10+
-* **Bibliotecas:** \`customtkinter\`, \`psutil\`, \`pillow\`
-* **Privilégios:** Acesso root via \`pkexec\` (para comandos de sistema).
+*Nota: As imagens acima são apenas ilustrativas. Substitua pelos prints reais do software.*
 
----
+## 🖥️ Plataformas Suportadas
 
-## 🔧 Como Instalar e Rodar
+| Sistema | Status | Observações |
+|---------|--------|-------------|
+| 🐧 Linux | ✅ Funcional | Testado em Fedora, Solus, openSUSE |
+| 🪟 Windows | ✅ Funcional | Requer winget para instalação de apps |
+| 🍏 macOS | ✅ Funcional | Requer Homebrew para instalação de apps |
+| 📱 Android | 🚧 Em desenvolvimento | Versão separada com Kivy/BeeWare |
 
-### 1. Clonar e Instalar Dependências
-\`\`\`bash
+## 🚀 Instalação
+
+### Linux
+
+```bash
+# via curl (recomendado)
+curl -sSL https://raw.githubusercontent.com/ewertonvasconcelos/speedscan/main/install.sh | bash
+
+# ou manualmente
 git clone https://github.com/ewertonvasconcelos/speedscan.git
 cd speedscan
-pip install customtkinter psutil pillow
-\`\`\`
-
-### 2. Executar o Aplicativo
-\`\`\`bash
-python3 speedscan_app.py
-\`\`\`
-
----
-Desenvolvido por [Ewerton Vasconcelos](https://github.com/ewertonvasconcelos)
+pip install -r requirements.txt
+python3 core/speedscan_app.py
