@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SpeedScan - Versão Multiplataforma (corrigido: tema e rolagem)
+# SpeedScan - Versão final com 12 cards na Rede e botão Detalhes corrigido
 # Uso: python3 core/speedscan_app.py
 
 import customtkinter as ctk
@@ -18,6 +18,9 @@ from datetime import datetime
 # Configurações
 CONFIG_FILE = os.path.expanduser("~/.speedscan_conf")
 ICON_PATH = os.path.expanduser("~/speedscan/icon.png")
+LOG_DIR = os.path.expanduser("~/speedscan/logs")
+
+os.makedirs(LOG_DIR, exist_ok=True)
 
 def get_config():
     if os.path.exists(CONFIG_FILE):
@@ -77,7 +80,7 @@ class SpeedScan(ctk.CTk):
         self.title("SpeedScan")
         self.geometry("1200x950")
         self.minsize(1000, 700)
-        self.configure(fg_color=self.bg_color)
+        self.configure(fg_color=self.bg_color, cursor="arrow")
 
         self.apply_ui_scale()
 
@@ -163,7 +166,8 @@ class SpeedScan(ctk.CTk):
                 corner_radius=20,
                 fg_color="transparent",
                 hover_color=self.acc_color,
-                command=lambda: self.show_frame("sistema")
+                command=lambda: self.show_frame("sistema"),
+                cursor="hand2"
             )
             btn_speed.pack()
         else:
@@ -176,7 +180,8 @@ class SpeedScan(ctk.CTk):
                 fg_color="transparent",
                 hover_color=self.acc_color,
                 font=("Inter", 48),
-                command=lambda: self.show_frame("sistema")
+                command=lambda: self.show_frame("sistema"),
+                cursor="hand2"
             )
             btn_speed.pack()
 
@@ -210,7 +215,8 @@ class SpeedScan(ctk.CTk):
             hover_color=self.acc_color,
             font=("Inter", 13),
             corner_radius=10,
-            command=lambda: self.show_frame(target)
+            command=lambda: self.show_frame(target),
+            cursor="hand2"
         )
         btn.pack(fill="x")
         return btn
@@ -268,7 +274,7 @@ class SpeedScan(ctk.CTk):
             ("🖥️ CPU", "cpu", self._get_cpu),
             ("📟 RAM", "ram", self._get_ram),
             ("🎮 GPU", "gpu", self._get_gpu),
-            ("💽 Discos", "disks", self._get_disks),
+            ("💽 Discos", "disks", self._get_disks_detailed),
             ("⏱️ Uptime", "uptime", self._get_uptime),
             ("🔋 Bateria", "battery", self._get_battery)
         ]
@@ -305,7 +311,7 @@ class SpeedScan(ctk.CTk):
             self.sys_labels["cpu"].configure(text=self._get_cpu())
             self.sys_labels["ram"].configure(text=self._get_ram())
             self.sys_labels["gpu"].configure(text=self._get_gpu())
-            self.sys_labels["disks"].configure(text=self._get_disks())
+            self.sys_labels["disks"].configure(text=self._get_disks_detailed())
             self.sys_labels["uptime"].configure(text=self._get_uptime())
             self.sys_labels["battery"].configure(text=self._get_battery())
         except Exception as e:
@@ -368,18 +374,23 @@ class SpeedScan(ctk.CTk):
             pass
         return "Não detectado"
 
-    def _get_disks(self):
+    def _get_disks_detailed(self):
         try:
-            if self.SO == "Linux":
-                out = subprocess.check_output("lsblk -d -o MODEL,SIZE | tail -n +2 | head -2", shell=True, text=True).strip()
-                if out:
-                    return out.replace('\n', ' | ')
-            disks = []
+            disks_info = []
             for part in psutil.disk_partitions():
-                if part.fstype:
-                    usage = psutil.disk_usage(part.mountpoint)
-                    disks.append(f"{part.device} ({usage.total // 1073741824} GB)")
-            return " | ".join(disks[:2])
+                if part.fstype and not part.mountpoint.startswith("/snap/"):
+                    try:
+                        usage = psutil.disk_usage(part.mountpoint)
+                        total_gb = usage.total / (1024**3)
+                        used_gb = usage.used / (1024**3)
+                        free_gb = usage.free / (1024**3)
+                        disks_info.append(f"{part.device} ({total_gb:.1f}G, usado {used_gb:.1f}G, livre {free_gb:.1f}G)")
+                    except:
+                        continue
+            if disks_info:
+                return "\n".join(disks_info[:3])
+            else:
+                return "Nenhum disco detectado"
         except:
             return "N/A"
 
@@ -400,7 +411,7 @@ class SpeedScan(ctk.CTk):
         except:
             return "AC Power"
 
-    # ---------- Otimização (12 cards) ----------
+    # ---------- Otimização ----------
     def create_otimizacao_frame(self, parent):
         ctk.CTkLabel(parent, text="Otimização", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 20))
 
@@ -437,7 +448,8 @@ class SpeedScan(ctk.CTk):
                 card,
                 text=btn_text,
                 fg_color=self.acc_color,
-                command=lambda c=cmd, t=tag, ti=title: self.run_optimization_action(c, t, ti)
+                command=lambda c=cmd, t=tag, ti=title: self.run_optimization_action(c, t, ti),
+                cursor="hand2"
             )
             btn.pack(pady=5)
 
@@ -507,7 +519,7 @@ class SpeedScan(ctk.CTk):
         log.insert("end", "\n\nDOLPHIN INSTALADO COM SUCESSO!\n")
         log.insert("end", "Para configurar, execute 'dolphin-emu' no terminal.\n")
 
-    # ---------- Rede ----------
+    # ---------- Rede (12 cards) ----------
     def create_rede_frame(self, parent):
         ctk.CTkLabel(parent, text="Rede", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 20))
 
@@ -517,18 +529,21 @@ class SpeedScan(ctk.CTk):
             grid.columnconfigure(i, weight=1)
 
         cards = [
-            ("📡 Ping", "ping", "net", False),
-            ("☁️ Cloudflare DNS", "1.1.1.1", "net", True),
-            ("🔵 Google DNS", "8.8.8.8", "net", True),
-            ("🛡️ AdGuard DNS", "94.140.14.14", "net", True),
-            ("🔄 DNS Automático", "auto", "net", True),
-            ("🌐 Testar Velocidade", "speedtest", "net", False),
-            ("🔌 Diagnóstico Placa", "ethtool", "net", False),
-            ("🔄 Renovar IP", "dhclient", "net", False),
-            ("🧭 Portas Abertas", "ports", "net", False),
+            ("📡 Ping", "ping", "net", "info"),
+            ("☁️ Cloudflare DNS", "1.1.1.1", "net", "dns"),
+            ("🔵 Google DNS", "8.8.8.8", "net", "dns"),
+            ("🛡️ AdGuard DNS", "94.140.14.14", "net", "dns"),
+            ("🔄 DNS Automático", "auto", "net", "dns"),
+            ("🌐 Testar Velocidade", "speedtest", "net", "exec"),
+            ("🔌 Diagnóstico Placa", "ethtool", "net", "exec"),
+            ("🔄 Renovar IP", "dhclient", "net", "exec"),
+            ("🧭 Portas Abertas", "ports", "net", "exec"),
+            ("📶 Traceroute", "traceroute", "net", "exec"),
+            ("📶 Informações Wi-Fi", "wifi", "net", "info"),
+            ("🌍 Testar DNS", "nslookup", "net", "exec"),
         ]
 
-        for idx, (title, cmd, tag, is_dns) in enumerate(cards):
+        for idx, (title, cmd, tag, card_type) in enumerate(cards):
             row, col = divmod(idx, 3)
             card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10, border_width=1, border_color=self.acc_color)
             card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
@@ -536,33 +551,64 @@ class SpeedScan(ctk.CTk):
             card.configure(height=150)
 
             ctk.CTkLabel(card, text=title, font=("Inter", 14, "bold"), text_color=self.acc_color).pack(pady=(10, 5))
-            if cmd == "ping":
+
+            if card_type == "info":
+                # Card informativo, sem botão
+                info_label = ctk.CTkLabel(card, text="Clique para atualizar", font=("Consolas", 10), text_color=self.text_color)
+                info_label.pack(pady=5)
+                # Botão para atualizar as informações (executa comando)
                 btn = ctk.CTkButton(
                     card,
-                    text="Iniciar",
+                    text="Atualizar",
                     fg_color=self.acc_color,
-                    command=self.toggle_ping
+                    command=lambda c=cmd, t=tag: self.run_network_action(c, t, False),
+                    cursor="hand2"
                 )
                 btn.pack(pady=5)
-                self.ping_label = ctk.CTkLabel(card, text="-- ms", font=("Consolas", 14), text_color="#10b981")
-                self.ping_label.pack()
-            else:
-                btn_text = "Aplicar" if is_dns else "Executar"
+            elif card_type == "dns":
                 btn = ctk.CTkButton(
                     card,
-                    text=btn_text,
+                    text="Aplicar",
                     fg_color=self.acc_color,
-                    command=lambda c=cmd, t=tag, d=is_dns: self.run_network_action(c, t, d)
+                    command=lambda c=cmd, t=tag, d=True: self.run_network_action(c, t, d),
+                    cursor="hand2"
                 )
                 btn.pack(pady=5)
+            else:  # exec
+                if cmd == "ping":
+                    btn = ctk.CTkButton(
+                        card,
+                        text="Iniciar",
+                        fg_color=self.acc_color,
+                        command=self.toggle_ping,
+                        cursor="hand2"
+                    )
+                    btn.pack(pady=5)
+                    self.ping_label = ctk.CTkLabel(card, text="-- ms", font=("Consolas", 14), text_color="#10b981")
+                    self.ping_label.pack()
+                else:
+                    btn = ctk.CTkButton(
+                        card,
+                        text="Executar",
+                        fg_color=self.acc_color,
+                        command=lambda c=cmd, t=tag, d=False: self.run_network_action(c, t, d),
+                        cursor="hand2"
+                    )
+                    btn.pack(pady=5)
 
         self._add_console(parent, "net")
 
     def run_network_action(self, cmd, tag, is_dns):
         if cmd == "ping":
             self.toggle_ping()
+        elif cmd == "traceroute":
+            self.run_traceroute(tag)
         elif cmd == "speedtest":
-            self.run_action("curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 -", tag)
+            self.run_speedtest(tag)
+        elif cmd == "wifi":
+            self.get_wifi_info(tag)
+        elif cmd == "nslookup":
+            self.run_nslookup(tag)
         elif cmd == "ethtool":
             if self.SO == "Linux":
                 iface = subprocess.getoutput("ip route | grep default | awk '{print $5}' | head -1")
@@ -583,6 +629,72 @@ class SpeedScan(ctk.CTk):
             self.apply_dns(cmd, tag)
         else:
             self.run_action(cmd, tag)
+
+    def run_traceroute(self, tag):
+        if self.SO == "Windows":
+            cmd = "tracert 8.8.8.8"
+        else:
+            cmd = "traceroute 8.8.8.8"
+        self.run_action(cmd, tag)
+
+    def run_speedtest(self, tag):
+        log = getattr(self, f"log_{tag}")
+        log.delete("1.0", "end")
+        log.insert("end", "Iniciando teste de velocidade...\n")
+        try:
+            subprocess.run(["speedtest-cli", "--version"], capture_output=True, check=True)
+            cmd = "speedtest-cli"
+        except:
+            cmd = "curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 -"
+        self.run_action(cmd, tag)
+
+    def get_wifi_info(self, tag):
+        """Obtém informações da rede Wi-Fi atual"""
+        log = getattr(self, f"log_{tag}")
+        log.delete("1.0", "end")
+        log.insert("end", "Obtendo informações da rede Wi-Fi...\n")
+        if self.SO == "Linux":
+            try:
+                # Tenta usar nmcli
+                ssid = subprocess.getoutput("nmcli -t -f active,ssid dev wifi | grep '^sim' | cut -d: -f2")
+                if not ssid:
+                    ssid = "Não conectado"
+                signal = subprocess.getoutput("nmcli -t -f active,signal dev wifi | grep '^sim' | cut -d: -f2")
+                security = subprocess.getoutput("nmcli -t -f active,security dev wifi | grep '^sim' | cut -d: -f2")
+                log.insert("end", f"SSID: {ssid}\n")
+                log.insert("end", f"Sinal: {signal}%\n")
+                log.insert("end", f"Segurança: {security}\n")
+            except:
+                log.insert("end", "Falha ao obter informações via nmcli. Tente outro método.\n")
+        elif self.SO == "Windows":
+            try:
+                output = subprocess.check_output("netsh wlan show interfaces", shell=True, text=True)
+                ssid = re.search(r"SSID\s*:\s*(.+)", output)
+                signal = re.search(r"Sinal\s*:\s*(\d+)%", output)
+                log.insert("end", f"SSID: {ssid.group(1) if ssid else 'Desconhecido'}\n")
+                log.insert("end", f"Sinal: {signal.group(1) if signal else 'Desconhecido'}%\n")
+            except:
+                log.insert("end", "Falha ao obter informações no Windows.\n")
+        elif self.SO == "Darwin":
+            try:
+                # No macOS, usar airport (precisa de link simbólico)
+                output = subprocess.check_output("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I", shell=True, text=True)
+                ssid = re.search(r" SSID: (.+)", output)
+                signal = re.search(r" agrCtlRSSI: (-\d+)", output)
+                log.insert("end", f"SSID: {ssid.group(1) if ssid else 'Desconhecido'}\n")
+                log.insert("end", f"Sinal: {signal.group(1) if signal else 'Desconhecido'} dBm\n")
+            except:
+                log.insert("end", "Falha ao obter informações no macOS.\n")
+        else:
+            log.insert("end", "Sistema não suportado.\n")
+
+    def run_nslookup(self, tag):
+        """Executa nslookup para google.com"""
+        if self.SO == "Windows":
+            cmd = "nslookup google.com"
+        else:
+            cmd = "nslookup google.com"
+        self.run_action(cmd, tag)
 
     def apply_dns(self, dns, tag):
         if self.SO == "Linux":
@@ -701,7 +813,8 @@ class SpeedScan(ctk.CTk):
                 card,
                 text="Executar",
                 fg_color=self.acc_color,
-                command=lambda c=cmd, t=tag: self.run_driver_action(c, t)
+                command=lambda c=cmd, t=tag: self.run_driver_action(c, t),
+                cursor="hand2"
             )
             btn.pack(pady=5)
 
@@ -860,14 +973,16 @@ class SpeedScan(ctk.CTk):
                     card,
                     text="Configurar",
                     fg_color=self.acc_color,
-                    command=self.configure_local_ai
+                    command=self.configure_local_ai,
+                    cursor="hand2"
                 )
             else:
                 btn = ctk.CTkButton(
                     card,
                     text="Conectar",
                     fg_color=self.acc_color,
-                    command=lambda i=ia: self.connect_ai(i)
+                    command=lambda i=ia: self.connect_ai(i),
+                    cursor="hand2"
                 )
             btn.pack(pady=5)
 
@@ -887,7 +1002,7 @@ class SpeedScan(ctk.CTk):
         self.run_action("curl -fsSL https://ollama.com/install.sh | sh", "agente")
         log.insert("end", "Após instalação, execute 'ollama run llama2' para testar.\n")
 
-    # ---------- Configurações (corrigido) ----------
+    # ---------- Configurações ----------
     def create_config_frame(self, parent):
         ctk.CTkLabel(parent, text="Configurações", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 30))
 
@@ -897,7 +1012,7 @@ class SpeedScan(ctk.CTk):
         self.entry_user = ctk.CTkEntry(frame_user, placeholder_text="Seu nome", width=300)
         self.entry_user.insert(0, self.config.get("username", "ewerton"))
         self.entry_user.pack(anchor="w", pady=5)
-        btn_reset_user = ctk.CTkButton(frame_user, text="Voltar para o padrão", fg_color="transparent", text_color=self.acc_color, command=lambda: self.entry_user.delete(0, "end") or self.entry_user.insert(0, "ewerton"))
+        btn_reset_user = ctk.CTkButton(frame_user, text="Voltar para o padrão", fg_color="transparent", text_color=self.acc_color, command=lambda: self.entry_user.delete(0, "end") or self.entry_user.insert(0, "ewerton"), cursor="hand2")
         btn_reset_user.pack(anchor="w")
 
         frame_lang = ctk.CTkFrame(parent, fg_color="transparent")
@@ -918,18 +1033,15 @@ class SpeedScan(ctk.CTk):
         frame_theme.pack(fill="x", pady=10)
         ctk.CTkLabel(frame_theme, text="Tema da interface", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
 
-        # Lista de nomes e chaves
         theme_names = ["Padrão (Roxo)", "Cinza Profissional", "Escuro Total", "Claro Clean"]
         theme_keys = ["default", "grey", "dark", "light"]
 
-        # Encontra o índice do tema atual
         current_theme_key = self.config.get("theme", "default")
         if current_theme_key in theme_keys:
             default_idx = theme_keys.index(current_theme_key)
         else:
             default_idx = 0
 
-        # Variável para armazenar o nome selecionado
         self.theme_name_var = ctk.StringVar(value=theme_names[default_idx])
         theme_menu = ctk.CTkOptionMenu(frame_theme, values=theme_names, variable=self.theme_name_var, width=300)
         theme_menu.pack(anchor="w", pady=5)
@@ -943,7 +1055,7 @@ class SpeedScan(ctk.CTk):
 
         ctk.CTkLabel(parent, text="* - As alterações serão aplicadas após reiniciar o aplicativo", font=("Inter", 10), text_color="#888888").pack(anchor="w", pady=20)
 
-        btn_apply = ctk.CTkButton(parent, text="Aplicar", fg_color=self.acc_color, command=self.apply_config, width=200, height=40)
+        btn_apply = ctk.CTkButton(parent, text="Aplicar", fg_color=self.acc_color, command=self.apply_config, width=200, height=40, cursor="hand2")
         btn_apply.pack(pady=20)
 
     def apply_config(self):
@@ -959,7 +1071,6 @@ class SpeedScan(ctk.CTk):
                 self.config["ui_scale"] = k
                 break
 
-        # Mapeia o nome do tema para a chave
         theme_names = ["Padrão (Roxo)", "Cinza Profissional", "Escuro Total", "Claro Clean"]
         theme_keys = ["default", "grey", "dark", "light"]
         selected_theme_name = self.theme_name_var.get()
@@ -973,7 +1084,7 @@ class SpeedScan(ctk.CTk):
         with open(CONFIG_FILE, "w") as f:
             json.dump(self.config, f)
 
-        time.sleep(0.1)
+        # Sem delay, reinicia imediatamente
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
@@ -1008,22 +1119,60 @@ class SpeedScan(ctk.CTk):
         )
         ctk.CTkLabel(card, text=info_text, font=("Inter", 12), justify="left", text_color=self.text_color).pack(pady=20, padx=30)
 
-    # ---------- Utilitários (consoles) ----------
+    # ---------- Utilitários (consoles com botão Exportar) ----------
     def _add_console(self, parent, tag):
-        btn = ctk.CTkButton(
-            parent,
+        # Frame para botões (Detalhes e Exportar)
+        button_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        button_frame.pack(anchor="e", pady=5)
+
+        btn_export = ctk.CTkButton(
+            button_frame,
+            text="📤 Exportar",
+            fg_color="transparent",
+            text_color=self.acc_color,
+            hover_color=self.acc_color,
+            corner_radius=20,
+            command=lambda: self.export_log(tag),
+            cursor="hand2"
+        )
+        btn_export.pack(side="left", padx=5)
+
+        btn_detail = ctk.CTkButton(
+            button_frame,
             text="Detalhes ⌄",
             fg_color="transparent",
             text_color=self.acc_color,
             hover_color=self.acc_color,
             corner_radius=20,
-            command=lambda: self.toggle_console(tag)
+            command=lambda: self.toggle_console(tag),
+            cursor="hand2"
         )
-        setattr(self, f"detail_btn_{tag}", btn)
+        btn_detail.pack(side="left")
 
         log = ctk.CTkTextbox(parent, height=150, fg_color="#000000", text_color="#10b981", font=("Consolas", 11))
+
+        setattr(self, f"detail_btn_{tag}", btn_detail)
+        setattr(self, f"export_btn_{tag}", btn_export)
         setattr(self, f"log_{tag}", log)
         self.consoles_visible[tag] = False
+
+        # Botão de detalhes inicialmente invisível
+        btn_detail.pack_forget()
+
+    def export_log(self, tag):
+        log = getattr(self, f"log_{tag}")
+        content = log.get("1.0", "end-1c").strip()
+        if not content:
+            return
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"log_{tag}_{timestamp}.txt"
+        filepath = os.path.join(LOG_DIR, filename)
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(content)
+            log.insert("end", f"\n[LOG EXPORTADO para {filepath}]\n")
+        except Exception as e:
+            log.insert("end", f"\n[ERRO ao exportar: {e}]\n")
 
     def show_details_button(self, tag):
         btn = getattr(self, f"detail_btn_{tag}")
@@ -1044,7 +1193,7 @@ class SpeedScan(ctk.CTk):
             btn.pack_forget()
             self.consoles_visible[tag] = False
         else:
-            log.pack(fill="x", pady=5, before=btn)
+            log.pack(fill="x", pady=5, before=btn.master)  # antes do button_frame
             btn.configure(text="Detalhes ⌃")
             self.consoles_visible[tag] = True
 
@@ -1116,7 +1265,7 @@ class SpeedScan(ctk.CTk):
         while True:
             if self.current_module == "sistema":
                 self.after(0, self.update_sys_info)
-            time.sleep(3)
+            time.sleep(2)
 
     def _on_mousewheel(self, event):
         current = self.frames[self.current_module]
