@@ -20,7 +20,7 @@ SpeedScan é uma ferramenta de diagnóstico e otimização de sistemas desenvolv
 
 | Sistema | Otimização | Rede |
 |--------|------------|------|
-| ![Sistema](screenshots/sistema.png) | ![Otimização](screenshots/otimizacao.png) | ![Rede](screenshots/rede.png) |
+| ![Sistema] | ![Otimização] | ![Rede] |
 
 *Nota: As imagens acima são apenas ilustrativas. Substitua pelos prints reais do software.*
 
