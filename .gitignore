@@ -14,3 +14,9 @@ dist/
 
 # Opcional: Se não quiser subir os instaladores pesados no futuro
 # installers/
+
+# Backups do código (arquivos .bak)
+*.bak
+
+# Pasta extraída do AppImage
+squashfs-root/
