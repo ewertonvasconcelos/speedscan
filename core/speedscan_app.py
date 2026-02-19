@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SpeedScan - Versão final com logo arredondada e preparado para GitHub
+# SpeedScan - Versão Multiplataforma (corrigido: tema e rolagem)
 # Uso: python3 core/speedscan_app.py
 
 import customtkinter as ctk
@@ -56,7 +56,6 @@ scales = {
     "150": "150%"
 }
 
-# Lista de IAs sugeridas
 AI_SUGGESTIONS = [
     "DeepSeek",
     "OpenAI GPT-4",
@@ -82,7 +81,6 @@ class SpeedScan(ctk.CTk):
 
         self.apply_ui_scale()
 
-        # Variáveis de estado
         self.turbo_active = False
         self.consoles_visible = {}
         self.ping_active = False
@@ -90,44 +88,32 @@ class SpeedScan(ctk.CTk):
         self.sidebar_buttons = {}
         self.detail_buttons = {}
 
-        # Layout
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # Sidebar
         self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=self.side_bg)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.grid_propagate(False)
 
-        # Container principal
         self.container = ctk.CTkFrame(self, fg_color="transparent")
         self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
         self.container.grid_columnconfigure(0, weight=1)
         self.container.grid_rowconfigure(0, weight=1)
 
         self.frames = {}
-
         self.create_sidebar()
         self.create_frames()
-
         self.show_frame("sistema")
-
         self.bind_all("<MouseWheel>", self._on_mousewheel)
-
         threading.Thread(target=self.hardware_monitor, daemon=True).start()
 
-    # ---------- Função para arredondar imagem ----------
-    def round_image(self, path, size=(96, 96), radius=48):
-        """
-        Carrega uma imagem do caminho, aplica máscara circular e retorna CTkImage.
-        radius = metade do size para círculo perfeito.
-        """
+    def round_image(self, path, size=(96, 96), radius=20):
         try:
             img = Image.open(path).convert("RGBA")
             img = img.resize(size, Image.Resampling.LANCZOS)
             mask = Image.new("L", size, 0)
             draw = ImageDraw.Draw(mask)
-            draw.ellipse((0, 0) + size, fill=255)
+            draw.rounded_rectangle((0, 0) + size, radius=radius, fill=255)
             result = Image.new("RGBA", size)
             result.paste(img, (0, 0), mask)
             return ctk.CTkImage(result, size=size)
@@ -135,7 +121,6 @@ class SpeedScan(ctk.CTk):
             print(f"Erro ao arredondar imagem: {e}")
             return None
 
-    # ---------- Temas e escala ----------
     def update_theme_vars(self):
         t = themes.get(self.config["theme"], themes["default"])
         ctk.set_appearance_mode(t["mode"])
@@ -143,7 +128,6 @@ class SpeedScan(ctk.CTk):
         self.side_bg = t["side"]
         self.acc_color = t["acc"]
         self.text_color = t["text"]
-        # Cor mais clara para cards internos
         self.light_bg = self._lighten_color(self.bg_color, 0.2)
 
     def _lighten_color(self, hex_color, factor=0.2):
@@ -161,14 +145,13 @@ class SpeedScan(ctk.CTk):
         else:
             ctk.set_widget_scaling(float(scale) / 100)
 
-    # ---------- Sidebar ----------
     def create_sidebar(self):
         top_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         top_frame.pack(side="top", fill="x", pady=(30, 10))
 
         icon_image = None
         if os.path.exists(ICON_PATH):
-            icon_image = self.round_image(ICON_PATH, size=(96, 96), radius=48)
+            icon_image = self.round_image(ICON_PATH, size=(96, 96), radius=20)
 
         if icon_image:
             btn_speed = ctk.CTkButton(
@@ -177,7 +160,7 @@ class SpeedScan(ctk.CTk):
                 text="",
                 width=96,
                 height=96,
-                corner_radius=25,  # mantém a pílula do botão
+                corner_radius=20,
                 fg_color="transparent",
                 hover_color=self.acc_color,
                 command=lambda: self.show_frame("sistema")
@@ -189,15 +172,13 @@ class SpeedScan(ctk.CTk):
                 text="⚡",
                 width=96,
                 height=96,
-                corner_radius=25,
+                corner_radius=20,
                 fg_color="transparent",
                 hover_color=self.acc_color,
                 font=("Inter", 48),
                 command=lambda: self.show_frame("sistema")
             )
             btn_speed.pack()
-
-        # Sem label abaixo do ícone
 
         center_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         center_frame.pack(side="top", fill="both", expand=True, pady=20)
@@ -246,7 +227,9 @@ class SpeedScan(ctk.CTk):
             else:
                 btn.configure(fg_color="transparent")
 
-    # ---------- Criação dos frames ----------
+        if target == "sistema":
+            self.update_sys_info()
+
     def create_frames(self):
         self.frames["sistema"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
         self.create_sistema_frame(self.frames["sistema"])
@@ -269,7 +252,7 @@ class SpeedScan(ctk.CTk):
         self.frames["sobre"] = ctk.CTkFrame(self.container, fg_color="transparent")
         self.create_sobre_frame(self.frames["sobre"])
 
-    # ---------- Sistema (cards de informações) ----------
+    # ---------- Sistema ----------
     def create_sistema_frame(self, parent):
         ctk.CTkLabel(parent, text="Informações do Sistema", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 30))
 
@@ -325,21 +308,22 @@ class SpeedScan(ctk.CTk):
             self.sys_labels["disks"].configure(text=self._get_disks())
             self.sys_labels["uptime"].configure(text=self._get_uptime())
             self.sys_labels["battery"].configure(text=self._get_battery())
-        except:
-            pass
+        except Exception as e:
+            print(f"Erro ao atualizar informações: {e}")
 
     def _get_hostname(self):
         return platform.node()
 
     def _get_distro(self):
-        try:
-            with open("/etc/os-release") as f:
-                for line in f:
-                    if line.startswith("PRETTY_NAME="):
-                        return line.split("=")[1].strip().strip('"')
-        except:
-            pass
-        return platform.system()
+        if self.SO == "Linux":
+            try:
+                with open("/etc/os-release") as f:
+                    for line in f:
+                        if line.startswith("PRETTY_NAME="):
+                            return line.split("=")[1].strip().strip('"')
+            except:
+                pass
+        return platform.system() + " " + platform.release()
 
     def _get_kernel(self):
         return platform.release()
@@ -400,12 +384,21 @@ class SpeedScan(ctk.CTk):
             return "N/A"
 
     def _get_uptime(self):
-        uptime_seconds = time.time() - psutil.boot_time()
-        return str(datetime.timedelta(seconds=int(uptime_seconds)))
+        try:
+            uptime_seconds = time.time() - psutil.boot_time()
+            return str(datetime.timedelta(seconds=int(uptime_seconds)))
+        except:
+            return "N/A"
 
     def _get_battery(self):
-        battery = psutil.sensors_battery()
-        return f"{battery.percent:.1f}%" if battery else "AC Power"
+        try:
+            battery = psutil.sensors_battery()
+            if battery:
+                return f"{battery.percent:.1f}%"
+            else:
+                return "AC Power"
+        except:
+            return "AC Power"
 
     # ---------- Otimização (12 cards) ----------
     def create_otimizacao_frame(self, parent):
@@ -417,13 +410,13 @@ class SpeedScan(ctk.CTk):
             grid.columnconfigure(i, weight=1)
 
         cards = [
-            ("🧹 Limpeza de Cache", "sudo eopkg dc", "ot", False),
-            ("🔄 Reset de Swap", "sudo swapoff -a && sudo swapon -a", "ot", False),
-            ("✅ Verificar Erros", "sudo eopkg check", "ot", False),
+            ("🧹 Limpeza de Cache", "cache", "ot", False),
+            ("🔄 Reset de Swap", "swap", "ot", False),
+            ("✅ Verificar Erros", "check", "ot", False),
             ("🔥 Modo Turbo", "turbo", "ot", False),
             ("Steam", "steam", "gm", True),
             ("Lutris", "lutris", "gm", True),
-            ("Heroic Launcher", "heroic-games-launcher-bin", "gm", True),
+            ("Heroic Launcher", "heroic", "gm", True),
             ("Bottles", "bottles", "gm", True),
             ("Wine", "wine", "gm", True),
             ("MangoHud", "mangohud", "gm", True),
@@ -455,31 +448,66 @@ class SpeedScan(ctk.CTk):
             self.toggle_turbo()
         elif cmd == "dolphin":
             self.install_dolphin()
+        elif cmd in ["steam", "lutris", "heroic", "bottles", "wine", "mangohud", "goverlay"]:
+            self.install_package(cmd, tag)
         else:
-            if tag == "gm":
-                self.run_action(f"sudo eopkg it {cmd} -y", tag)
+            self.run_system_action(cmd, tag)
+
+    def install_package(self, pkg, tag):
+        if self.SO == "Linux":
+            if os.path.exists("/etc/eopkg/repositories"):  # Solus
+                self.run_action(f"sudo eopkg it {pkg} -y", tag)
+            elif os.path.exists("/etc/debian_version"):  # Debian/Ubuntu
+                self.run_action(f"sudo apt install -y {pkg}", tag)
+            elif os.path.exists("/etc/redhat-release"):  # Fedora/RHEL
+                self.run_action(f"sudo dnf install -y {pkg}", tag)
             else:
-                self.run_action(cmd, tag)
+                self.run_action(f"echo 'Instalação automática não suportada para {pkg}'", tag)
+        elif self.SO == "Windows":
+            self.run_action(f"winget install {pkg}", tag)
+        elif self.SO == "Darwin":
+            self.run_action(f"brew install {pkg}", tag)
+        else:
+            self.run_action(f"echo 'Sistema não suportado'", tag)
+
+    def run_system_action(self, cmd, tag):
+        if self.SO == "Linux":
+            if cmd == "cache":
+                self.run_action("sudo eopkg dc && sudo eopkg clean", tag)
+            elif cmd == "swap":
+                self.run_action("sudo swapoff -a && sudo swapon -a", tag)
+            elif cmd == "check":
+                self.run_action("sudo eopkg check", tag)
+            else:
+                self.run_action(f"echo 'Comando {cmd} não implementado'", tag)
+        else:
+            self.run_action(f"echo 'Ação {cmd} não disponível neste SO'", tag)
 
     def install_dolphin(self):
         distro = self._get_distro().lower()
-        if "ubuntu" in distro or "debian" in distro:
-            install_cmd = "sudo apt install dolphin-emu -y"
-        elif "fedora" in distro:
-            install_cmd = "sudo dnf install dolphin-emu -y"
-        elif "arch" in distro:
-            install_cmd = "sudo pacman -S dolphin-emu --noconfirm"
-        elif "opensuse" in distro:
-            install_cmd = "sudo zypper install dolphin-emu -y"
+        if self.SO == "Linux":
+            if "ubuntu" in distro or "debian" in distro:
+                install_cmd = "sudo apt install dolphin-emu -y"
+            elif "fedora" in distro:
+                install_cmd = "sudo dnf install dolphin-emu -y"
+            elif "arch" in distro:
+                install_cmd = "sudo pacman -S dolphin-emu --noconfirm"
+            elif "opensuse" in distro:
+                install_cmd = "sudo zypper install dolphin-emu -y"
+            else:
+                install_cmd = "echo 'Distro não suportada para instalação automática'"
+        elif self.SO == "Windows":
+            install_cmd = "winget install dolphin-emu"
+        elif self.SO == "Darwin":
+            install_cmd = "brew install dolphin-emu"
         else:
-            install_cmd = "echo 'Distro não suportada para instalação automática'"
+            install_cmd = "echo 'Sistema não suportado'"
         self.run_action(install_cmd, "ot")
         log = getattr(self, "log_ot")
         log.insert("end", "\n\nDOLPHIN INSTALADO COM SUCESSO!\n")
         log.insert("end", "Para configurar, execute 'dolphin-emu' no terminal.\n")
-        log.insert("end", "Ou acesse as configurações gráficas/áudio em ~/.local/share/dolphin-emu/\n")
 
-    # ---------- Rede (9 cards) ----------
+    # ---------- Rede ----------
     def create_rede_frame(self, parent):
         ctk.CTkLabel(parent, text="Rede", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 20))
 
@@ -536,51 +564,111 @@ class SpeedScan(ctk.CTk):
         elif cmd == "speedtest":
             self.run_action("curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 -", tag)
         elif cmd == "ethtool":
-            iface = subprocess.getoutput("ip route | grep default | awk '{print $5}' | head -1")
-            if iface:
-                self.run_action(f"ethtool {iface}", tag)
+            if self.SO == "Linux":
+                iface = subprocess.getoutput("ip route | grep default | awk '{print $5}' | head -1")
+                if iface:
+                    self.run_action(f"ethtool {iface}", tag)
+                else:
+                    self.run_action("echo 'Interface não encontrada'", tag)
             else:
-                self.run_action("echo 'Interface não encontrada'", tag)
+                self.run_action("echo 'Comando ethtool disponível apenas no Linux'", tag)
         elif cmd == "dhclient":
-            self.run_action("sudo dhclient -v -r && sudo dhclient -v", tag)
+            if self.SO == "Linux":
+                self.run_action("sudo dhclient -v -r && sudo dhclient -v", tag)
+            else:
+                self.run_action("echo 'Renovação de IP via DHCPClient não suportada neste SO'", tag)
         elif cmd == "ports":
             self.scan_ports_interactive()
         elif is_dns:
-            if cmd == "auto":
-                cmd = "nmcli dev mod $(nmcli -t -f DEVICE,STATE dev | grep connected | cut -d: -f1 | head -n1) ipv4.dns ''"
-            else:
-                cmd = f"nmcli dev mod $(nmcli -t -f DEVICE,STATE dev | grep connected | cut -d: -f1 | head -n1) ipv4.dns '{cmd}'"
-            self.run_action(cmd, tag)
+            self.apply_dns(cmd, tag)
         else:
             self.run_action(cmd, tag)
+
+    def apply_dns(self, dns, tag):
+        if self.SO == "Linux":
+            iface = subprocess.getoutput("nmcli -t -f DEVICE,STATE dev | grep connected | cut -d: -f1 | head -n1")
+            if iface:
+                if dns == "auto":
+                    cmd = f"nmcli dev mod {iface} ipv4.dns ''"
+                else:
+                    cmd = f"nmcli dev mod {iface} ipv4.dns '{dns}'"
+                self.run_action(cmd, tag)
+            else:
+                self.run_action("echo 'Interface de rede não encontrada'", tag)
+        elif self.SO == "Windows":
+            iface = subprocess.getoutput("wmic nic where netenabled=true get NetConnectionID | findstr /v NetConnectionID").strip()
+            if iface:
+                if dns == "auto":
+                    cmd = f'netsh interface ip set dns "{iface}" dhcp'
+                else:
+                    cmd = f'netsh interface ip set dns "{iface}" static {dns}'
+                self.run_action(cmd, tag)
+            else:
+                self.run_action("echo 'Interface não encontrada'", tag)
+        elif self.SO == "Darwin":
+            service = subprocess.getoutput("networksetup -listallnetworkservices | grep -v 'An asterisk' | head -1")
+            if service:
+                if dns == "auto":
+                    cmd = f"networksetup -setdnsservers '{service}' empty"
+                else:
+                    cmd = f"networksetup -setdnsservers '{service}' {dns}"
+                self.run_action(cmd, tag)
+            else:
+                self.run_action("echo 'Serviço de rede não encontrado'", tag)
+        else:
+            self.run_action("echo 'Configuração de DNS não suportada neste SO'", tag)
 
     def scan_ports_interactive(self):
         log = getattr(self, "log_net")
         log.delete("1.0", "end")
         log.insert("end", "Escaneando portas abertas...\n")
         try:
-            output = subprocess.check_output("ss -tuln | tail -n +2", shell=True, text=True)
-            lines = output.strip().split('\n')
-            ports = []
-            for line in lines:
-                parts = line.split()
-                if len(parts) >= 5:
-                    proto = parts[0]
-                    addr_port = parts[4]
-                    if ':' in addr_port:
-                        port = addr_port.split(':')[-1]
+            if self.SO == "Linux":
+                output = subprocess.check_output("ss -tuln | tail -n +2", shell=True, text=True)
+                lines = output.strip().split('\n')
+                ports = []
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) >= 5:
+                        proto = parts[0]
+                        addr_port = parts[4]
+                        if ':' in addr_port:
+                            port = addr_port.split(':')[-1]
+                            ports.append((proto, port))
+            elif self.SO == "Windows":
+                output = subprocess.check_output("netstat -an | findstr LISTENING", shell=True, text=True)
+                lines = output.strip().split('\n')
+                ports = []
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) > 1:
+                        addr = parts[1]
+                        if ':' in addr:
+                            port = addr.split(':')[-1]
+                            ports.append(("TCP", port))
+            elif self.SO == "Darwin":
+                output = subprocess.check_output("lsof -i -P -n | grep LISTEN", shell=True, text=True)
+                lines = output.strip().split('\n')
+                ports = []
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) > 8:
+                        proto = parts[7].split('/')[0]
+                        port = parts[8].split(':')[-1]
                         ports.append((proto, port))
+            else:
+                ports = []
             if not ports:
                 log.insert("end", "Nenhuma porta aberta encontrada.\n")
                 return
             log.insert("end", "Portas abertas:\n")
             for i, (proto, port) in enumerate(ports):
                 log.insert("end", f"[{i+1}] {proto} {port}\n")
-            log.insert("end", "\nPara fechar, use o firewall apropriado. Ex: sudo ufw deny 22/tcp\n")
+            log.insert("end", "\nPara fechar, use o firewall apropriado.\n")
         except Exception as e:
             log.insert("end", f"Erro ao escanear: {e}\n")
 
-    # ---------- Drivers (9 cards) ----------
+    # ---------- Drivers ----------
     def create_drivers_frame(self, parent):
         ctk.CTkLabel(parent, text="Drivers", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 20))
 
@@ -590,15 +678,15 @@ class SpeedScan(ctk.CTk):
             grid.columnconfigure(i, weight=1)
 
         cards = [
-            ("🖥️ PCI (Vídeo/Rede)", "lspci -nnk", "drv", False),
-            ("📦 Atualizar Sistema", "sudo dnf upgrade -y", "drv", False),
-            ("🔌 USB Conectados", "lsusb", "drv", False),
-            ("🧩 Módulos Kernel", "lsmod", "drv", False),
-            ("⚙️ CPU Detalhada", "lscpu", "drv", False),
-            ("⚠️ Firmware Erros", "sudo dmesg | grep -i firmware", "drv", False),
-            ("🎮 Drivers de Vídeo", "video", "drv", False),
-            ("🌐 Drivers de Rede", "rede", "drv", False),
-            ("🔄 Atualizações Automáticas", "auto-update", "drv", False),
+            ("🖥️ PCI (Vídeo/Rede)", "pci", "drv", False),
+            ("📦 Atualizar Sistema", "update", "drv", False),
+            ("🔌 USB Conectados", "usb", "drv", False),
+            ("🧩 Módulos Kernel", "modules", "drv", False),
+            ("⚙️ CPU Detalhada", "cpu_info", "drv", False),
+            ("⚠️ Firmware Erros", "firmware", "drv", False),
+            ("🎮 Drivers de Vídeo", "video_drv", "drv", False),
+            ("🌐 Drivers de Rede", "net_drv", "drv", False),
+            ("🔄 Atualizações Automáticas", "auto_update", "drv", False),
         ]
 
         for idx, (title, cmd, tag, _) in enumerate(cards):
@@ -620,34 +708,89 @@ class SpeedScan(ctk.CTk):
         self._add_console(parent, "drv")
 
     def run_driver_action(self, cmd, tag):
-        if cmd == "video":
+        if cmd == "pci":
+            if self.SO == "Linux":
+                self.run_action("lspci -nnk", tag)
+            elif self.SO == "Darwin":
+                self.run_action("system_profiler SPHardwareDataType", tag)
+            elif self.SO == "Windows":
+                self.run_action("wmic path win32_VideoController get name", tag)
+        elif cmd == "update":
+            if self.SO == "Linux":
+                self.run_action("sudo dnf upgrade -y || sudo apt upgrade -y", tag)
+            elif self.SO == "Windows":
+                self.run_action("winget upgrade --all", tag)
+            elif self.SO == "Darwin":
+                self.run_action("brew upgrade", tag)
+        elif cmd == "usb":
+            if self.SO == "Linux":
+                self.run_action("lsusb", tag)
+            elif self.SO == "Darwin":
+                self.run_action("system_profiler SPUSBDataType", tag)
+            elif self.SO == "Windows":
+                self.run_action("wmic path Win32_USBControllerDevice get *", tag)
+        elif cmd == "modules":
+            if self.SO == "Linux":
+                self.run_action("lsmod", tag)
+            elif self.SO == "Darwin":
+                self.run_action("kextstat", tag)
+            elif self.SO == "Windows":
+                self.run_action("driverquery", tag)
+        elif cmd == "cpu_info":
+            if self.SO == "Linux":
+                self.run_action("lscpu", tag)
+            elif self.SO == "Darwin":
+                self.run_action("sysctl -a | grep machdep.cpu", tag)
+            elif self.SO == "Windows":
+                self.run_action("wmic cpu get name", tag)
+        elif cmd == "firmware":
+            if self.SO == "Linux":
+                self.run_action("sudo dmesg | grep -i firmware", tag)
+            elif self.SO == "Darwin":
+                self.run_action("ioreg -l | grep -i firmware", tag)
+            else:
+                self.run_action("echo 'Firmware info not available'", tag)
+        elif cmd == "video_drv":
             self.install_video_drivers()
-        elif cmd == "rede":
+        elif cmd == "net_drv":
             self.install_network_drivers()
-        elif cmd == "auto-update":
+        elif cmd == "auto_update":
             self.setup_auto_updates()
         else:
-            self.run_action(cmd, tag)
+            self.run_action(f"echo 'Comando {cmd} não reconhecido'", tag)
 
     def install_video_drivers(self):
         log = getattr(self, "log_drv")
         log.delete("1.0", "end")
         log.insert("end", "Detectando GPU...\n")
         try:
-            lspci = subprocess.check_output("lspci | grep -i 'vga\\|3d'", shell=True, text=True)
-            if "NVIDIA" in lspci:
-                log.insert("end", "GPU NVIDIA detectada. Instalando driver proprietário...\n")
-                cmd = "sudo dnf install nvidia-driver -y" if "fedora" in self._get_distro().lower() else "sudo apt install nvidia-driver -y"
-            elif "AMD" in lspci:
-                log.insert("end", "GPU AMD detectada. Instalando driver amdgpu...\n")
-                cmd = "sudo dnf install xorg-x11-drv-amdgpu -y" if "fedora" in self._get_distro().lower() else "sudo apt install xserver-xorg-video-amdgpu -y"
-            elif "Intel" in lspci:
-                log.insert("end", "GPU Intel detectada. Driver já incluso no kernel.\n")
-                cmd = "echo 'Driver Intel já presente'"
-            else:
-                log.insert("end", "GPU não identificada.\n")
-                return
-            self.run_action(cmd, "drv")
+            if self.SO == "Linux":
+                lspci = subprocess.check_output("lspci | grep -i 'vga\\|3d'", shell=True, text=True)
+                if "NVIDIA" in lspci:
+                    log.insert("end", "GPU NVIDIA detectada. Instalando driver proprietário...\n")
+                    if "fedora" in self._get_distro().lower():
+                        cmd = "sudo dnf install nvidia-driver -y"
+                    else:
+                        cmd = "sudo apt install nvidia-driver -y"
+                elif "AMD" in lspci:
+                    log.insert("end", "GPU AMD detectada. Instalando driver amdgpu...\n")
+                    if "fedora" in self._get_distro().lower():
+                        cmd = "sudo dnf install xorg-x11-drv-amdgpu -y"
+                    else:
+                        cmd = "sudo apt install xserver-xorg-video-amdgpu -y"
+                elif "Intel" in lspci:
+                    log.insert("end", "GPU Intel detectada. Driver já incluso no kernel.\n")
+                    cmd = "echo 'Driver Intel já presente'"
+                else:
+                    log.insert("end", "GPU não identificada.\n")
+                    return
+                self.run_action(cmd, "drv")
+            elif self.SO == "Windows":
+                log.insert("end", "No Windows, os drivers de vídeo são gerenciados pelo Windows Update.\n")
+                self.run_action("echo 'Use o Gerenciador de Dispositivos para atualizar'", "drv")
+            elif self.SO == "Darwin":
+                log.insert("end", "No macOS, os drivers são atualizados via atualização do sistema.\n")
+                self.run_action("softwareupdate --list", "drv")
         except Exception as e:
             log.insert("end", f"Erro: {e}\n")
 
@@ -656,33 +799,47 @@ class SpeedScan(ctk.CTk):
         log.delete("1.0", "end")
         log.insert("end", "Verificando placa de rede...\n")
         try:
-            lspci = subprocess.check_output("lspci | grep -i ethernet", shell=True, text=True)
-            if "Realtek" in lspci:
-                log.insert("end", "Placa Realtek detectada. Instalando driver r8168...\n")
-                cmd = "sudo dnf install r8168 -y" if "fedora" in self._get_distro().lower() else "sudo apt install r8168-dkms -y"
+            if self.SO == "Linux":
+                lspci = subprocess.check_output("lspci | grep -i ethernet", shell=True, text=True)
+                if "Realtek" in lspci:
+                    log.insert("end", "Placa Realtek detectada. Instalando driver r8168...\n")
+                    if "fedora" in self._get_distro().lower():
+                        cmd = "sudo dnf install r8168 -y"
+                    else:
+                        cmd = "sudo apt install r8168-dkms -y"
+                else:
+                    log.insert("end", "Placa não Realtek. Driver padrão já deve funcionar.\n")
+                    cmd = "echo 'Nenhuma ação necessária'"
+                self.run_action(cmd, "drv")
             else:
-                log.insert("end", "Placa não Realtek. Driver padrão já deve funcionar.\n")
-                cmd = "echo 'Nenhuma ação necessária'"
-            self.run_action(cmd, "drv")
+                log.insert("end", "Detecção de drivers de rede disponível apenas no Linux.\n")
         except Exception as e:
             log.insert("end", f"Erro: {e}\n")
 
     def setup_auto_updates(self):
         log = getattr(self, "log_drv")
         log.delete("1.0", "end")
-        if "fedora" in self._get_distro().lower():
-            log.insert("end", "Instalando e configurando dnf-automatic...\n")
-            self.run_action("sudo dnf install dnf-automatic -y && sudo systemctl enable --now dnf-automatic.timer", "drv")
-        elif "ubuntu" in self._get_distro().lower() or "debian" in self._get_distro().lower():
-            log.insert("end", "Configurando unattended-upgrades...\n")
-            self.run_action("sudo apt install unattended-upgrades -y && sudo dpkg-reconfigure -plow unattended-upgrades", "drv")
+        if self.SO == "Linux":
+            if "fedora" in self._get_distro().lower():
+                log.insert("end", "Instalando e configurando dnf-automatic...\n")
+                self.run_action("sudo dnf install dnf-automatic -y && sudo systemctl enable --now dnf-automatic.timer", "drv")
+            elif "ubuntu" in self._get_distro().lower() or "debian" in self._get_distro().lower():
+                log.insert("end", "Configurando unattended-upgrades...\n")
+                self.run_action("sudo apt install unattended-upgrades -y && sudo dpkg-reconfigure -plow unattended-upgrades", "drv")
+            else:
+                log.insert("end", "Sistema não suportado para atualizações automáticas.\n")
+        elif self.SO == "Windows":
+            log.insert("end", "Configurando Windows Update para automático...\n")
+            self.run_action("wuauclt /detectnow /updatenow", "drv")
+        elif self.SO == "Darwin":
+            log.insert("end", "Configurando atualizações automáticas do macOS...\n")
+            self.run_action("sudo softwareupdate --schedule on", "drv")
         else:
-            log.insert("end", "Sistema não suportado para atualizações automáticas.\n")
+            log.insert("end", "Sistema não suportado.\n")
 
-    # ---------- Agente IA (9 cards) ----------
+    # ---------- Agente IA ----------
     def create_agente_frame(self, parent):
         ctk.CTkLabel(parent, text="Agente de IA", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(pady=(0, 30))
-
         ctk.CTkLabel(parent, text="Conecte um modelo de IA:", font=("Inter", 16), text_color=self.text_color).pack(pady=10)
 
         grid = ctk.CTkFrame(parent, fg_color="transparent")
@@ -730,7 +887,7 @@ class SpeedScan(ctk.CTk):
         self.run_action("curl -fsSL https://ollama.com/install.sh | sh", "agente")
         log.insert("end", "Após instalação, execute 'ollama run llama2' para testar.\n")
 
-    # ---------- Configurações ----------
+    # ---------- Configurações (corrigido) ----------
     def create_config_frame(self, parent):
         ctk.CTkLabel(parent, text="Configurações", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 30))
 
@@ -760,11 +917,21 @@ class SpeedScan(ctk.CTk):
         frame_theme = ctk.CTkFrame(parent, fg_color="transparent")
         frame_theme.pack(fill="x", pady=10)
         ctk.CTkLabel(frame_theme, text="Tema da interface", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
-        self.theme_var = ctk.StringVar(value=self.config.get("theme", "default"))
+
+        # Lista de nomes e chaves
         theme_names = ["Padrão (Roxo)", "Cinza Profissional", "Escuro Total", "Claro Clean"]
-        theme_menu = ctk.CTkOptionMenu(frame_theme, values=theme_names, width=300)
-        idx = ["default", "grey", "dark", "light"].index(self.config.get("theme", "default"))
-        theme_menu.set(theme_names[idx])
+        theme_keys = ["default", "grey", "dark", "light"]
+
+        # Encontra o índice do tema atual
+        current_theme_key = self.config.get("theme", "default")
+        if current_theme_key in theme_keys:
+            default_idx = theme_keys.index(current_theme_key)
+        else:
+            default_idx = 0
+
+        # Variável para armazenar o nome selecionado
+        self.theme_name_var = ctk.StringVar(value=theme_names[default_idx])
+        theme_menu = ctk.CTkOptionMenu(frame_theme, values=theme_names, variable=self.theme_name_var, width=300)
         theme_menu.pack(anchor="w", pady=5)
 
         frame_tab = ctk.CTkFrame(parent, fg_color="transparent")
@@ -791,12 +958,22 @@ class SpeedScan(ctk.CTk):
             if v == selected_scale:
                 self.config["ui_scale"] = k
                 break
-        theme_map = ["default", "grey", "dark", "light"]
-        theme_idx = ["Padrão (Roxo)", "Cinza Profissional", "Escuro Total", "Claro Clean"].index(self.theme_var.get())
-        self.config["theme"] = theme_map[theme_idx]
+
+        # Mapeia o nome do tema para a chave
+        theme_names = ["Padrão (Roxo)", "Cinza Profissional", "Escuro Total", "Claro Clean"]
+        theme_keys = ["default", "grey", "dark", "light"]
+        selected_theme_name = self.theme_name_var.get()
+        if selected_theme_name in theme_names:
+            idx = theme_names.index(selected_theme_name)
+            self.config["theme"] = theme_keys[idx]
+        else:
+            self.config["theme"] = "default"
+
         self.config["open_file_in_tab"] = (self.tab_var.get() == "Na guia")
         with open(CONFIG_FILE, "w") as f:
             json.dump(self.config, f)
+
+        time.sleep(0.1)
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
@@ -831,7 +1008,7 @@ class SpeedScan(ctk.CTk):
         )
         ctk.CTkLabel(card, text=info_text, font=("Inter", 12), justify="left", text_color=self.text_color).pack(pady=20, padx=30)
 
-    # ---------- Utilitários (consoles inteligentes) ----------
+    # ---------- Utilitários (consoles) ----------
     def _add_console(self, parent, tag):
         btn = ctk.CTkButton(
             parent,
@@ -897,10 +1074,15 @@ class SpeedScan(ctk.CTk):
     # ---------- Funções específicas ----------
     def toggle_turbo(self):
         self.turbo_active = not self.turbo_active
-        if self.turbo_active:
-            cmd = "sudo cpupower frequency-set -g performance"
+        if self.SO == "Linux":
+            cmd = "sudo cpupower frequency-set -g performance" if self.turbo_active else "sudo cpupower frequency-set -g powersave"
+        elif self.SO == "Windows":
+            guid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c" if self.turbo_active else "381b4222-f694-41f0-9685-ff5bb260df2e"
+            cmd = f"powercfg /setactive {guid}"
+        elif self.SO == "Darwin":
+            cmd = "echo 'Modo Turbo não disponível no macOS'"
         else:
-            cmd = "sudo cpupower frequency-set -g powersave"
+            cmd = "echo 'Sistema não suportado'"
         self.run_action(cmd, "ot")
 
     def toggle_ping(self):
@@ -920,11 +1102,10 @@ class SpeedScan(ctk.CTk):
                     text=True,
                     timeout=2
                 )
-                if "time=" in p.stdout or "tempo=" in p.stdout:
-                    match = re.search(r'time[=<](\d+\.?\d*)', p.stdout)
-                    res = match.group(1) if match else "Erro"
-                else:
-                    res = "Erro"
+                match = re.search(r'time[=<](\d+\.?\d*)', p.stdout, re.IGNORECASE) or \
+                        re.search(r'tempo[=<](\d+\.?\d*)', p.stdout, re.IGNORECASE) or \
+                        re.search(r'(\d+\.?\d*) ?ms', p.stdout)
+                res = match.group(1) if match else "Erro"
                 self.after(0, lambda r=res: self.ping_label.configure(text=f"{r} ms"))
             except:
                 self.after(0, lambda: self.ping_label.configure(text="-- ms"))
