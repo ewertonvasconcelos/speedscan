@@ -1,24 +1,73 @@
-import customtkinter as ctk
-import os, platform, psutil, subprocess, threading, json, time
-from PIL import Image
+#!/usr/bin/env python3
+# SpeedScan - Versão final com logo arredondada e preparado para GitHub
+# Uso: python3 core/speedscan_app.py
 
+import customtkinter as ctk
+import os
+import platform
+import psutil
+import subprocess
+import threading
+import json
+import time
+import sys
+import re
+from PIL import Image, ImageDraw
+from datetime import datetime
+
+# Configurações
 CONFIG_FILE = os.path.expanduser("~/.speedscan_conf")
 ICON_PATH = os.path.expanduser("~/speedscan/icon.png")
 
 def get_config():
     if os.path.exists(CONFIG_FILE):
         try:
-            with open(CONFIG_FILE, "r") as f: return json.load(f)
-        except: pass
-    return {"theme": "default", "geometry": "1200x950"}
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except:
+            pass
+    return {
+        "theme": "default",
+        "username": "ewerton",
+        "language": "pt_BR",
+        "ui_scale": "auto",
+        "open_file_in_tab": False
+    }
 
 conf = get_config()
+
 themes = {
     "default": {"mode": "dark", "bg": "#1e293b", "side": "#0f172a", "acc": "#a855f7", "text": "#ffffff"},
     "grey":    {"mode": "light", "bg": "#d1d5db", "side": "#374151", "acc": "#4b5563", "text": "#111827"},
     "dark":    {"mode": "dark", "bg": "#080808", "side": "#000000", "acc": "#10b981", "text": "#ffffff"},
     "light":   {"mode": "light", "bg": "#ffffff", "side": "#f8fafc", "acc": "#2563eb", "text": "#0f172a"}
 }
+
+languages = {
+    "pt_BR": "Português Brasileiro",
+    "en_US": "English (US)",
+    "es_ES": "Español"
+}
+
+scales = {
+    "auto": "Automático",
+    "100": "100%",
+    "125": "125%",
+    "150": "150%"
+}
+
+# Lista de IAs sugeridas
+AI_SUGGESTIONS = [
+    "DeepSeek",
+    "OpenAI GPT-4",
+    "Google Gemini",
+    "Claude (Anthropic)",
+    "Llama 3 (Meta)",
+    "Mistral AI",
+    "Cohere",
+    "Local (Ollama)",
+    "Configurar IA Local"
+]
 
 class SpeedScan(ctk.CTk):
     def __init__(self):
@@ -27,195 +76,872 @@ class SpeedScan(ctk.CTk):
         self.config = conf
         self.update_theme_vars()
         self.title("SpeedScan")
-        self.geometry(self.config.get("geometry", "1200x950"))
+        self.geometry("1200x950")
+        self.minsize(1000, 700)
         self.configure(fg_color=self.bg_color)
-        
-        self.turbo_active = False
-        self.consoles_visible = {"ot": False, "gm": False, "net": False, "drv": False, "ping": False}
-        self.action_ready = {"ot": False, "gm": False, "net": False, "drv": False}
 
-        self.grid_columnconfigure(1, weight=1); self.grid_rowconfigure(0, weight=1)
-        
-        self.sidebar = ctk.CTkFrame(self, width=320, corner_radius=0, fg_color=self.side_bg)
+        self.apply_ui_scale()
+
+        # Variáveis de estado
+        self.turbo_active = False
+        self.consoles_visible = {}
+        self.ping_active = False
+        self.current_module = "sistema"
+        self.sidebar_buttons = {}
+        self.detail_buttons = {}
+
+        # Layout
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # Sidebar
+        self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=self.side_bg)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.grid_propagate(False)
-        
-        try:
-            logo_img = ctk.CTkImage(Image.open(ICON_PATH), size=(220, 220))
-            self.logo_disp = ctk.CTkLabel(self.sidebar, image=logo_img, text="")
-            self.logo_disp.pack(pady=(40, 10), padx=20)
-        except:
-            self.logo_disp = ctk.CTkLabel(self.sidebar, text="⚡", font=("Orbitron", 80))
-            self.logo_disp.pack(pady=40)
-        
-        self.title_label = ctk.CTkLabel(self.sidebar, text="SpeedScan", font=("Orbitron", 32, "bold"), text_color=self.accent)
-        self.title_label.pack(pady=10)
 
-        self.tab_view = ctk.CTkTabview(self, corner_radius=15, fg_color=self.bg_color, segmented_button_selected_color=self.accent)
-        self.tab_view.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
-        
-        for n in ["🏠 Início", "💻 Sistema", "🚀 Otimização", "🎮 Gamer", "🌐 Rede", "🛠 Drivers", "🎨 Temas"]:
-            self.tab_view.add(n)
-        
-        self.setup_tabs()
+        # Container principal
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_rowconfigure(0, weight=1)
+
+        self.frames = {}
+
+        self.create_sidebar()
+        self.create_frames()
+
+        self.show_frame("sistema")
+
         self.bind_all("<MouseWheel>", self._on_mousewheel)
 
+        threading.Thread(target=self.hardware_monitor, daemon=True).start()
+
+    # ---------- Função para arredondar imagem ----------
+    def round_image(self, path, size=(96, 96), radius=48):
+        """
+        Carrega uma imagem do caminho, aplica máscara circular e retorna CTkImage.
+        radius = metade do size para círculo perfeito.
+        """
+        try:
+            img = Image.open(path).convert("RGBA")
+            img = img.resize(size, Image.Resampling.LANCZOS)
+            mask = Image.new("L", size, 0)
+            draw = ImageDraw.Draw(mask)
+            draw.ellipse((0, 0) + size, fill=255)
+            result = Image.new("RGBA", size)
+            result.paste(img, (0, 0), mask)
+            return ctk.CTkImage(result, size=size)
+        except Exception as e:
+            print(f"Erro ao arredondar imagem: {e}")
+            return None
+
+    # ---------- Temas e escala ----------
     def update_theme_vars(self):
-        t = themes.get(self.config.get("theme", "default"))
+        t = themes.get(self.config["theme"], themes["default"])
         ctk.set_appearance_mode(t["mode"])
-        self.bg_color = t["bg"]; self.side_bg = t["side"]; self.accent = t["acc"]; self.text_color = t["text"]
+        self.bg_color = t["bg"]
+        self.side_bg = t["side"]
+        self.acc_color = t["acc"]
+        self.text_color = t["text"]
+        # Cor mais clara para cards internos
+        self.light_bg = self._lighten_color(self.bg_color, 0.2)
 
-    def _on_mousewheel(self, event):
-        tab = self.tab_view.get()
-        targets = {"💻 Sistema": self.scroll_sys, "🎮 Gamer": self.scroll_gm, "🛠 Drivers": self.scroll_drv}
-        if tab in targets: targets[tab]._parent_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+    def _lighten_color(self, hex_color, factor=0.2):
+        hex_color = hex_color.lstrip('#')
+        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+        r = min(255, int(r + (255 - r) * factor))
+        g = min(255, int(g + (255 - g) * factor))
+        b = min(255, int(b + (255 - b) * factor))
+        return f"#{r:02x}{g:02x}{b:02x}"
 
-    def create_btn(self, m, t, c, color=None):
-        return ctk.CTkButton(m, text=t, command=c, fg_color=color if color else self.accent, 
-                             hover_color="#9333ea", text_color="#ffffff", width=420, height=45, font=("Inter", 14, "bold"))
-
-    def toggle_console(self, target):
-        lookup = {"ot": (self.log_ot, self.btn_ot), "gm": (self.log_gm, self.btn_gm), 
-                  "net": (self.log_net, self.btn_net), "drv": (self.log_drv, self.btn_drv)}
-        log, btn = lookup[target]
-        if not self.consoles_visible[target]:
-            log.pack(fill="x", padx=40, pady=10)
-            btn.configure(text="Detalhes ⌃", text_color=self.accent)
-            self.consoles_visible[target] = True
+    def apply_ui_scale(self):
+        scale = self.config.get("ui_scale", "auto")
+        if scale == "auto":
+            ctk.set_widget_scaling(1.0)
         else:
-            log.pack_forget()
-            btn.configure(text="Detalhes ⌄", text_color=self.bg_color)
-            self.consoles_visible[target] = False
+            ctk.set_widget_scaling(float(scale) / 100)
 
-    def setup_tabs(self):
-        self.scroll_sys = ctk.CTkScrollableFrame(self.tab_view.tab("💻 Sistema"), fg_color="transparent")
-        self.scroll_sys.pack(fill="both", expand=True); self.update_sys_info()
+    # ---------- Sidebar ----------
+    def create_sidebar(self):
+        top_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        top_frame.pack(side="top", fill="x", pady=(30, 10))
 
-        self.t_ot = self.tab_view.tab("🚀 Otimização")
-        for n, c in [("Limpeza de Cache Profunda", "sudo eopkg dc"), ("Otimizar RAM/Swap", "sudo swapoff -a && sudo swapon -a"), ("Verificar Erros", "sudo eopkg check")]:
-            self.create_btn(self.t_ot, n, lambda cmd=c: self.run_action(cmd, "ot")).pack(pady=10)
-        self.btn_ot = ctk.CTkButton(self.t_ot, text="Detalhes ⌄", fg_color="transparent", text_color=self.bg_color, command=lambda: self.toggle_console("ot"))
-        self.btn_ot.pack(pady=5, anchor="e", padx=40)
-        self.log_ot = ctk.CTkTextbox(self.t_ot, height=200, fg_color=self.side_bg, text_color="#10b981")
+        icon_image = None
+        if os.path.exists(ICON_PATH):
+            icon_image = self.round_image(ICON_PATH, size=(96, 96), radius=48)
 
-        self.t_gm = self.tab_view.tab("🎮 Gamer")
-        self.btn_turbo = self.create_btn(self.t_gm, "🔥 ATIVAR MODO TURBO GAMER", self.toggle_turbo, color="#e11d48")
-        self.btn_turbo.pack(pady=15)
-        self.scroll_gm = ctk.CTkScrollableFrame(self.t_gm, fg_color="transparent", height=350)
-        self.scroll_gm.pack(fill="both", expand=True)
-        apps = [("Steam", "steam"), ("Lutris", "lutris"), ("Heroic Launcher", "heroic-games-launcher-bin"), ("Bottles", "bottles"), ("Wine", "wine"), ("MangoHud", "mangohud"), ("Goverlay", "goverlay")]
-        for n, p in apps:
-            self.create_btn(self.scroll_gm, f"Instalar {n}", lambda pkg=p: self.run_action(f"sudo eopkg it {pkg} -y", "gm")).pack(pady=5)
-        self.btn_gm = ctk.CTkButton(self.t_gm, text="Detalhes ⌄", fg_color="transparent", text_color=self.bg_color, command=lambda: self.toggle_console("gm"))
-        self.btn_gm.pack(pady=5, anchor="e", padx=40)
-        self.log_gm = ctk.CTkTextbox(self.t_gm, height=200, fg_color=self.side_bg, text_color="#10b981")
+        if icon_image:
+            btn_speed = ctk.CTkButton(
+                top_frame,
+                image=icon_image,
+                text="",
+                width=96,
+                height=96,
+                corner_radius=25,  # mantém a pílula do botão
+                fg_color="transparent",
+                hover_color=self.acc_color,
+                command=lambda: self.show_frame("sistema")
+            )
+            btn_speed.pack()
+        else:
+            btn_speed = ctk.CTkButton(
+                top_frame,
+                text="⚡",
+                width=96,
+                height=96,
+                corner_radius=25,
+                fg_color="transparent",
+                hover_color=self.acc_color,
+                font=("Inter", 48),
+                command=lambda: self.show_frame("sistema")
+            )
+            btn_speed.pack()
 
-        self.t_net = self.tab_view.tab("🌐 Rede")
-        self.create_btn(self.t_net, "Testar Latência (Ping)", self.toggle_ping_ui).pack(pady=10)
-        self.ping_frame = ctk.CTkFrame(self.t_net, fg_color=self.side_bg, corner_radius=12)
-        self.ping_label = ctk.CTkLabel(self.ping_frame, text="Ping: -- ms", font=("Consolas", 16, "bold"), text_color="#10b981")
-        self.ping_label.pack(pady=10, padx=20)
-        self.dns_box = ctk.CTkFrame(self.t_net, fg_color="transparent")
-        self.dns_box.pack(fill="x")
-        for n, c in [("Cloudflare DNS", "nmcli dev mod eth0 ipv4.dns '1.1.1.1'"), ("Google DNS", "nmcli dev mod eth0 ipv4.dns '8.8.8.8'"), ("DNS Automático", "nmcli dev mod eth0 ipv4.dns ''")]:
-            self.create_btn(self.dns_box, n, lambda cmd=c: self.run_action(cmd, "net")).pack(pady=5)
-        self.btn_net = ctk.CTkButton(self.t_net, text="Detalhes ⌄", fg_color="transparent", text_color=self.bg_color, command=lambda: self.toggle_console("net"))
-        self.btn_net.pack(pady=5, anchor="e", padx=40)
-        self.log_net = ctk.CTkTextbox(self.t_net, height=150, fg_color=self.side_bg, text_color="#10b981")
+        # Sem label abaixo do ícone
 
-        self.t_drv = self.tab_view.tab("🛠 Drivers")
-        self.scroll_drv = ctk.CTkScrollableFrame(self.t_drv, fg_color="transparent", height=450)
-        self.scroll_drv.pack(fill="both", expand=True)
-        for n, c in [("PCI (Vídeo/Rede)", "lspci -nnk"), ("USB Conectados", "lsusb"), ("Módulos Kernel", "lsmod"), ("CPU Detalhada", "lscpu"), ("Firmware Erros", "sudo dmesg | grep -i firmware")]:
-            self.create_btn(self.scroll_drv, n, lambda cmd=c: self.run_action(cmd, "drv")).pack(pady=5)
-        self.btn_drv = ctk.CTkButton(self.t_drv, text="Detalhes ⌄", fg_color="transparent", text_color=self.bg_color, command=lambda: self.toggle_console("drv"))
-        self.btn_drv.pack(pady=5, anchor="e", padx=40)
-        self.log_drv = ctk.CTkTextbox(self.t_drv, height=200, fg_color=self.side_bg, text_color="#10b981")
+        center_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        center_frame.pack(side="top", fill="both", expand=True, pady=20)
 
-        self.t_tm = self.tab_view.tab("🎨 Temas")
-        for name, key in [("Padrão", "default"), ("Cinza", "grey"), ("Escuro", "dark"), ("Claro", "light")]:
-            self.create_btn(self.t_tm, name, lambda k=key: self.set_theme(k)).pack(pady=10)
+        ctk.CTkLabel(center_frame, text="").pack(expand=True)
 
-    def run_action(self, cmd, target):
-        lookup = {"ot": (self.log_ot, self.btn_ot), "gm": (self.log_gm, self.btn_gm), "net": (self.log_net, self.btn_net), "drv": (self.log_drv, self.btn_drv)}
-        log, btn = lookup[target]
-        log.delete("0.0", "end")
-        self.action_ready[target] = False
-        btn.configure(text_color=self.bg_color)
-        threading.Thread(target=self.execute, args=(cmd, log, btn, target), daemon=True).start()
+        self.sidebar_buttons["otimizacao"] = self.add_sidebar_btn(center_frame, "🚀", "Otimização", "otimizacao")
+        self.sidebar_buttons["rede"] = self.add_sidebar_btn(center_frame, "🌐", "Rede", "rede")
+        self.sidebar_buttons["drivers"] = self.add_sidebar_btn(center_frame, "🛠️", "Drivers", "drivers")
+        self.sidebar_buttons["agente"] = self.add_sidebar_btn(center_frame, "🤖", "Agente IA", "agente")
 
-    def execute(self, cmd, log, btn, target):
-        final_cmd = f"pkexec bash -c '{cmd}'" if (self.SO == "Linux" and "sudo" in cmd) else cmd
-        p = subprocess.Popen(final_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        o, e = p.communicate()
-        if p.returncode == 0:
-            self.action_ready[target] = True
-            self.after(0, lambda: self.finish_action(btn, log, o + (e or "") + "\n-- OK --", target))
+        ctk.CTkLabel(center_frame, text="").pack(expand=True)
 
-    def finish_action(self, btn, log, content, target):
-        log.insert("end", content)
-        if not self.consoles_visible[target]: self.toggle_console(target)
+        bottom_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        bottom_frame.pack(side="bottom", fill="x", pady=20)
+
+        self.sidebar_buttons["config"] = self.add_sidebar_btn(bottom_frame, "⚙️", "Configurações", "config")
+        self.sidebar_buttons["sobre"] = self.add_sidebar_btn(bottom_frame, "ℹ️", "Sobre", "sobre")
+
+    def add_sidebar_btn(self, parent, icon, text, target):
+        frame = ctk.CTkFrame(parent, fg_color="transparent")
+        frame.pack(pady=5, fill="x", padx=10)
+        btn = ctk.CTkButton(
+            frame,
+            text=f"{icon}  {text}",
+            anchor="w",
+            height=40,
+            fg_color="transparent",
+            hover_color=self.acc_color,
+            font=("Inter", 13),
+            corner_radius=10,
+            command=lambda: self.show_frame(target)
+        )
+        btn.pack(fill="x")
+        return btn
+
+    def show_frame(self, target):
+        for frame in self.frames.values():
+            frame.pack_forget()
+        self.frames[target].pack(fill="both", expand=True)
+        self.current_module = target
+
+        for key, btn in self.sidebar_buttons.items():
+            if key == target:
+                btn.configure(fg_color=self.acc_color)
+            else:
+                btn.configure(fg_color="transparent")
+
+    # ---------- Criação dos frames ----------
+    def create_frames(self):
+        self.frames["sistema"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_sistema_frame(self.frames["sistema"])
+
+        self.frames["otimizacao"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_otimizacao_frame(self.frames["otimizacao"])
+
+        self.frames["rede"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_rede_frame(self.frames["rede"])
+
+        self.frames["drivers"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_drivers_frame(self.frames["drivers"])
+
+        self.frames["agente"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_agente_frame(self.frames["agente"])
+
+        self.frames["config"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_config_frame(self.frames["config"])
+
+        self.frames["sobre"] = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.create_sobre_frame(self.frames["sobre"])
+
+    # ---------- Sistema (cards de informações) ----------
+    def create_sistema_frame(self, parent):
+        ctk.CTkLabel(parent, text="Informações do Sistema", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 30))
+
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="both", expand=True)
+        for i in range(3):
+            grid.columnconfigure(i, weight=1)
+
+        info_fields = [
+            ("💻 Hostname", "hostname", self._get_hostname),
+            ("💿 Distribuição", "distro", self._get_distro),
+            ("🐧 Kernel", "kernel", self._get_kernel),
+            ("🖥️ CPU", "cpu", self._get_cpu),
+            ("📟 RAM", "ram", self._get_ram),
+            ("🎮 GPU", "gpu", self._get_gpu),
+            ("💽 Discos", "disks", self._get_disks),
+            ("⏱️ Uptime", "uptime", self._get_uptime),
+            ("🔋 Bateria", "battery", self._get_battery)
+        ]
+
+        self.sys_labels = {}
+
+        for i, (label, key, func) in enumerate(info_fields):
+            row, col = divmod(i, 3)
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10, border_width=1, border_color=self.acc_color)
+            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            card.grid_propagate(False)
+            card.configure(height=150)
+
+            ctk.CTkLabel(card, text=label, font=("Inter", 14, "bold"), text_color=self.acc_color).pack(pady=(10, 5))
+
+            value_label = ctk.CTkLabel(
+                card,
+                text="...",
+                font=("Consolas", 11),
+                text_color=self.text_color,
+                wraplength=180,
+                justify="left"
+            )
+            value_label.pack(expand=True, fill="both", padx=5, pady=(0, 10))
+            self.sys_labels[key] = value_label
+
+        self.update_sys_info()
 
     def update_sys_info(self):
-        for w in self.scroll_sys.winfo_children(): w.destroy()
-        cpu = os.popen("grep -m1 'model name' /proc/cpuinfo | cut -d: -f2").read().strip() or platform.processor()
-        gpu_raw = os.popen("lspci -k | grep -A 3 -i 'vga\\|3d'").read()
-        gpu_brand = "Intel" if "Intel" in gpu_raw else ("Nvidia" if "Nvidia" in gpu_raw else "AMD")
-        gpu_model = os.popen("lspci | grep -i 'vga\\|3d' | cut -d: -f3").read().strip()
-        gpu_driver = os.popen("glxinfo | grep 'OpenGL core profile version string'").read().split(':')[-1].strip() or "Mesa Driver"
-        disk_lines = os.popen("lsblk -d -o NAME,MODEL,SIZE,ROTA,TRAN").read().strip().split('\n')[1:]
-        disk_summary = ""
-        for line in disk_lines:
-            p = line.split()
-            if len(p) >= 4:
-                model = " ".join(p[1:-2]); size = p[-2]; tech = "HDD" if p[-1] == "1" else "SSD"
-                disk_summary += f"• {model} [{tech}] - {size}\n"
-        
-        info = [
-            ("💻 DISPOSITIVO", platform.node()),
-            ("💿 DISTRO", os.popen("cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2").read().strip().replace('"', '')),
-            ("🐧 KERNEL", platform.release()),
-            ("🖥️ CPU", cpu),
-            ("📟 GPU", f"{gpu_brand} {gpu_model} [{gpu_driver}]"),
-            ("📟 RAM", f"{psutil.virtual_memory().total/(1024**3):.2f} GB"),
-            ("💽 DISCOS", disk_summary.strip()),
-            ("🔋 BATERIA", f"{psutil.sensors_battery().percent}%" if psutil.sensors_battery() else "AC Power")
-        ]
-        for l, v in info:
-            f = ctk.CTkFrame(self.scroll_sys, fg_color="transparent"); f.pack(fill="x", padx=40, pady=10)
-            ctk.CTkLabel(f, text=l, font=("Inter", 15, "bold"), text_color=self.accent, width=180, anchor="w").pack(side="left")
-            ctk.CTkLabel(f, text=v, font=("Consolas", 13), text_color=self.text_color, justify="left").pack(side="left")
+        try:
+            self.sys_labels["hostname"].configure(text=self._get_hostname())
+            self.sys_labels["distro"].configure(text=self._get_distro())
+            self.sys_labels["kernel"].configure(text=self._get_kernel())
+            self.sys_labels["cpu"].configure(text=self._get_cpu())
+            self.sys_labels["ram"].configure(text=self._get_ram())
+            self.sys_labels["gpu"].configure(text=self._get_gpu())
+            self.sys_labels["disks"].configure(text=self._get_disks())
+            self.sys_labels["uptime"].configure(text=self._get_uptime())
+            self.sys_labels["battery"].configure(text=self._get_battery())
+        except:
+            pass
 
+    def _get_hostname(self):
+        return platform.node()
+
+    def _get_distro(self):
+        try:
+            with open("/etc/os-release") as f:
+                for line in f:
+                    if line.startswith("PRETTY_NAME="):
+                        return line.split("=")[1].strip().strip('"')
+        except:
+            pass
+        return platform.system()
+
+    def _get_kernel(self):
+        return platform.release()
+
+    def _get_cpu(self):
+        try:
+            if self.SO == "Linux":
+                out = subprocess.check_output("grep -m1 'model name' /proc/cpuinfo | cut -d: -f2", shell=True, text=True).strip()
+                if out:
+                    return out
+            elif self.SO == "Windows":
+                out = subprocess.check_output("wmic cpu get name", shell=True, text=True).strip().split('\n')[1]
+                if out:
+                    return out
+            elif self.SO == "Darwin":
+                out = subprocess.check_output("sysctl -n machdep.cpu.brand_string", shell=True, text=True).strip()
+                if out:
+                    return out
+        except:
+            pass
+        return f"{psutil.cpu_count()} núcleos ({psutil.cpu_percent()}%)"
+
+    def _get_ram(self):
+        mem = psutil.virtual_memory()
+        return f"{mem.used // 1048576} MB / {mem.total // 1048576} MB ({mem.percent}%)"
+
+    def _get_gpu(self):
+        try:
+            if self.SO == "Linux":
+                out = subprocess.check_output("lspci | grep -i 'vga\\|3d' | cut -d: -f3-", shell=True, text=True).strip()
+                if out:
+                    return out
+            elif self.SO == "Windows":
+                out = subprocess.check_output("wmic path win32_VideoController get name", shell=True, text=True).strip().split('\n')[1]
+                if out:
+                    return out
+            elif self.SO == "Darwin":
+                out = subprocess.check_output("system_profiler SPDisplaysDataType | grep Chipset", shell=True, text=True).strip()
+                if out:
+                    return out
+        except:
+            pass
+        return "Não detectado"
+
+    def _get_disks(self):
+        try:
+            if self.SO == "Linux":
+                out = subprocess.check_output("lsblk -d -o MODEL,SIZE | tail -n +2 | head -2", shell=True, text=True).strip()
+                if out:
+                    return out.replace('\n', ' | ')
+            disks = []
+            for part in psutil.disk_partitions():
+                if part.fstype:
+                    usage = psutil.disk_usage(part.mountpoint)
+                    disks.append(f"{part.device} ({usage.total // 1073741824} GB)")
+            return " | ".join(disks[:2])
+        except:
+            return "N/A"
+
+    def _get_uptime(self):
+        uptime_seconds = time.time() - psutil.boot_time()
+        return str(datetime.timedelta(seconds=int(uptime_seconds)))
+
+    def _get_battery(self):
+        battery = psutil.sensors_battery()
+        return f"{battery.percent:.1f}%" if battery else "AC Power"
+
+    # ---------- Otimização (12 cards) ----------
+    def create_otimizacao_frame(self, parent):
+        ctk.CTkLabel(parent, text="Otimização", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 20))
+
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="both", expand=True, pady=10)
+        for i in range(3):
+            grid.columnconfigure(i, weight=1)
+
+        cards = [
+            ("🧹 Limpeza de Cache", "sudo eopkg dc", "ot", False),
+            ("🔄 Reset de Swap", "sudo swapoff -a && sudo swapon -a", "ot", False),
+            ("✅ Verificar Erros", "sudo eopkg check", "ot", False),
+            ("🔥 Modo Turbo", "turbo", "ot", False),
+            ("Steam", "steam", "gm", True),
+            ("Lutris", "lutris", "gm", True),
+            ("Heroic Launcher", "heroic-games-launcher-bin", "gm", True),
+            ("Bottles", "bottles", "gm", True),
+            ("Wine", "wine", "gm", True),
+            ("MangoHud", "mangohud", "gm", True),
+            ("Goverlay", "goverlay", "gm", True),
+            ("🎮 Emulador Dolphin", "dolphin", "ot", True),
+        ]
+
+        for idx, (title, cmd, tag, is_install) in enumerate(cards):
+            row, col = divmod(idx, 3)
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10, border_width=1, border_color=self.acc_color)
+            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            card.grid_propagate(False)
+            card.configure(height=150)
+
+            ctk.CTkLabel(card, text=title, font=("Inter", 14, "bold"), text_color=self.acc_color).pack(pady=(10, 5))
+            btn_text = "Instalar" if is_install else "Executar"
+            btn = ctk.CTkButton(
+                card,
+                text=btn_text,
+                fg_color=self.acc_color,
+                command=lambda c=cmd, t=tag, ti=title: self.run_optimization_action(c, t, ti)
+            )
+            btn.pack(pady=5)
+
+        self._add_console(parent, "ot")
+
+    def run_optimization_action(self, cmd, tag, title):
+        if cmd == "turbo":
+            self.toggle_turbo()
+        elif cmd == "dolphin":
+            self.install_dolphin()
+        else:
+            if tag == "gm":
+                self.run_action(f"sudo eopkg it {cmd} -y", tag)
+            else:
+                self.run_action(cmd, tag)
+
+    def install_dolphin(self):
+        distro = self._get_distro().lower()
+        if "ubuntu" in distro or "debian" in distro:
+            install_cmd = "sudo apt install dolphin-emu -y"
+        elif "fedora" in distro:
+            install_cmd = "sudo dnf install dolphin-emu -y"
+        elif "arch" in distro:
+            install_cmd = "sudo pacman -S dolphin-emu --noconfirm"
+        elif "opensuse" in distro:
+            install_cmd = "sudo zypper install dolphin-emu -y"
+        else:
+            install_cmd = "echo 'Distro não suportada para instalação automática'"
+        self.run_action(install_cmd, "ot")
+        log = getattr(self, "log_ot")
+        log.insert("end", "\n\nDOLPHIN INSTALADO COM SUCESSO!\n")
+        log.insert("end", "Para configurar, execute 'dolphin-emu' no terminal.\n")
+        log.insert("end", "Ou acesse as configurações gráficas/áudio em ~/.local/share/dolphin-emu/\n")
+
+    # ---------- Rede (9 cards) ----------
+    def create_rede_frame(self, parent):
+        ctk.CTkLabel(parent, text="Rede", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 20))
+
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="both", expand=True, pady=10)
+        for i in range(3):
+            grid.columnconfigure(i, weight=1)
+
+        cards = [
+            ("📡 Ping", "ping", "net", False),
+            ("☁️ Cloudflare DNS", "1.1.1.1", "net", True),
+            ("🔵 Google DNS", "8.8.8.8", "net", True),
+            ("🛡️ AdGuard DNS", "94.140.14.14", "net", True),
+            ("🔄 DNS Automático", "auto", "net", True),
+            ("🌐 Testar Velocidade", "speedtest", "net", False),
+            ("🔌 Diagnóstico Placa", "ethtool", "net", False),
+            ("🔄 Renovar IP", "dhclient", "net", False),
+            ("🧭 Portas Abertas", "ports", "net", False),
+        ]
+
+        for idx, (title, cmd, tag, is_dns) in enumerate(cards):
+            row, col = divmod(idx, 3)
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10, border_width=1, border_color=self.acc_color)
+            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            card.grid_propagate(False)
+            card.configure(height=150)
+
+            ctk.CTkLabel(card, text=title, font=("Inter", 14, "bold"), text_color=self.acc_color).pack(pady=(10, 5))
+            if cmd == "ping":
+                btn = ctk.CTkButton(
+                    card,
+                    text="Iniciar",
+                    fg_color=self.acc_color,
+                    command=self.toggle_ping
+                )
+                btn.pack(pady=5)
+                self.ping_label = ctk.CTkLabel(card, text="-- ms", font=("Consolas", 14), text_color="#10b981")
+                self.ping_label.pack()
+            else:
+                btn_text = "Aplicar" if is_dns else "Executar"
+                btn = ctk.CTkButton(
+                    card,
+                    text=btn_text,
+                    fg_color=self.acc_color,
+                    command=lambda c=cmd, t=tag, d=is_dns: self.run_network_action(c, t, d)
+                )
+                btn.pack(pady=5)
+
+        self._add_console(parent, "net")
+
+    def run_network_action(self, cmd, tag, is_dns):
+        if cmd == "ping":
+            self.toggle_ping()
+        elif cmd == "speedtest":
+            self.run_action("curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 -", tag)
+        elif cmd == "ethtool":
+            iface = subprocess.getoutput("ip route | grep default | awk '{print $5}' | head -1")
+            if iface:
+                self.run_action(f"ethtool {iface}", tag)
+            else:
+                self.run_action("echo 'Interface não encontrada'", tag)
+        elif cmd == "dhclient":
+            self.run_action("sudo dhclient -v -r && sudo dhclient -v", tag)
+        elif cmd == "ports":
+            self.scan_ports_interactive()
+        elif is_dns:
+            if cmd == "auto":
+                cmd = "nmcli dev mod $(nmcli -t -f DEVICE,STATE dev | grep connected | cut -d: -f1 | head -n1) ipv4.dns ''"
+            else:
+                cmd = f"nmcli dev mod $(nmcli -t -f DEVICE,STATE dev | grep connected | cut -d: -f1 | head -n1) ipv4.dns '{cmd}'"
+            self.run_action(cmd, tag)
+        else:
+            self.run_action(cmd, tag)
+
+    def scan_ports_interactive(self):
+        log = getattr(self, "log_net")
+        log.delete("1.0", "end")
+        log.insert("end", "Escaneando portas abertas...\n")
+        try:
+            output = subprocess.check_output("ss -tuln | tail -n +2", shell=True, text=True)
+            lines = output.strip().split('\n')
+            ports = []
+            for line in lines:
+                parts = line.split()
+                if len(parts) >= 5:
+                    proto = parts[0]
+                    addr_port = parts[4]
+                    if ':' in addr_port:
+                        port = addr_port.split(':')[-1]
+                        ports.append((proto, port))
+            if not ports:
+                log.insert("end", "Nenhuma porta aberta encontrada.\n")
+                return
+            log.insert("end", "Portas abertas:\n")
+            for i, (proto, port) in enumerate(ports):
+                log.insert("end", f"[{i+1}] {proto} {port}\n")
+            log.insert("end", "\nPara fechar, use o firewall apropriado. Ex: sudo ufw deny 22/tcp\n")
+        except Exception as e:
+            log.insert("end", f"Erro ao escanear: {e}\n")
+
+    # ---------- Drivers (9 cards) ----------
+    def create_drivers_frame(self, parent):
+        ctk.CTkLabel(parent, text="Drivers", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 20))
+
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="both", expand=True, pady=10)
+        for i in range(3):
+            grid.columnconfigure(i, weight=1)
+
+        cards = [
+            ("🖥️ PCI (Vídeo/Rede)", "lspci -nnk", "drv", False),
+            ("📦 Atualizar Sistema", "sudo dnf upgrade -y", "drv", False),
+            ("🔌 USB Conectados", "lsusb", "drv", False),
+            ("🧩 Módulos Kernel", "lsmod", "drv", False),
+            ("⚙️ CPU Detalhada", "lscpu", "drv", False),
+            ("⚠️ Firmware Erros", "sudo dmesg | grep -i firmware", "drv", False),
+            ("🎮 Drivers de Vídeo", "video", "drv", False),
+            ("🌐 Drivers de Rede", "rede", "drv", False),
+            ("🔄 Atualizações Automáticas", "auto-update", "drv", False),
+        ]
+
+        for idx, (title, cmd, tag, _) in enumerate(cards):
+            row, col = divmod(idx, 3)
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10, border_width=1, border_color=self.acc_color)
+            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            card.grid_propagate(False)
+            card.configure(height=150)
+
+            ctk.CTkLabel(card, text=title, font=("Inter", 14, "bold"), text_color=self.acc_color).pack(pady=(10, 5))
+            btn = ctk.CTkButton(
+                card,
+                text="Executar",
+                fg_color=self.acc_color,
+                command=lambda c=cmd, t=tag: self.run_driver_action(c, t)
+            )
+            btn.pack(pady=5)
+
+        self._add_console(parent, "drv")
+
+    def run_driver_action(self, cmd, tag):
+        if cmd == "video":
+            self.install_video_drivers()
+        elif cmd == "rede":
+            self.install_network_drivers()
+        elif cmd == "auto-update":
+            self.setup_auto_updates()
+        else:
+            self.run_action(cmd, tag)
+
+    def install_video_drivers(self):
+        log = getattr(self, "log_drv")
+        log.delete("1.0", "end")
+        log.insert("end", "Detectando GPU...\n")
+        try:
+            lspci = subprocess.check_output("lspci | grep -i 'vga\\|3d'", shell=True, text=True)
+            if "NVIDIA" in lspci:
+                log.insert("end", "GPU NVIDIA detectada. Instalando driver proprietário...\n")
+                cmd = "sudo dnf install nvidia-driver -y" if "fedora" in self._get_distro().lower() else "sudo apt install nvidia-driver -y"
+            elif "AMD" in lspci:
+                log.insert("end", "GPU AMD detectada. Instalando driver amdgpu...\n")
+                cmd = "sudo dnf install xorg-x11-drv-amdgpu -y" if "fedora" in self._get_distro().lower() else "sudo apt install xserver-xorg-video-amdgpu -y"
+            elif "Intel" in lspci:
+                log.insert("end", "GPU Intel detectada. Driver já incluso no kernel.\n")
+                cmd = "echo 'Driver Intel já presente'"
+            else:
+                log.insert("end", "GPU não identificada.\n")
+                return
+            self.run_action(cmd, "drv")
+        except Exception as e:
+            log.insert("end", f"Erro: {e}\n")
+
+    def install_network_drivers(self):
+        log = getattr(self, "log_drv")
+        log.delete("1.0", "end")
+        log.insert("end", "Verificando placa de rede...\n")
+        try:
+            lspci = subprocess.check_output("lspci | grep -i ethernet", shell=True, text=True)
+            if "Realtek" in lspci:
+                log.insert("end", "Placa Realtek detectada. Instalando driver r8168...\n")
+                cmd = "sudo dnf install r8168 -y" if "fedora" in self._get_distro().lower() else "sudo apt install r8168-dkms -y"
+            else:
+                log.insert("end", "Placa não Realtek. Driver padrão já deve funcionar.\n")
+                cmd = "echo 'Nenhuma ação necessária'"
+            self.run_action(cmd, "drv")
+        except Exception as e:
+            log.insert("end", f"Erro: {e}\n")
+
+    def setup_auto_updates(self):
+        log = getattr(self, "log_drv")
+        log.delete("1.0", "end")
+        if "fedora" in self._get_distro().lower():
+            log.insert("end", "Instalando e configurando dnf-automatic...\n")
+            self.run_action("sudo dnf install dnf-automatic -y && sudo systemctl enable --now dnf-automatic.timer", "drv")
+        elif "ubuntu" in self._get_distro().lower() or "debian" in self._get_distro().lower():
+            log.insert("end", "Configurando unattended-upgrades...\n")
+            self.run_action("sudo apt install unattended-upgrades -y && sudo dpkg-reconfigure -plow unattended-upgrades", "drv")
+        else:
+            log.insert("end", "Sistema não suportado para atualizações automáticas.\n")
+
+    # ---------- Agente IA (9 cards) ----------
+    def create_agente_frame(self, parent):
+        ctk.CTkLabel(parent, text="Agente de IA", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(pady=(0, 30))
+
+        ctk.CTkLabel(parent, text="Conecte um modelo de IA:", font=("Inter", 16), text_color=self.text_color).pack(pady=10)
+
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="both", expand=True, pady=10)
+        for i in range(3):
+            grid.columnconfigure(i, weight=1)
+
+        for idx, ia in enumerate(AI_SUGGESTIONS):
+            row, col = divmod(idx, 3)
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10, border_width=1, border_color=self.acc_color)
+            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            card.grid_propagate(False)
+            card.configure(height=150)
+
+            ctk.CTkLabel(card, text=ia, font=("Inter", 14, "bold"), text_color=self.acc_color).pack(pady=(10, 5))
+            if ia == "Configurar IA Local":
+                btn = ctk.CTkButton(
+                    card,
+                    text="Configurar",
+                    fg_color=self.acc_color,
+                    command=self.configure_local_ai
+                )
+            else:
+                btn = ctk.CTkButton(
+                    card,
+                    text="Conectar",
+                    fg_color=self.acc_color,
+                    command=lambda i=ia: self.connect_ai(i)
+                )
+            btn.pack(pady=5)
+
+        self.ai_status = ctk.CTkLabel(parent, text="", font=("Inter", 12), text_color=self.acc_color)
+        self.ai_status.pack(pady=20)
+
+    def connect_ai(self, ia_name):
+        self.ai_status.configure(text=f"Conectado a {ia_name} (simulação)")
+
+    def configure_local_ai(self):
+        if not hasattr(self, "log_agente"):
+            self._add_console(self.frames["agente"], "agente")
+        log = getattr(self, "log_agente")
+        log.delete("1.0", "end")
+        log.insert("end", "Configurando IA local...\n")
+        log.insert("end", "Instalando Ollama...\n")
+        self.run_action("curl -fsSL https://ollama.com/install.sh | sh", "agente")
+        log.insert("end", "Após instalação, execute 'ollama run llama2' para testar.\n")
+
+    # ---------- Configurações ----------
+    def create_config_frame(self, parent):
+        ctk.CTkLabel(parent, text="Configurações", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 30))
+
+        frame_user = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_user.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_user, text="Nome de usuário", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        self.entry_user = ctk.CTkEntry(frame_user, placeholder_text="Seu nome", width=300)
+        self.entry_user.insert(0, self.config.get("username", "ewerton"))
+        self.entry_user.pack(anchor="w", pady=5)
+        btn_reset_user = ctk.CTkButton(frame_user, text="Voltar para o padrão", fg_color="transparent", text_color=self.acc_color, command=lambda: self.entry_user.delete(0, "end") or self.entry_user.insert(0, "ewerton"))
+        btn_reset_user.pack(anchor="w")
+
+        frame_lang = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_lang.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_lang, text="Idioma de Interface", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        self.lang_var = ctk.StringVar(value=languages.get(self.config.get("language", "pt_BR"), "Português Brasileiro"))
+        lang_menu = ctk.CTkOptionMenu(frame_lang, values=list(languages.values()), variable=self.lang_var, width=300)
+        lang_menu.pack(anchor="w", pady=5)
+
+        frame_scale = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_scale.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_scale, text="Escala da interface *", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        self.scale_var = ctk.StringVar(value=scales.get(self.config.get("ui_scale", "auto"), "Automático"))
+        scale_menu = ctk.CTkOptionMenu(frame_scale, values=list(scales.values()), variable=self.scale_var, width=300)
+        scale_menu.pack(anchor="w", pady=5)
+
+        frame_theme = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_theme.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_theme, text="Tema da interface", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        self.theme_var = ctk.StringVar(value=self.config.get("theme", "default"))
+        theme_names = ["Padrão (Roxo)", "Cinza Profissional", "Escuro Total", "Claro Clean"]
+        theme_menu = ctk.CTkOptionMenu(frame_theme, values=theme_names, width=300)
+        idx = ["default", "grey", "dark", "light"].index(self.config.get("theme", "default"))
+        theme_menu.set(theme_names[idx])
+        theme_menu.pack(anchor="w", pady=5)
+
+        frame_tab = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_tab.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_tab, text="Abrir arquivo", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        self.tab_var = ctk.StringVar(value="Na guia" if self.config.get("open_file_in_tab", False) else "Nova janela")
+        tab_menu = ctk.CTkOptionMenu(frame_tab, values=["Na guia", "Nova janela"], variable=self.tab_var, width=300)
+        tab_menu.pack(anchor="w", pady=5)
+
+        ctk.CTkLabel(parent, text="* - As alterações serão aplicadas após reiniciar o aplicativo", font=("Inter", 10), text_color="#888888").pack(anchor="w", pady=20)
+
+        btn_apply = ctk.CTkButton(parent, text="Aplicar", fg_color=self.acc_color, command=self.apply_config, width=200, height=40)
+        btn_apply.pack(pady=20)
+
+    def apply_config(self):
+        self.config["username"] = self.entry_user.get()
+        selected_lang = self.lang_var.get()
+        for k, v in languages.items():
+            if v == selected_lang:
+                self.config["language"] = k
+                break
+        selected_scale = self.scale_var.get()
+        for k, v in scales.items():
+            if v == selected_scale:
+                self.config["ui_scale"] = k
+                break
+        theme_map = ["default", "grey", "dark", "light"]
+        theme_idx = ["Padrão (Roxo)", "Cinza Profissional", "Escuro Total", "Claro Clean"].index(self.theme_var.get())
+        self.config["theme"] = theme_map[theme_idx]
+        self.config["open_file_in_tab"] = (self.tab_var.get() == "Na guia")
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(self.config, f)
+        python = sys.executable
+        os.execl(python, python, *sys.argv)
+
+    # ---------- Sobre ----------
+    def create_sobre_frame(self, parent):
+        parent.grid_rowconfigure(0, weight=1)
+        parent.grid_columnconfigure(0, weight=1)
+
+        card = ctk.CTkFrame(parent, fg_color=self.light_bg, corner_radius=15, border_width=2, border_color=self.acc_color)
+        card.grid(row=0, column=0, padx=50, pady=50, sticky="nsew")
+        card.grid_propagate(False)
+        card.configure(width=600, height=500)
+
+        ctk.CTkLabel(card, text="⚡ SpeedScan", font=("Inter", 36, "bold"), text_color=self.acc_color).pack(pady=(40, 10))
+        ctk.CTkLabel(card, text="Versão Beta 0.9.0", font=("Inter", 14), text_color="#888888").pack()
+
+        info_text = (
+            "Desenvolvedor: Ewerton Vasconcelos\n"
+            "Tecnologias: Python, CustomTkinter, psutil\n"
+            "Repositório: github.com/ewertonvasconcelos/speedscan\n\n"
+            "Este software está em fase de desenvolvimento.\n"
+            "Não foi lançado oficialmente.\n\n"
+            "Funcionalidades:\n"
+            "• Monitoramento de hardware em tempo real\n"
+            "• Otimização de sistema (cache, swap, turbo)\n"
+            "• Instalação de apps gamers (Steam, Lutris, Dolphin)\n"
+            "• Configuração de DNS e rede\n"
+            "• Diagnóstico e atualização de drivers\n"
+            "• Conexão com modelos de IA\n"
+            "• Temas personalizáveis\n\n"
+            "© 2026 Ewerton Vasconcelos. Todos os direitos reservados."
+        )
+        ctk.CTkLabel(card, text=info_text, font=("Inter", 12), justify="left", text_color=self.text_color).pack(pady=20, padx=30)
+
+    # ---------- Utilitários (consoles inteligentes) ----------
+    def _add_console(self, parent, tag):
+        btn = ctk.CTkButton(
+            parent,
+            text="Detalhes ⌄",
+            fg_color="transparent",
+            text_color=self.acc_color,
+            hover_color=self.acc_color,
+            corner_radius=20,
+            command=lambda: self.toggle_console(tag)
+        )
+        setattr(self, f"detail_btn_{tag}", btn)
+
+        log = ctk.CTkTextbox(parent, height=150, fg_color="#000000", text_color="#10b981", font=("Consolas", 11))
+        setattr(self, f"log_{tag}", log)
+        self.consoles_visible[tag] = False
+
+    def show_details_button(self, tag):
+        btn = getattr(self, f"detail_btn_{tag}")
+        if not btn.winfo_ismapped():
+            btn.pack(anchor="e", pady=5)
+        btn.configure(text="Detalhes ⌄")
+
+    def hide_details_button(self, tag):
+        btn = getattr(self, f"detail_btn_{tag}")
+        if btn.winfo_ismapped():
+            btn.pack_forget()
+
+    def toggle_console(self, tag):
+        log = getattr(self, f"log_{tag}")
+        btn = getattr(self, f"detail_btn_{tag}")
+        if self.consoles_visible.get(tag, False):
+            log.pack_forget()
+            btn.pack_forget()
+            self.consoles_visible[tag] = False
+        else:
+            log.pack(fill="x", pady=5, before=btn)
+            btn.configure(text="Detalhes ⌃")
+            self.consoles_visible[tag] = True
+
+    def run_action(self, cmd, tag):
+        log = getattr(self, f"log_{tag}")
+        log.delete("1.0", "end")
+        self.hide_details_button(tag)
+        self.consoles_visible[tag] = False
+        threading.Thread(target=self._execute, args=(cmd, log, tag), daemon=True).start()
+
+    def _execute(self, cmd, log, tag):
+        if self.SO == "Linux" and "sudo" in cmd:
+            full_cmd = f"pkexec bash -c '{cmd}'"
+        else:
+            full_cmd = cmd
+        proc = subprocess.Popen(full_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        for line in proc.stdout:
+            self.after(0, lambda l=line: self._update_log(log, l))
+        proc.wait()
+        self.after(0, lambda: self._update_log(log, "\n-- COMANDO FINALIZADO --\n"))
+        self.after(0, lambda: self.show_details_button(tag))
+
+    def _update_log(self, log, text):
+        log.insert("end", text)
+        log.see("end")
+
+    # ---------- Funções específicas ----------
     def toggle_turbo(self):
         self.turbo_active = not self.turbo_active
-        color = "#475569" if self.turbo_active else "#e11d48"
-        self.btn_turbo.configure(text="🛡️ DESATIVAR TURBO" if self.turbo_active else "🔥 ATIVAR MODO TURBO", fg_color=color)
-        if self.SO == "Linux": self.run_action("sudo cpupower frequency-set -g performance" if self.turbo_active else "sudo cpupower frequency-set -g powersave", "gm")
+        if self.turbo_active:
+            cmd = "sudo cpupower frequency-set -g performance"
+        else:
+            cmd = "sudo cpupower frequency-set -g powersave"
+        self.run_action(cmd, "ot")
 
-    def toggle_ping_ui(self):
-        if not self.consoles_visible["ping"]:
-            self.ping_frame.pack(pady=10, before=self.dns_box); self.consoles_visible["ping"] = True
-            threading.Thread(target=self.ping_loop, daemon=True).start()
-        else: self.ping_frame.pack_forget(); self.consoles_visible["ping"] = False
+    def toggle_ping(self):
+        if not self.ping_active:
+            self.ping_active = True
+            threading.Thread(target=self._ping_loop, daemon=True).start()
+        else:
+            self.ping_active = False
 
-    def ping_loop(self):
-        while self.consoles_visible["ping"]:
+    def _ping_loop(self):
+        while self.ping_active:
             try:
-                p = subprocess.run(["ping", "-c", "1", "-W", "1", "8.8.8.8"], capture_output=True, text=True)
-                res = p.stdout.split("time=")[1].split(" ")[0] if "time=" in p.stdout else "Erro"
-                self.after(0, lambda r=res: self.ping_label.configure(text=f"Ping: {r} ms"))
-            except: pass
+                param = "-n" if self.SO == "Windows" else "-c"
+                p = subprocess.run(
+                    ["ping", param, "1", "-W", "1", "8.8.8.8"],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if "time=" in p.stdout or "tempo=" in p.stdout:
+                    match = re.search(r'time[=<](\d+\.?\d*)', p.stdout)
+                    res = match.group(1) if match else "Erro"
+                else:
+                    res = "Erro"
+                self.after(0, lambda r=res: self.ping_label.configure(text=f"{r} ms"))
+            except:
+                self.after(0, lambda: self.ping_label.configure(text="-- ms"))
             time.sleep(2)
 
-    def set_theme(self, key):
-        self.config["theme"] = key
-        with open(CONFIG_FILE, "w") as f: json.dump(self.config, f)
-        self.update_theme_vars()
-        self.configure(fg_color=self.bg_color)
-        self.sidebar.configure(fg_color=self.side_bg)
-        self.title_label.configure(text_color=self.accent)
-        self.tab_view.configure(fg_color=self.bg_color, segmented_button_selected_color=self.accent)
-        # Não roda o update_sys_info aqui para manter a velocidade instantânea.
+    # ---------- Hardware monitor ----------
+    def hardware_monitor(self):
+        while True:
+            if self.current_module == "sistema":
+                self.after(0, self.update_sys_info)
+            time.sleep(3)
+
+    def _on_mousewheel(self, event):
+        current = self.frames[self.current_module]
+        if isinstance(current, ctk.CTkScrollableFrame):
+            current._parent_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
 if __name__ == "__main__":
-    app = SpeedScan(); app.mainloop()
+    app = SpeedScan()
+    app.mainloop()

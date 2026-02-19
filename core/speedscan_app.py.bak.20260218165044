@@ -1,0 +1,772 @@
+#!/usr/bin/env python3
+# SpeedScan - Versão inspirada no ONLYOFFICE
+# Uso: python3 core/speedscan_app.py
+
+import customtkinter as ctk
+import os
+import platform
+import psutil
+import subprocess
+import threading
+import json
+import time
+import sys
+from PIL import Image
+from datetime import datetime
+
+# Configurações
+CONFIG_FILE = os.path.expanduser("~/.speedscan_conf")
+ICON_PATH = os.path.expanduser("~/speedscan/icon.png")
+
+def get_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except:
+            pass
+    return {
+        "theme": "default",
+        "username": "ewerton",
+        "language": "pt_BR",
+        "ui_scale": "auto",
+        "open_file_in_tab": False
+    }
+
+conf = get_config()
+
+themes = {
+    "default": {"mode": "dark", "bg": "#1e293b", "side": "#0f172a", "acc": "#a855f7", "text": "#ffffff"},
+    "grey":    {"mode": "light", "bg": "#d1d5db", "side": "#374151", "acc": "#4b5563", "text": "#111827"},
+    "dark":    {"mode": "dark", "bg": "#080808", "side": "#000000", "acc": "#10b981", "text": "#ffffff"},
+    "light":   {"mode": "light", "bg": "#ffffff", "side": "#f8fafc", "acc": "#2563eb", "text": "#0f172a"}
+}
+
+# Mapeamento de idiomas (placeholder)
+languages = {
+    "pt_BR": "Português Brasileiro",
+    "en_US": "English (US)",
+    "es_ES": "Español"
+}
+
+# Escalas disponíveis
+scales = {
+    "auto": "Automático",
+    "100": "100%",
+    "125": "125%",
+    "150": "150%"
+}
+
+class SpeedScan(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.SO = platform.system()
+        self.config = conf
+        self.update_theme_vars()
+        self.title("SpeedScan Beta")
+        self.geometry("1200x950")
+        self.minsize(1000, 700)
+        self.configure(fg_color=self.bg_color)
+
+        # Aplicar escala inicial
+        self.apply_ui_scale()
+
+        # Variáveis de estado
+        self.turbo_active = False
+        self.consoles_visible = {}
+        self.ping_active = False
+        self.current_module = None  # para navegação
+
+        # Layout principal: sidebar + conteúdo
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # Sidebar (esquerda) - estilo ONLYOFFICE
+        self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=self.side_bg)
+        self.sidebar.grid(row=0, column=0, sticky="nsew")
+        self.sidebar.grid_propagate(False)
+
+        # Container de conteúdo (direita)
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_rowconfigure(0, weight=1)
+
+        # Dicionário de frames principais
+        self.main_frames = {}  # "home", "config", "agente" (futuro)
+        self.module_frames = {}  # "sistema", "otimizacao", "rede", "drivers"
+
+        # Criar botões da sidebar
+        self.create_sidebar()
+
+        # Criar frames principais
+        self.create_main_frames()
+
+        # Criar frames dos módulos (funcionalidades)
+        self.create_module_frames()
+
+        # Mostrar frame inicial (Home)
+        self.show_main_frame("home")
+
+        # Atalho de rolagem
+        self.bind_all("<MouseWheel>", self._on_mousewheel)
+
+        # Iniciar monitoramento de hardware em background
+        threading.Thread(target=self.hardware_monitor, daemon=True).start()
+
+    def update_theme_vars(self):
+        t = themes.get(self.config["theme"], themes["default"])
+        ctk.set_appearance_mode(t["mode"])
+        self.bg_color = t["bg"]
+        self.side_bg = t["side"]
+        self.acc_color = t["acc"]
+        self.text_color = t["text"]
+
+    def apply_ui_scale(self):
+        scale = self.config.get("ui_scale", "auto")
+        if scale == "auto":
+            # Deixa o sistema decidir
+            ctk.set_widget_scaling(1.0)
+        else:
+            ctk.set_widget_scaling(float(scale) / 100)
+
+    def create_sidebar(self):
+        # Título ONLYOFFICE (simulado)
+        title_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        title_frame.pack(pady=(20, 30), fill="x")
+        ctk.CTkLabel(title_frame, text="⚡ SpeedScan", font=("Inter", 18, "bold"), text_color=self.acc_color).pack()
+
+        # Botões da sidebar
+        self.side_btns = {}
+
+        # Página Inicial
+        self.side_btns["home"] = self.add_sidebar_btn("🏠", "Página Inicial", "home")
+
+        # Agente de IA
+        self.side_btns["agente"] = self.add_sidebar_btn("🤖", "Agente de IA", "agente")
+
+        # Configurações
+        self.side_btns["config"] = self.add_sidebar_btn("⚙️", "Configurações", "config")
+
+        # Sobre (abre pop-up)
+        self.side_btns["sobre"] = self.add_sidebar_btn("ℹ️", "Sobre", "sobre", is_popup=True)
+
+    def add_sidebar_btn(self, icon, text, target, is_popup=False):
+        frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        frame.pack(pady=5, fill="x", padx=10)
+        if is_popup:
+            cmd = self.show_about_popup
+        else:
+            cmd = lambda: self.show_main_frame(target)
+        btn = ctk.CTkButton(
+            frame,
+            text=f"{icon}  {text}",
+            anchor="w",
+            height=40,
+            fg_color="transparent",
+            hover_color=self.acc_color,
+            font=("Inter", 13),
+            command=cmd
+        )
+        btn.pack(fill="x")
+        return btn
+
+    def show_main_frame(self, target):
+        """Mostra um dos frames principais (home, config, agente)"""
+        # Esconder todos os frames principais
+        for frame in self.main_frames.values():
+            frame.pack_forget()
+        # Mostrar o frame alvo
+        self.main_frames[target].pack(fill="both", expand=True)
+        # Se for home, garantir que o grid de módulos esteja visível
+        if target == "home":
+            self.show_module_grid()
+
+    def show_module_grid(self):
+        """Na home, mostra o grid de módulos e esconde qualquer módulo ativo"""
+        if hasattr(self, 'current_module_frame') and self.current_module_frame:
+            self.current_module_frame.pack_forget()
+        self.home_grid.pack(fill="both", expand=True)
+        self.current_module = None
+
+    def show_module(self, module_name):
+        """Mostra um módulo específico (sistema, otimizacao, rede, drivers)"""
+        # Esconde o grid da home
+        self.home_grid.pack_forget()
+        # Se já havia um módulo, esconde
+        if self.current_module_frame:
+            self.current_module_frame.pack_forget()
+        # Mostra o novo módulo
+        self.module_frames[module_name].pack(fill="both", expand=True)
+        self.current_module_frame = self.module_frames[module_name]
+        self.current_module = module_name
+
+    def create_main_frames(self):
+        """Cria os frames principais: home, config, agente"""
+        # Frame Home (com grid de módulos)
+        self.main_frames["home"] = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.create_home_content(self.main_frames["home"])
+
+        # Frame Configurações
+        self.main_frames["config"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_config_content(self.main_frames["config"])
+
+        # Frame Agente de IA (placeholder)
+        self.main_frames["agente"] = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.create_agente_content(self.main_frames["agente"])
+
+    def create_home_content(self, parent):
+        """Conteúdo da home: grid de módulos e botão voltar (quando em módulo)"""
+        # Frame para o grid (inicialmente visível)
+        self.home_grid = ctk.CTkFrame(parent, fg_color="transparent")
+        self.home_grid.pack(fill="both", expand=True)
+
+        # Título
+        ctk.CTkLabel(self.home_grid, text="Página Inicial", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 30))
+
+        # Grid 2x2 de cards
+        grid_frame = ctk.CTkFrame(self.home_grid, fg_color="transparent")
+        grid_frame.pack(expand=True, fill="both")
+
+        # Configurar grid
+        for i in range(2):
+            grid_frame.columnconfigure(i, weight=1, uniform="col")
+        for j in range(2):
+            grid_frame.rowconfigure(j, weight=1, uniform="row")
+
+        cards = [
+            ("💻 Sistema", "sistema"),
+            ("🚀 Otimização", "otimizacao"),
+            ("🌐 Rede", "rede"),
+            ("🛠️ Drivers", "drivers")
+        ]
+
+        for idx, (text, module) in enumerate(cards):
+            row, col = divmod(idx, 2)
+            card = ctk.CTkFrame(grid_frame, fg_color=self.bg_color, corner_radius=15, border_width=2, border_color=self.acc_color)
+            card.grid(row=row, column=col, padx=20, pady=20, sticky="nsew")
+            card.bind("<Button-1>", lambda e, m=module: self.show_module(m))
+
+            label = ctk.CTkLabel(card, text=text, font=("Inter", 24, "bold"), text_color=self.acc_color)
+            label.pack(expand=True)
+            label.bind("<Button-1>", lambda e, m=module: self.show_module(m))
+
+        # Frame para o botão voltar (inicialmente vazio)
+        self.back_button_frame = ctk.CTkFrame(parent, fg_color="transparent", height=40)
+        self.back_button_frame.pack(fill="x", pady=10)
+        self.back_button = ctk.CTkButton(
+            self.back_button_frame,
+            text="← Voltar à Página Inicial",
+            fg_color="transparent",
+            text_color=self.acc_color,
+            hover=False,
+            command=self.show_module_grid
+        )
+        # Inicialmente escondido
+        self.back_button.pack_forget()
+
+        # Quando um módulo for mostrado, o botão voltar será exibido via show_module
+
+    def create_module_frames(self):
+        """Cria os frames para cada módulo (sistema, otimizacao, rede, drivers)"""
+        # Sistema
+        self.module_frames["sistema"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_sistema_content(self.module_frames["sistema"])
+
+        # Otimização (com abas internas: Otimização e Gamer)
+        self.module_frames["otimizacao"] = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.create_otimizacao_content(self.module_frames["otimizacao"])
+
+        # Rede
+        self.module_frames["rede"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_rede_content(self.module_frames["rede"])
+
+        # Drivers
+        self.module_frames["drivers"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_drivers_content(self.module_frames["drivers"])
+
+    def create_sistema_content(self, parent):
+        """Conteúdo do módulo Sistema (monitoramento)"""
+        # Botão voltar (já existe no home, mas aqui adicionamos um título)
+        ctk.CTkLabel(parent, text="💻 Sistema", font=("Inter", 24, "bold"), text_color=self.acc_color).pack(anchor="w", pady=10)
+
+        self.sys_labels = {}
+        info_fields = [
+            ("hostname", "💻 Hostname"),
+            ("distro", "💿 Distribuição"),
+            ("kernel", "🐧 Kernel"),
+            ("cpu", "🖥️ CPU"),
+            ("ram", "📟 RAM"),
+            ("gpu", "🎮 GPU"),
+            ("disks", "💽 Discos"),
+            ("uptime", "⏱️ Uptime"),
+            ("battery", "🔋 Bateria")
+        ]
+        for key, label in info_fields:
+            frame = ctk.CTkFrame(parent, fg_color="transparent")
+            frame.pack(fill="x", padx=40, pady=5, anchor="w")
+            ctk.CTkLabel(frame, text=label, font=("Inter", 14, "bold"), text_color=self.acc_color, width=150, anchor="w").pack(side="left")
+            self.sys_labels[key] = ctk.CTkLabel(frame, text="...", font=("Consolas", 12), text_color=self.text_color)
+            self.sys_labels[key].pack(side="left", padx=10)
+
+    def create_otimizacao_content(self, parent):
+        """Módulo Otimização com abas internas"""
+        tabview = ctk.CTkTabview(parent, fg_color="transparent", segmented_button_selected_color=self.acc_color)
+        tabview.pack(fill="both", expand=True)
+
+        # Aba Otimização
+        tab_ot = tabview.add("🚀 Otimização")
+        self.create_otimizacao_aba(tab_ot)
+
+        # Aba Gamer
+        tab_gm = tabview.add("🎮 Gamer")
+        self.create_gamer_aba(tab_gm)
+
+    def create_otimizacao_aba(self, parent):
+        actions = [
+            ("🧹 Limpeza de Cache", "sudo eopkg dc"),
+            ("🔄 Reset de Swap", "sudo swapoff -a && sudo swapon -a"),
+            ("✅ Verificar Erros", "sudo eopkg check"),
+        ]
+        self._add_action_cards(parent, actions, "ot")
+        self._add_console(parent, "ot")
+
+    def create_gamer_aba(self, parent):
+        self.turbo_btn = ctk.CTkButton(
+            parent,
+            text="🔥 ATIVAR MODO TURBO",
+            fg_color="#e11d48",
+            hover_color="#b91c1c",
+            height=50,
+            font=("Inter", 14, "bold"),
+            command=self.toggle_turbo
+        )
+        self.turbo_btn.pack(pady=10, fill="x")
+
+        apps = [
+            ("Steam", "steam"),
+            ("Lutris", "lutris"),
+            ("Heroic Launcher", "heroic-games-launcher-bin"),
+            ("Bottles", "bottles"),
+            ("Wine", "wine"),
+            ("MangoHud", "mangohud"),
+            ("Goverlay", "goverlay"),
+        ]
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="x", pady=10)
+        for name, pkg in apps:
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, width=200, height=120, corner_radius=10)
+            card.pack(side="left", padx=8, pady=5)
+            card.pack_propagate(False)
+            ctk.CTkLabel(card, text=name, font=("Inter", 13, "bold"), text_color=self.acc_color).pack(pady=10)
+            ctk.CTkButton(
+                card,
+                text="Instalar",
+                fg_color=self.acc_color,
+                command=lambda p=pkg: self.run_action(f"sudo eopkg it {p} -y", "gm")
+            ).pack()
+        self._add_console(parent, "gm")
+
+    def create_rede_content(self, parent):
+        ctk.CTkLabel(parent, text="🌐 Rede", font=("Inter", 24, "bold"), text_color=self.acc_color).pack(anchor="w", pady=10)
+
+        ping_frame = ctk.CTkFrame(parent, fg_color=self.bg_color, corner_radius=12)
+        ping_frame.pack(fill="x", pady=10)
+        self.ping_label = ctk.CTkLabel(
+            ping_frame,
+            text="Ping: -- ms",
+            font=("Consolas", 20, "bold"),
+            text_color="#10b981"
+        )
+        self.ping_label.pack(pady=10)
+        ctk.CTkButton(ping_frame, text="Iniciar Ping Contínuo", command=self.toggle_ping, fg_color=self.acc_color).pack(pady=5)
+
+        dns_actions = [
+            ("Cloudflare DNS", "1.1.1.1"),
+            ("Google DNS", "8.8.8.8"),
+            ("AdGuard DNS", "94.140.14.14"),
+            ("DNS Automático", "auto")
+        ]
+        self._add_action_cards(parent, dns_actions, "net", is_dns=True)
+        self._add_console(parent, "net")
+
+    def create_drivers_content(self, parent):
+        ctk.CTkLabel(parent, text="🛠️ Drivers", font=("Inter", 24, "bold"), text_color=self.acc_color).pack(anchor="w", pady=10)
+
+        update_btn = ctk.CTkButton(
+            parent,
+            text="📦 Atualizar Sistema",
+            fg_color=self.acc_color,
+            height=40,
+            command=lambda: self.run_action("sudo dnf upgrade -y", "drv")
+        )
+        update_btn.pack(pady=10, fill="x")
+
+        diag_actions = [
+            ("PCI (Vídeo/Rede)", "lspci -nnk"),
+            ("USB Conectados", "lsusb"),
+            ("Módulos Kernel", "lsmod"),
+            ("CPU Detalhada", "lscpu"),
+            ("Firmware Erros", "sudo dmesg | grep -i firmware"),
+        ]
+        self._add_action_cards(parent, diag_actions, "drv")
+        self._add_console(parent, "drv")
+
+    def create_config_content(self, parent):
+        """Tela de configurações com várias opções"""
+        ctk.CTkLabel(parent, text="Configurações", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 30))
+
+        # Nome de usuário
+        frame_user = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_user.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_user, text="Nome de usuário", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        entry_user = ctk.CTkEntry(frame_user, placeholder_text="Seu nome", width=300)
+        entry_user.insert(0, self.config.get("username", "ewerton"))
+        entry_user.pack(anchor="w", pady=5)
+        btn_reset_user = ctk.CTkButton(frame_user, text="Voltar para o padrão", fg_color="transparent", text_color=self.acc_color, command=lambda: entry_user.delete(0, "end") or entry_user.insert(0, "ewerton"))
+        btn_reset_user.pack(anchor="w")
+
+        # Idioma
+        frame_lang = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_lang.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_lang, text="Idioma de Interface", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        lang_var = ctk.StringVar(value=self.config.get("language", "pt_BR"))
+        lang_menu = ctk.CTkOptionMenu(frame_lang, values=list(languages.values()), variable=lang_var, width=300)
+        lang_menu.pack(anchor="w", pady=5)
+        # Mapear de volta para chave
+        def get_lang_key():
+            for k, v in languages.items():
+                if v == lang_var.get():
+                    return k
+            return "pt_BR"
+        # (salvamento será feito no botão Aplicar)
+
+        # Escala da interface
+        frame_scale = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_scale.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_scale, text="Escala da interface *", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        scale_var = ctk.StringVar(value=self.config.get("ui_scale", "auto"))
+        scale_menu = ctk.CTkOptionMenu(frame_scale, values=list(scales.values()), variable=scale_var, width=300)
+        scale_menu.pack(anchor="w", pady=5)
+
+        # Tema da interface
+        frame_theme = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_theme.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_theme, text="Tema da interface", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        theme_var = ctk.StringVar(value=self.config.get("theme", "default"))
+        theme_options = ["default", "grey", "dark", "light"]
+        theme_names = ["Padrão (Roxo)", "Cinza Profissional", "Escuro Total", "Claro Clean"]
+        theme_menu = ctk.CTkOptionMenu(frame_theme, values=theme_names, width=300)
+        # Mapear índice
+        def get_theme_key():
+            idx = theme_names.index(theme_menu.get())
+            return theme_options[idx]
+        theme_menu.set(theme_names[theme_options.index(self.config.get("theme", "default"))])
+        theme_menu.pack(anchor="w", pady=5)
+
+        # Abrir arquivo na guia
+        frame_tab = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_tab.pack(fill="x", pady=10)
+        ctk.CTkLabel(frame_tab, text="Abrir arquivo", font=("Inter", 14), text_color=self.text_color).pack(anchor="w")
+        tab_var = ctk.StringVar(value="Na guia" if self.config.get("open_file_in_tab", False) else "Nova janela")
+        tab_menu = ctk.CTkOptionMenu(frame_tab, values=["Na guia", "Nova janela"], variable=tab_var, width=300)
+        tab_menu.pack(anchor="w", pady=5)
+
+        # Nota sobre reinicialização
+        ctk.CTkLabel(parent, text="* - As alterações serão aplicadas após reiniciar o aplicativo", font=("Inter", 10), text_color="#888888").pack(anchor="w", pady=20)
+
+        # Botão Aplicar
+        def apply_config():
+            self.config["username"] = entry_user.get()
+            # Idioma
+            selected_lang = lang_var.get()
+            for k, v in languages.items():
+                if v == selected_lang:
+                    self.config["language"] = k
+                    break
+            # Escala
+            selected_scale = scale_var.get()
+            for k, v in scales.items():
+                if v == selected_scale:
+                    self.config["ui_scale"] = k
+                    break
+            # Tema
+            self.config["theme"] = get_theme_key()
+            # Abrir arquivo
+            self.config["open_file_in_tab"] = (tab_var.get() == "Na guia")
+
+            # Salvar
+            with open(CONFIG_FILE, "w") as f:
+                json.dump(self.config, f)
+
+            # Reiniciar se necessário (tema ou escala)
+            if get_theme_key() != self.config.get("theme") or selected_scale != self.config.get("ui_scale"):
+                python = sys.executable
+                os.execl(python, python, *sys.argv)
+            else:
+                # apenas atualiza interface
+                self.update_theme_vars()
+                self.configure(fg_color=self.bg_color)
+                self.sidebar.configure(fg_color=self.side_bg)
+                # Recria frames para aplicar cores? (simplificado)
+                # Por enquanto, apenas avisa
+                print("Configurações aplicadas. Algumas alterações podem precisar de reinicialização.")
+
+        btn_apply = ctk.CTkButton(parent, text="Aplicar", fg_color=self.acc_color, command=apply_config, width=200, height=40)
+        btn_apply.pack(pady=20)
+
+    def create_agente_content(self, parent):
+        """Tela Agente de IA (placeholder)"""
+        ctk.CTkLabel(parent, text="Agente de IA", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(pady=50)
+        msg = ctk.CTkLabel(parent, text="Nenhum modelo de IA está conectado ainda.\nConecte um modelo para começar a interagir com ele aqui mesmo na interface.",
+                          font=("Inter", 14), text_color=self.text_color, justify="center")
+        msg.pack(pady=20)
+        btn = ctk.CTkButton(parent, text="Conectar um modelo de IA", fg_color=self.acc_color, command=lambda: print("Conectar IA (futuro)"))
+        btn.pack(pady=10)
+
+    def show_about_popup(self):
+        """Exibe janela pop-up Sobre"""
+        popup = ctk.CTkToplevel(self)
+        popup.title("Sobre o SpeedScan")
+        popup.geometry("600x500")
+        popup.transient(self)
+        popup.grab_set()
+        popup.configure(fg_color=self.bg_color)
+
+        card = ctk.CTkFrame(popup, fg_color=self.bg_color, corner_radius=15, border_width=1, border_color="#334155")
+        card.pack(pady=40, padx=40, fill="both", expand=True)
+
+        ctk.CTkLabel(card, text="⚡ SpeedScan", font=("Inter", 36, "bold"), text_color=self.acc_color).pack(pady=(30, 10))
+        ctk.CTkLabel(card, text="Versão Beta 0.9.0", font=("Inter", 14), text_color="#888888").pack()
+
+        info_text = (
+            "Desenvolvedor: Ewerton Vasconcelos\n"
+            "Tecnologias: Python, CustomTkinter, psutil\n"
+            "Repositório: github.com/ewertonvasconcelos/speedscan\n\n"
+            "Este software está em fase de desenvolvimento.\n"
+            "Não foi lançado oficialmente.\n\n"
+            "Funcionalidades:\n"
+            "• Monitoramento de hardware em tempo real\n"
+            "• Otimização de sistema (cache, swap)\n"
+            "• Modo Turbo e instalação de apps gamers\n"
+            "• Configuração de DNS (Cloudflare, Google, AdGuard)\n"
+            "• Diagnóstico de drivers e atualizações\n"
+            "• Temas personalizáveis\n\n"
+            "© 2026 Ewerton Vasconcelos. Todos os direitos reservados."
+        )
+        ctk.CTkLabel(card, text=info_text, font=("Inter", 12), justify="left", text_color=self.text_color).pack(pady=20, padx=30)
+
+        btn_close = ctk.CTkButton(card, text="Fechar", fg_color=self.acc_color, command=popup.destroy)
+        btn_close.pack(pady=10)
+
+    # ---------- Utilitários (mantidos das versões anteriores) ----------
+    def _add_action_cards(self, parent, actions, tag, is_dns=False):
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="x", pady=10)
+        for title, value in actions:
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, width=200, height=120, corner_radius=10)
+            card.pack(side="left", padx=8, pady=5)
+            card.pack_propagate(False)
+            ctk.CTkLabel(card, text=title, font=("Inter", 13, "bold"), text_color=self.acc_color).pack(pady=10)
+            if is_dns:
+                if value == "auto":
+                    cmd = "nmcli dev mod $(nmcli -t -f DEVICE,STATE dev | grep connected | cut -d: -f1 | head -n1) ipv4.dns ''"
+                else:
+                    cmd = f"nmcli dev mod $(nmcli -t -f DEVICE,STATE dev | grep connected | cut -d: -f1 | head -n1) ipv4.dns '{value}'"
+            else:
+                cmd = value
+            ctk.CTkButton(
+                card,
+                text="Executar",
+                fg_color=self.acc_color,
+                command=lambda c=cmd, t=tag: self.run_action(c, t)
+            ).pack()
+
+    def _add_console(self, parent, tag):
+        btn = ctk.CTkButton(
+            parent,
+            text="📄 Detalhes ⌄",
+            fg_color="transparent",
+            text_color=self.acc_color,
+            hover=False,
+            command=lambda: self.toggle_console(tag)
+        )
+        btn.pack(anchor="e", pady=5)
+        log = ctk.CTkTextbox(parent, height=150, fg_color="#000000", text_color="#10b981", font=("Consolas", 11))
+        setattr(self, f"log_{tag}", log)
+        setattr(self, f"btn_{tag}", btn)
+        self.consoles_visible[tag] = False
+
+    def toggle_console(self, tag):
+        log = getattr(self, f"log_{tag}")
+        btn = getattr(self, f"btn_{tag}")
+        if self.consoles_visible.get(tag, False):
+            log.pack_forget()
+            btn.configure(text="📄 Detalhes ⌄")
+            self.consoles_visible[tag] = False
+        else:
+            log.pack(fill="x", pady=5)
+            btn.configure(text="📄 Detalhes ⌃")
+            self.consoles_visible[tag] = True
+
+    def run_action(self, cmd, tag):
+        log = getattr(self, f"log_{tag}")
+        if not self.consoles_visible.get(tag, False):
+            self.toggle_console(tag)
+        log.delete("1.0", "end")
+        threading.Thread(target=self._execute, args=(cmd, log), daemon=True).start()
+
+    def _execute(self, cmd, log):
+        if self.SO == "Linux" and "sudo" in cmd:
+            full_cmd = f"pkexec bash -c '{cmd}'"
+        else:
+            full_cmd = cmd
+        proc = subprocess.Popen(full_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        for line in proc.stdout:
+            self.after(0, lambda l=line: self._update_log(log, l))
+        proc.wait()
+        self.after(0, lambda: self._update_log(log, "\n-- COMANDO FINALIZADO --\n"))
+
+    def _update_log(self, log, text):
+        log.insert("end", text)
+        log.see("end")
+
+    def toggle_turbo(self):
+        self.turbo_active = not self.turbo_active
+        if self.turbo_active:
+            self.turbo_btn.configure(text="🛡️ DESATIVAR MODO TURBO", fg_color="#475569")
+            cmd = "sudo cpupower frequency-set -g performance"
+        else:
+            self.turbo_btn.configure(text="🔥 ATIVAR MODO TURBO", fg_color="#e11d48")
+            cmd = "sudo cpupower frequency-set -g powersave"
+        self.run_action(cmd, "gm")
+
+    def toggle_ping(self):
+        if not self.ping_active:
+            self.ping_active = True
+            threading.Thread(target=self._ping_loop, daemon=True).start()
+        else:
+            self.ping_active = False
+
+    def _ping_loop(self):
+        while self.ping_active:
+            try:
+                param = "-n" if self.SO == "Windows" else "-c"
+                p = subprocess.run(
+                    ["ping", param, "1", "-W", "1", "8.8.8.8"],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if "time=" in p.stdout or "tempo=" in p.stdout:
+                    import re
+                    match = re.search(r'time[=<](\d+\.?\d*)', p.stdout)
+                    res = match.group(1) if match else "Erro"
+                else:
+                    res = "Erro"
+                self.after(0, lambda r=res: self.ping_label.configure(text=f"Ping: {r} ms"))
+            except:
+                self.after(0, lambda: self.ping_label.configure(text="Ping: -- ms"))
+            time.sleep(2)
+
+    def hardware_monitor(self):
+        while True:
+            try:
+                cpu_percent = psutil.cpu_percent()
+                cpu_count = psutil.cpu_count(logical=True)
+                cpu_model = self._get_cpu_model()
+                mem = psutil.virtual_memory()
+                swap = psutil.swap_memory()
+                uptime_seconds = time.time() - psutil.boot_time()
+                uptime_str = str(datetime.timedelta(seconds=int(uptime_seconds)))
+                hostname = platform.node()
+                distro = self._get_distro()
+                kernel = platform.release()
+                gpu = self._get_gpu_info()
+                disks = self._get_disk_summary()
+                battery = psutil.sensors_battery()
+                battery_str = f"{battery.percent:.1f}%" if battery else "AC Power"
+
+                self.after(0, lambda: self.sys_labels["hostname"].configure(text=hostname))
+                self.after(0, lambda: self.sys_labels["distro"].configure(text=distro))
+                self.after(0, lambda: self.sys_labels["kernel"].configure(text=kernel))
+                self.after(0, lambda: self.sys_labels["cpu"].configure(text=f"{cpu_model} ({cpu_count} núcleos, {cpu_percent}%)"))
+                self.after(0, lambda: self.sys_labels["ram"].configure(text=f"{mem.used//1048576} MB / {mem.total//1048576} MB ({mem.percent}%)"))
+                self.after(0, lambda: self.sys_labels["gpu"].configure(text=gpu))
+                self.after(0, lambda: self.sys_labels["disks"].configure(text=disks))
+                self.after(0, lambda: self.sys_labels["uptime"].configure(text=uptime_str))
+                self.after(0, lambda: self.sys_labels["battery"].configure(text=battery_str))
+            except:
+                pass
+            time.sleep(3)
+
+    def _get_cpu_model(self):
+        try:
+            if self.SO == "Linux":
+                return os.popen("grep -m1 'model name' /proc/cpuinfo | cut -d: -f2").read().strip()
+            elif self.SO == "Windows":
+                return os.popen("wmic cpu get name").read().strip().split('\n')[1]
+            elif self.SO == "Darwin":
+                return os.popen("sysctl -n machdep.cpu.brand_string").read().strip()
+        except:
+            return "N/A"
+
+    def _get_distro(self):
+        try:
+            with open("/etc/os-release") as f:
+                for line in f:
+                    if line.startswith("PRETTY_NAME="):
+                        return line.split("=")[1].strip().strip('"')
+        except:
+            pass
+        return "Desconhecida"
+
+    def _get_gpu_info(self):
+        try:
+            if self.SO == "Linux":
+                out = subprocess.check_output(["lspci", "-k"], stderr=subprocess.DEVNULL, text=True)
+                for line in out.splitlines():
+                    if "VGA" in line or "3D" in line:
+                        return line.split(":", 2)[-1].strip()
+            elif self.SO == "Windows":
+                return os.popen("wmic path win32_VideoController get name").read().strip().split('\n')[1]
+            elif self.SO == "Darwin":
+                return os.popen("system_profiler SPDisplaysDataType | grep Chipset").read().strip()
+        except:
+            pass
+        return "Não detectado"
+
+    def _get_disk_summary(self):
+        try:
+            if self.SO == "Linux":
+                out = subprocess.check_output(["lsblk", "-d", "-o", "MODEL,SIZE"], stderr=subprocess.DEVNULL, text=True)
+                lines = out.strip().split("\n")[1:]
+                return " | ".join([l.strip() for l in lines[:2]])
+            else:
+                disks = []
+                for part in psutil.disk_partitions():
+                    if part.fstype:
+                        usage = psutil.disk_usage(part.mountpoint)
+                        disks.append(f"{part.device} ({usage.total//1073741824}GB)")
+                return " | ".join(disks[:2])
+        except:
+            return "N/A"
+
+    def _on_mousewheel(self, event):
+        # Rola o frame atualmente visível (se for scrollable)
+        current = None
+        # Verificar se há um módulo ativo
+        if self.current_module_frame and self.current_module_frame.winfo_ismapped():
+            current = self.current_module_frame
+        else:
+            # Verificar frames principais
+            for frame in self.main_frames.values():
+                if frame.winfo_ismapped():
+                    current = frame
+                    break
+        if current and isinstance(current, ctk.CTkScrollableFrame):
+            current._parent_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+if __name__ == "__main__":
+    app = SpeedScan()
+    app.mainloop()

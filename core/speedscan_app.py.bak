@@ -1,0 +1,581 @@
+#!/usr/bin/env python3
+# SpeedScan - Versão com Gamer dentro de Otimização
+# Uso: python3 core/speedscan_app.py
+
+import customtkinter as ctk
+import os
+import platform
+import psutil
+import subprocess
+import threading
+import json
+import time
+import sys
+from PIL import Image
+from datetime import datetime
+
+# Configurações
+CONFIG_FILE = os.path.expanduser("~/.speedscan_conf")
+ICON_PATH = os.path.expanduser("~/speedscan/icon.png")
+
+def get_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except:
+            pass
+    return {"theme": "default"}
+
+conf = get_config()
+
+themes = {
+    "default": {"mode": "dark", "bg": "#1e293b", "side": "#0f172a", "acc": "#a855f7", "text": "#ffffff"},
+    "grey":    {"mode": "light", "bg": "#d1d5db", "side": "#374151", "acc": "#4b5563", "text": "#111827"},
+    "dark":    {"mode": "dark", "bg": "#080808", "side": "#000000", "acc": "#10b981", "text": "#ffffff"},
+    "light":   {"mode": "light", "bg": "#ffffff", "side": "#f8fafc", "acc": "#2563eb", "text": "#0f172a"}
+}
+
+class SpeedScan(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.SO = platform.system()
+        self.config = conf
+        self.update_theme_vars()
+        self.title("SpeedScan Beta")
+        self.geometry("1200x950")
+        self.minsize(1000, 700)
+        self.configure(fg_color=self.bg_color)
+
+        # Variáveis de estado
+        self.turbo_active = False
+        self.consoles_visible = {}
+        self.ping_active = False
+
+        # Layout principal: sidebar + conteúdo
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # Sidebar (esquerda)
+        self.sidebar = ctk.CTkFrame(self, width=120, corner_radius=0, fg_color=self.side_bg)
+        self.sidebar.grid(row=0, column=0, sticky="nsew")
+        self.sidebar.grid_propagate(False)
+
+        # Container de conteúdo (direita)
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_rowconfigure(0, weight=1)
+
+        # Dicionário de frames (seções)
+        self.frames = {}
+
+        # Criar botões da sidebar
+        self.create_sidebar_buttons()
+
+        # Criar frames de conteúdo
+        self.create_frames()
+
+        # Mostrar frame inicial (Sistema)
+        self.show_frame("sistema")
+
+        # Atalho de rolagem
+        self.bind_all("<MouseWheel>", self._on_mousewheel)
+
+        # Iniciar monitoramento de hardware em background
+        threading.Thread(target=self.hardware_monitor, daemon=True).start()
+
+    def update_theme_vars(self):
+        t = themes.get(self.config["theme"], themes["default"])
+        ctk.set_appearance_mode(t["mode"])
+        self.bg_color = t["bg"]
+        self.side_bg = t["side"]
+        self.acc_color = t["acc"]
+        self.text_color = t["text"]
+
+    def create_sidebar_buttons(self):
+        """Cria os botões de navegação na sidebar"""
+        # Espaçamento superior
+        ctk.CTkLabel(self.sidebar, text="").pack(pady=10)
+
+        # 1. SpeedScan (ícone + nome) - leva ao Sistema
+        frame_speed = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        frame_speed.pack(pady=10, fill="x")
+        self.btn_speed = ctk.CTkButton(
+            frame_speed,
+            text="⚡",
+            width=70,
+            height=70,
+            fg_color="transparent",
+            hover_color=self.acc_color,
+            font=("Inter", 32),
+            command=lambda: self.show_frame("sistema")
+        )
+        self.btn_speed.pack()
+        ctk.CTkLabel(frame_speed, text="SpeedScan", font=("Inter", 10, "bold"), text_color=self.text_color).pack()
+
+        # 2. Otimização (agora contém Gamer também)
+        self.btn_otim = self.add_sidebar_btn("🚀", "Otimização", "otimizacao")
+
+        # 3. Rede
+        self.btn_rede = self.add_sidebar_btn("🌐", "Rede", "rede")
+
+        # 4. Drivers
+        self.btn_drivers = self.add_sidebar_btn("🛠️", "Drivers", "drivers")
+
+        # 5. Configurações
+        self.btn_config = self.add_sidebar_btn("⚙️", "Configurações", "config")
+
+        # 6. Sobre
+        self.btn_sobre = self.add_sidebar_btn("ℹ️", "Sobre", "sobre")
+
+    def add_sidebar_btn(self, icon, text, target):
+        """Adiciona um botão na sidebar com ícone e texto abaixo"""
+        frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        frame.pack(pady=10, fill="x")
+        btn = ctk.CTkButton(
+            frame,
+            text=icon,
+            width=70,
+            height=70,
+            fg_color="transparent",
+            hover_color=self.acc_color,
+            font=("Inter", 24),
+            command=lambda: self.show_frame(target)
+        )
+        btn.pack()
+        lbl = ctk.CTkLabel(frame, text=text, font=("Inter", 9), text_color=self.text_color)
+        lbl.pack()
+        return btn
+
+    def show_frame(self, target):
+        """Exibe o frame correspondente"""
+        for frame in self.frames.values():
+            frame.grid_forget()
+        self.frames[target].grid(row=0, column=0, sticky="nsew")
+
+    def create_frames(self):
+        """Cria todos os frames de conteúdo"""
+        # Frame Sistema
+        self.frames["sistema"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_sistema_frame(self.frames["sistema"])
+
+        # Frame Otimização (agora com abas internas: Otimização e Gamer)
+        self.frames["otimizacao"] = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.create_otimizacao_frame(self.frames["otimizacao"])
+
+        # Frame Rede
+        self.frames["rede"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_rede_frame(self.frames["rede"])
+
+        # Frame Drivers
+        self.frames["drivers"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_drivers_frame(self.frames["drivers"])
+
+        # Frame Configurações
+        self.frames["config"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_config_frame(self.frames["config"])
+
+        # Frame Sobre
+        self.frames["sobre"] = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.create_sobre_frame(self.frames["sobre"])
+
+    # ---------- Conteúdo de cada frame ----------
+    def create_sistema_frame(self, parent):
+        """Frame com informações do sistema"""
+        self.sys_labels = {}
+        info_fields = [
+            ("hostname", "💻 Hostname"),
+            ("distro", "💿 Distribuição"),
+            ("kernel", "🐧 Kernel"),
+            ("cpu", "🖥️ CPU"),
+            ("ram", "📟 RAM"),
+            ("gpu", "🎮 GPU"),
+            ("disks", "💽 Discos"),
+            ("uptime", "⏱️ Uptime"),
+            ("battery", "🔋 Bateria")
+        ]
+        for key, label in info_fields:
+            frame = ctk.CTkFrame(parent, fg_color="transparent")
+            frame.pack(fill="x", padx=40, pady=5, anchor="w")
+            ctk.CTkLabel(frame, text=label, font=("Inter", 14, "bold"), text_color=self.acc_color, width=150, anchor="w").pack(side="left")
+            self.sys_labels[key] = ctk.CTkLabel(frame, text="...", font=("Consolas", 12), text_color=self.text_color)
+            self.sys_labels[key].pack(side="left", padx=10)
+
+    def create_otimizacao_frame(self, parent):
+        """Frame com abas: Otimização e Gamer"""
+        tabview = ctk.CTkTabview(parent, fg_color="transparent", segmented_button_selected_color=self.acc_color)
+        tabview.pack(fill="both", expand=True)
+
+        # Aba Otimização (ações de limpeza)
+        tab_ot = tabview.add("🚀 Otimização")
+        self.create_otimizacao_content(tab_ot)
+
+        # Aba Gamer (modo turbo e instalações)
+        tab_gm = tabview.add("🎮 Gamer")
+        self.create_gamer_content(tab_gm)
+
+    def create_otimizacao_content(self, parent):
+        """Conteúdo da aba Otimização"""
+        actions = [
+            ("🧹 Limpeza de Cache", "sudo eopkg dc"),
+            ("🔄 Reset de Swap", "sudo swapoff -a && sudo swapon -a"),
+            ("✅ Verificar Erros", "sudo eopkg check"),
+        ]
+        self._add_action_cards(parent, actions, "ot")
+        self._add_console(parent, "ot")
+
+    def create_gamer_content(self, parent):
+        """Conteúdo da aba Gamer"""
+        # Botão Turbo
+        self.turbo_btn = ctk.CTkButton(
+            parent,
+            text="🔥 ATIVAR MODO TURBO",
+            fg_color="#e11d48",
+            hover_color="#b91c1c",
+            height=50,
+            font=("Inter", 14, "bold"),
+            command=self.toggle_turbo
+        )
+        self.turbo_btn.pack(pady=10, fill="x")
+
+        # Lista de apps para instalar
+        apps = [
+            ("Steam", "steam"),
+            ("Lutris", "lutris"),
+            ("Heroic Launcher", "heroic-games-launcher-bin"),
+            ("Bottles", "bottles"),
+            ("Wine", "wine"),
+            ("MangoHud", "mangohud"),
+            ("Goverlay", "goverlay"),
+        ]
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="x", pady=10)
+        for name, pkg in apps:
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, width=200, height=120, corner_radius=10)
+            card.pack(side="left", padx=8, pady=5)
+            card.pack_propagate(False)
+            ctk.CTkLabel(card, text=name, font=("Inter", 13, "bold"), text_color=self.acc_color).pack(pady=10)
+            ctk.CTkButton(
+                card,
+                text="Instalar",
+                fg_color=self.acc_color,
+                command=lambda p=pkg: self.run_action(f"sudo eopkg it {p} -y", "gm")
+            ).pack()
+        self._add_console(parent, "gm")
+
+    def create_rede_frame(self, parent):
+        """Frame de rede com ping e DNS"""
+        # Ping interativo
+        ping_frame = ctk.CTkFrame(parent, fg_color=self.bg_color, corner_radius=12)
+        ping_frame.pack(fill="x", pady=10)
+        self.ping_label = ctk.CTkLabel(
+            ping_frame,
+            text="Ping: -- ms",
+            font=("Consolas", 20, "bold"),
+            text_color="#10b981"
+        )
+        self.ping_label.pack(pady=10)
+        ctk.CTkButton(ping_frame, text="Iniciar Ping Contínuo", command=self.toggle_ping, fg_color=self.acc_color).pack(pady=5)
+
+        # DNS
+        dns_actions = [
+            ("Cloudflare DNS", "1.1.1.1"),
+            ("Google DNS", "8.8.8.8"),
+            ("AdGuard DNS", "94.140.14.14"),
+            ("DNS Automático", "auto")
+        ]
+        self._add_action_cards(parent, dns_actions, "net", is_dns=True)
+        self._add_console(parent, "net")
+
+    def create_drivers_frame(self, parent):
+        """Frame de drivers com atualização e diagnósticos"""
+        # Botão de atualização do sistema
+        update_btn = ctk.CTkButton(
+            parent,
+            text="📦 Atualizar Sistema",
+            fg_color=self.acc_color,
+            height=40,
+            command=lambda: self.run_action("sudo dnf upgrade -y", "drv")
+        )
+        update_btn.pack(pady=10, fill="x")
+
+        # Diagnósticos
+        diag_actions = [
+            ("PCI (Vídeo/Rede)", "lspci -nnk"),
+            ("USB Conectados", "lsusb"),
+            ("Módulos Kernel", "lsmod"),
+            ("CPU Detalhada", "lscpu"),
+            ("Firmware Erros", "sudo dmesg | grep -i firmware"),
+        ]
+        self._add_action_cards(parent, diag_actions, "drv")
+        self._add_console(parent, "drv")
+
+    def create_config_frame(self, parent):
+        """Frame de configurações (temas)"""
+        ctk.CTkLabel(parent, text="Configurações", font=("Inter", 24, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0, 20))
+        ctk.CTkLabel(parent, text="Tema da interface:", font=("Inter", 16), text_color=self.text_color).pack(anchor="w", pady=10)
+
+        theme_options = [
+            ("Padrão (Roxo)", "default"),
+            ("Cinza Profissional", "grey"),
+            ("Escuro Total", "dark"),
+            ("Claro Clean", "light")
+        ]
+        for name, key in theme_options:
+            btn = ctk.CTkButton(
+                parent,
+                text=name,
+                fg_color=self.bg_color,
+                border_width=2,
+                border_color=self.acc_color,
+                text_color=self.text_color,
+                hover_color=self.acc_color,
+                width=300,
+                height=50,
+                command=lambda k=key: self.set_theme(k)
+            )
+            btn.pack(pady=8)
+
+    def create_sobre_frame(self, parent):
+        """Frame sobre com informações do software"""
+        card = ctk.CTkFrame(parent, fg_color=self.bg_color, corner_radius=15, border_width=1, border_color="#334155")
+        card.pack(pady=50, padx=50, fill="both", expand=True)
+
+        ctk.CTkLabel(card, text="⚡ SpeedScan", font=("Inter", 36, "bold"), text_color=self.acc_color).pack(pady=(40, 10))
+        ctk.CTkLabel(card, text="Versão Beta 0.9.0", font=("Inter", 14), text_color="#888888").pack()
+
+        info_text = (
+            "Este software está em fase de desenvolvimento.\n"
+            "Não foi lançado oficialmente.\n\n"
+            "Desenvolvedor: Ewerton Vasconcelos\n"
+            "Tecnologias: Python, CustomTkinter, psutil\n"
+            "Repositório: github.com/ewertonvasconcelos/speedscan\n\n"
+            "Funcionalidades:\n"
+            "• Monitoramento de hardware em tempo real\n"
+            "• Otimização de sistema (cache, swap)\n"
+            "• Modo Turbo e instalação de apps gamers\n"
+            "• Configuração de DNS (Cloudflare, Google, AdGuard)\n"
+            "• Diagnóstico de drivers e atualizações\n"
+            "• Temas personalizáveis\n\n"
+            "© 2026 Ewerton Vasconcelos. Todos os direitos reservados."
+        )
+        ctk.CTkLabel(card, text=info_text, font=("Inter", 14), justify="left", text_color=self.text_color).pack(pady=30, padx=40)
+
+    # ---------- Utilitários ----------
+    def _add_action_cards(self, parent, actions, tag, is_dns=False):
+        """Adiciona cards horizontais para ações"""
+        grid = ctk.CTkFrame(parent, fg_color="transparent")
+        grid.pack(fill="x", pady=10)
+        for title, value in actions:
+            card = ctk.CTkFrame(grid, fg_color=self.bg_color, width=200, height=120, corner_radius=10)
+            card.pack(side="left", padx=8, pady=5)
+            card.pack_propagate(False)
+            ctk.CTkLabel(card, text=title, font=("Inter", 13, "bold"), text_color=self.acc_color).pack(pady=10)
+            if is_dns:
+                if value == "auto":
+                    cmd = "nmcli dev mod $(nmcli -t -f DEVICE,STATE dev | grep connected | cut -d: -f1 | head -n1) ipv4.dns ''"
+                else:
+                    cmd = f"nmcli dev mod $(nmcli -t -f DEVICE,STATE dev | grep connected | cut -d: -f1 | head -n1) ipv4.dns '{value}'"
+            else:
+                cmd = value
+            ctk.CTkButton(
+                card,
+                text="Executar",
+                fg_color=self.acc_color,
+                command=lambda c=cmd, t=tag: self.run_action(c, t)
+            ).pack()
+
+    def _add_console(self, parent, tag):
+        """Adiciona console expansível"""
+        btn = ctk.CTkButton(
+            parent,
+            text="📄 Detalhes ⌄",
+            fg_color="transparent",
+            text_color=self.acc_color,
+            hover=False,
+            command=lambda: self.toggle_console(tag)
+        )
+        btn.pack(anchor="e", pady=5)
+        log = ctk.CTkTextbox(parent, height=150, fg_color="#000000", text_color="#10b981", font=("Consolas", 11))
+        setattr(self, f"log_{tag}", log)
+        setattr(self, f"btn_{tag}", btn)
+        self.consoles_visible[tag] = False
+
+    def toggle_console(self, tag):
+        log = getattr(self, f"log_{tag}")
+        btn = getattr(self, f"btn_{tag}")
+        if self.consoles_visible.get(tag, False):
+            log.pack_forget()
+            btn.configure(text="📄 Detalhes ⌄")
+            self.consoles_visible[tag] = False
+        else:
+            log.pack(fill="x", pady=5)
+            btn.configure(text="📄 Detalhes ⌃")
+            self.consoles_visible[tag] = True
+
+    def run_action(self, cmd, tag):
+        log = getattr(self, f"log_{tag}")
+        if not self.consoles_visible.get(tag, False):
+            self.toggle_console(tag)
+        log.delete("1.0", "end")
+        threading.Thread(target=self._execute, args=(cmd, log), daemon=True).start()
+
+    def _execute(self, cmd, log):
+        if self.SO == "Linux" and "sudo" in cmd:
+            full_cmd = f"pkexec bash -c '{cmd}'"
+        else:
+            full_cmd = cmd
+        proc = subprocess.Popen(full_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        for line in proc.stdout:
+            self.after(0, lambda l=line: self._update_log(log, l))
+        proc.wait()
+        self.after(0, lambda: self._update_log(log, "\n-- COMANDO FINALIZADO --\n"))
+
+    def _update_log(self, log, text):
+        log.insert("end", text)
+        log.see("end")
+
+    # ---------- Funções específicas ----------
+    def toggle_turbo(self):
+        self.turbo_active = not self.turbo_active
+        if self.turbo_active:
+            self.turbo_btn.configure(text="🛡️ DESATIVAR MODO TURBO", fg_color="#475569")
+            cmd = "sudo cpupower frequency-set -g performance"
+        else:
+            self.turbo_btn.configure(text="🔥 ATIVAR MODO TURBO", fg_color="#e11d48")
+            cmd = "sudo cpupower frequency-set -g powersave"
+        self.run_action(cmd, "gm")  # tag "gm" para o console da aba Gamer
+
+    def toggle_ping(self):
+        if not self.ping_active:
+            self.ping_active = True
+            threading.Thread(target=self._ping_loop, daemon=True).start()
+        else:
+            self.ping_active = False
+
+    def _ping_loop(self):
+        while self.ping_active:
+            try:
+                param = "-n" if self.SO == "Windows" else "-c"
+                p = subprocess.run(
+                    ["ping", param, "1", "-W", "1", "8.8.8.8"],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if "time=" in p.stdout or "tempo=" in p.stdout:
+                    import re
+                    match = re.search(r'time[=<](\d+\.?\d*)', p.stdout)
+                    res = match.group(1) if match else "Erro"
+                else:
+                    res = "Erro"
+                self.after(0, lambda r=res: self.ping_label.configure(text=f"Ping: {r} ms"))
+            except:
+                self.after(0, lambda: self.ping_label.configure(text="Ping: -- ms"))
+            time.sleep(2)
+
+    def hardware_monitor(self):
+        """Atualiza as informações do sistema periodicamente"""
+        while True:
+            try:
+                cpu_percent = psutil.cpu_percent()
+                cpu_count = psutil.cpu_count(logical=True)
+                cpu_model = self._get_cpu_model()
+                mem = psutil.virtual_memory()
+                swap = psutil.swap_memory()
+                uptime_seconds = time.time() - psutil.boot_time()
+                uptime_str = str(datetime.timedelta(seconds=int(uptime_seconds)))
+                hostname = platform.node()
+                distro = self._get_distro()
+                kernel = platform.release()
+                gpu = self._get_gpu_info()
+                disks = self._get_disk_summary()
+                battery = psutil.sensors_battery()
+                battery_str = f"{battery.percent:.1f}%" if battery else "AC Power"
+
+                self.after(0, lambda: self.sys_labels["hostname"].configure(text=hostname))
+                self.after(0, lambda: self.sys_labels["distro"].configure(text=distro))
+                self.after(0, lambda: self.sys_labels["kernel"].configure(text=kernel))
+                self.after(0, lambda: self.sys_labels["cpu"].configure(text=f"{cpu_model} ({cpu_count} núcleos, {cpu_percent}%)"))
+                self.after(0, lambda: self.sys_labels["ram"].configure(text=f"{mem.used//1048576} MB / {mem.total//1048576} MB ({mem.percent}%)"))
+                self.after(0, lambda: self.sys_labels["gpu"].configure(text=gpu))
+                self.after(0, lambda: self.sys_labels["disks"].configure(text=disks))
+                self.after(0, lambda: self.sys_labels["uptime"].configure(text=uptime_str))
+                self.after(0, lambda: self.sys_labels["battery"].configure(text=battery_str))
+            except:
+                pass
+            time.sleep(3)
+
+    def _get_cpu_model(self):
+        try:
+            if self.SO == "Linux":
+                return os.popen("grep -m1 'model name' /proc/cpuinfo | cut -d: -f2").read().strip()
+            elif self.SO == "Windows":
+                return os.popen("wmic cpu get name").read().strip().split('\n')[1]
+            elif self.SO == "Darwin":
+                return os.popen("sysctl -n machdep.cpu.brand_string").read().strip()
+        except:
+            return "N/A"
+
+    def _get_distro(self):
+        try:
+            with open("/etc/os-release") as f:
+                for line in f:
+                    if line.startswith("PRETTY_NAME="):
+                        return line.split("=")[1].strip().strip('"')
+        except:
+            pass
+        return "Desconhecida"
+
+    def _get_gpu_info(self):
+        try:
+            if self.SO == "Linux":
+                out = subprocess.check_output(["lspci", "-k"], stderr=subprocess.DEVNULL, text=True)
+                for line in out.splitlines():
+                    if "VGA" in line or "3D" in line:
+                        return line.split(":", 2)[-1].strip()
+            elif self.SO == "Windows":
+                return os.popen("wmic path win32_VideoController get name").read().strip().split('\n')[1]
+            elif self.SO == "Darwin":
+                return os.popen("system_profiler SPDisplaysDataType | grep Chipset").read().strip()
+        except:
+            pass
+        return "Não detectado"
+
+    def _get_disk_summary(self):
+        try:
+            if self.SO == "Linux":
+                out = subprocess.check_output(["lsblk", "-d", "-o", "MODEL,SIZE"], stderr=subprocess.DEVNULL, text=True)
+                lines = out.strip().split("\n")[1:]
+                return " | ".join([l.strip() for l in lines[:2]])
+            else:
+                disks = []
+                for part in psutil.disk_partitions():
+                    if part.fstype:
+                        usage = psutil.disk_usage(part.mountpoint)
+                        disks.append(f"{part.device} ({usage.total//1073741824}GB)")
+                return " | ".join(disks[:2])
+        except:
+            return "N/A"
+
+    # ---------- Tema com restart ----------
+    def set_theme(self, key):
+        self.config["theme"] = key
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(self.config, f)
+        python = sys.executable
+        os.execl(python, python, *sys.argv)
+
+    def _on_mousewheel(self, event):
+        current = None
+        for target, frame in self.frames.items():
+            if frame.winfo_ismapped():
+                current = frame
+                break
+        if current and isinstance(current, ctk.CTkScrollableFrame):
+            current._parent_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+if __name__ == "__main__":
+    app = SpeedScan()
+    app.mainloop()
