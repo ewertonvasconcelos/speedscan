@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SpeedScan - Versão final com botão Detalhes restaurado, cursor corrigido, 12 cards na Rede
+# SpeedScan - Versão final com cursor padrão do sistema
 # Uso: python3 core/speedscan_app.py
 
 import customtkinter as ctk
@@ -78,7 +78,7 @@ class SpeedScan(ctk.CTk):
         self.title("SpeedScan")
         self.geometry("1200x950")
         self.minsize(1000, 700)
-        self.configure(fg_color=self.bg_color, cursor="arrow")
+        self.configure(fg_color=self.bg_color)  # sem cursor definido
 
         self.apply_ui_scale()
 
@@ -92,11 +92,11 @@ class SpeedScan(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=self.side_bg)
+        self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=self.side_bg)  # sem cursor
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.grid_propagate(False)
 
-        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container = ctk.CTkFrame(self, fg_color="transparent")  # sem cursor
         self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
         self.container.grid_columnconfigure(0, weight=1)
         self.container.grid_rowconfigure(0, weight=1)
@@ -165,7 +165,7 @@ class SpeedScan(ctk.CTk):
                 fg_color="transparent",
                 hover_color=self.acc_color,
                 command=lambda: self.show_frame("sistema"),
-                cursor="hand2"
+                cursor="hand2"  # mão no botão
             )
             btn_speed.pack()
         else:
@@ -214,7 +214,7 @@ class SpeedScan(ctk.CTk):
             font=("Inter", 13),
             corner_radius=10,
             command=lambda: self.show_frame(target),
-            cursor="hand2"
+            cursor="hand2"  # mão nos botões da sidebar
         )
         btn.pack(fill="x")
         return btn
@@ -537,8 +537,8 @@ class SpeedScan(ctk.CTk):
             ("🔄 Renovar IP", "dhclient", "net", False),
             ("🧭 Portas Abertas", "ports", "net", False),
             ("📶 Traceroute", "traceroute", "net", False),
-            ("📶 Informações Wi-Fi", "wifi", "net", False),      # novo card informativo
-            ("🌍 Testar DNS", "testdns", "net", False),          # novo card executável
+            ("📶 Informações Wi-Fi", "wifi", "net", False),
+            ("🌍 Testar DNS", "testdns", "net", False),
         ]
 
         for idx, (title, cmd, tag, is_dns) in enumerate(cards):
@@ -622,7 +622,6 @@ class SpeedScan(ctk.CTk):
         self.run_action(cmd, tag)
 
     def run_wifi_info(self, tag):
-        """Mostra informações da rede Wi-Fi atual"""
         log = getattr(self, f"log_{tag}")
         log.delete("1.0", "end")
         log.insert("end", "Obtendo informações da rede Wi-Fi...\n")
@@ -637,7 +636,6 @@ class SpeedScan(ctk.CTk):
         self.run_action(cmd, tag)
 
     def run_testdns(self, tag):
-        """Executa nslookup ou dig para testar resolução DNS"""
         log = getattr(self, f"log_{tag}")
         log.delete("1.0", "end")
         log.insert("end", "Testando resolução DNS para google.com...\n")
@@ -1046,7 +1044,6 @@ class SpeedScan(ctk.CTk):
         with open(CONFIG_FILE, "w") as f:
             json.dump(self.config, f)
 
-        # Reinicia imediatamente (sem delay)
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
@@ -1081,9 +1078,8 @@ class SpeedScan(ctk.CTk):
         )
         ctk.CTkLabel(card, text=info_text, font=("Inter", 12), justify="left", text_color=self.text_color).pack(pady=20, padx=30)
 
-    # ---------- Utilitários (consoles com botão Detalhes restaurado) ----------
+    # ---------- Utilitários (consoles) ----------
     def _add_console(self, parent, tag):
-        # Apenas o botão Detalhes (sem Exportar)
         btn = ctk.CTkButton(
             parent,
             text="Detalhes ⌄",
@@ -1116,7 +1112,7 @@ class SpeedScan(ctk.CTk):
         btn = getattr(self, f"detail_btn_{tag}")
         if self.consoles_visible.get(tag, False):
             log.pack_forget()
-            btn.pack_forget()  # Botão desaparece ao fechar
+            btn.pack_forget()
             self.consoles_visible[tag] = False
         else:
             log.pack(fill="x", pady=5, before=btn)
@@ -1186,7 +1182,7 @@ class SpeedScan(ctk.CTk):
                 self.after(0, lambda: self.ping_label.configure(text="-- ms"))
             time.sleep(2)
 
-    # ---------- Hardware monitor (2s) ----------
+    # ---------- Hardware monitor ----------
     def hardware_monitor(self):
         while True:
             if self.current_module == "sistema":
