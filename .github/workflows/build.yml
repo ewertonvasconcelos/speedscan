@@ -1,0 +1,153 @@
+name: Build SpeedScan Packages
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller customtkinter psutil Pillow
+          sudo apt update
+          sudo apt install -y binutils rpm dpkg flatpak flatpak-builder
+
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name speedscan \
+            --add-data "core:core" \
+            --add-data "icon.png:." \
+            --hidden-import customtkinter \
+            --hidden-import PIL \
+            --hidden-import psutil \
+            --hidden-import platform \
+            --hidden-import subprocess \
+            --hidden-import threading \
+            --hidden-import json \
+            --hidden-import time \
+            --hidden-import sys \
+            --hidden-import re \
+            --hidden-import datetime \
+            core/speedscan_app.py
+
+      - name: Build .deb package
+        run: |
+          chmod +x build_deb.sh
+          ./build_deb.sh
+
+      - name: Build .rpm package
+        run: |
+          chmod +x build_rpm.sh
+          ./build_rpm.sh
+
+      - name: Build .flatpak package
+        run: |
+          chmod +x build_flatpak.sh
+          ./build_flatpak.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            *.deb
+            *.rpm
+            *.flatpak
+            dist/speedscan
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller customtkinter psutil Pillow
+
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name speedscan.exe `
+            --add-data "core;core" `
+            --add-data "icon.png;." `
+            --hidden-import customtkinter `
+            --hidden-import PIL `
+            --hidden-import psutil `
+            --hidden-import platform `
+            --hidden-import subprocess `
+            --hidden-import threading `
+            --hidden-import json `
+            --hidden-import time `
+            --hidden-import sys `
+            --hidden-import re `
+            --hidden-import datetime `
+            core/speedscan_app.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/speedscan.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller customtkinter psutil Pillow
+
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name speedscan \
+            --add-data "core:core" \
+            --add-data "icon.png:." \
+            --hidden-import customtkinter \
+            --hidden-import PIL \
+            --hidden-import psutil \
+            --hidden-import platform \
+            --hidden-import subprocess \
+            --hidden-import threading \
+            --hidden-import json \
+            --hidden-import time \
+            --hidden-import sys \
+            --hidden-import re \
+            --hidden-import datetime \
+            core/speedscan_app.py
+
+      - name: Create .dmg (optional)
+        run: |
+          # Você pode adicionar um script para gerar .dmg aqui
+          echo "TODO: create .dmg"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: dist/speedscan
