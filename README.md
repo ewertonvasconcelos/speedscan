@@ -20,7 +20,7 @@ SpeedScan é uma ferramenta de diagnóstico e otimização de sistemas desenvolv
 
 | Sistema | Otimização | Rede |
 |--------|------------|------|
-| ![Sistema] | ![Otimização] | ![Rede] |
+| ![Sistema](screenshots/sistema.png) | ![Otimização](screenshots/otimizacao.png) | ![Rede](screenshots/rede.png) |
 
 *Nota: As imagens acima são apenas ilustrativas. Substitua pelos prints reais do software.*
 
@@ -28,20 +28,21 @@ SpeedScan é uma ferramenta de diagnóstico e otimização de sistemas desenvolv
 
 | Sistema | Status | Observações |
 |---------|--------|-------------|
-| 🐧 Linux | ✅ Funcional | Testado em Fedora, Solus, openSUSE |
+| 🐧 Linux | ✅ Funcional | Testado em Fedora, Solus, openSUSE, KDE Linux. Pacotes `.deb` e `.rpm` disponíveis. |
 | 🪟 Windows | ✅ Funcional | Requer winget para instalação de apps |
 | 🍏 macOS | ✅ Funcional | Requer Homebrew para instalação de apps |
 | 📱 Android | 🚧 Em desenvolvimento | Versão separada com Kivy/BeeWare |
 
 ## 🚀 Instalação
 
-### Linux
+### Linux – Pacotes `.deb` e `.rpm`
+Baixe os pacotes da página de [releases](https://github.com/ewertonvasconcelos/speedscan/releases) ou diretamente do repositório:
 
+- **Debian/Ubuntu**: `sudo dpkg -i speedscan_0.9.0_amd64.deb`
+- **Fedora/openSUSE**: `sudo rpm -ivh speedscan-0.9.0-1.x86_64.rpm`
+
+### Via código fonte (Linux, Windows, macOS)
 ```bash
-# via curl (recomendado)
-curl -sSL https://raw.githubusercontent.com/ewertonvasconcelos/speedscan/main/install.sh | bash
-
-# ou manualmente
 git clone https://github.com/ewertonvasconcelos/speedscan.git
 cd speedscan
 pip install -r requirements.txt
