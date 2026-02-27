@@ -1,6 +1,6 @@
 # ⚡ SpeedScan
 
-![Versão](https://img.shields.io/badge/version-1.0.0--beta-blue)
+![Versão](https://img.shields.io/badge/version-0.0.9--beta-blue)
 ![Licença](https://img.shields.io/badge/license-MIT-green)
 ![Plataformas](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android-lightgrey)
 [![GitHub stars](https://img.shields.io/github/stars/ewertonvasconcelos/speedscan?style=social)](https://github.com/ewertonvasconcelos/speedscan/stargazers)
