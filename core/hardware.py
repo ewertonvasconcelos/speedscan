@@ -3,8 +3,10 @@ import platform
 import psutil
 import subprocess
 import time
+import json
 from datetime import datetime
 from functools import lru_cache
+import os
 
 class HardwareInfo:
     """Coleta informações de hardware de forma unificada com fallbacks."""
@@ -51,15 +53,43 @@ class HardwareInfo:
             return "Não detectado"
 
     def get_disks_detailed(self):
-        disks = []
-        for part in psutil.disk_partitions():
-            if part.fstype and not part.mountpoint.startswith("/snap/"):
+        """Retorna uma lista de discos físicos com tamanho total e espaço usado, sem duplicações."""
+        try:
+            # Tenta usar lsblk para obter discos físicos (mais limpo)
+            if self.so == "Linux" and self.runner.exists("lsblk"):
+                output = self.runner.check_output("lsblk -d -o NAME,SIZE,MODEL,TYPE -J 2>/dev/null")
+                if output:
+                    data = json.loads(output)
+                    disks = []
+                    for disk in data.get('blockdevices', []):
+                        if disk.get('type') == 'disk':
+                            name = disk.get('name')
+                            size = disk.get('size', '0B')
+                            model = disk.get('model', '')
+                            # Tenta obter uso do disco (não é trivial, podemos mostrar apenas tamanho)
+                            disks.append(f"{model} ({name}) - {size}")
+                    if disks:
+                        return "\n".join(disks[:3])  # limita a 3 discos
+            # Fallback: usa psutil mas filtra pontos de montagem irrelevantes
+            exclude = ('/snap', '/boot', '/sys', '/proc', '/dev', '/run')
+            seen = set()
+            disks = []
+            for part in psutil.disk_partitions():
+                if part.mountpoint.startswith(exclude):
+                    continue
+                if part.device in seen:
+                    continue
+                seen.add(part.device)
                 try:
                     usage = psutil.disk_usage(part.mountpoint)
-                    disks.append(f"{part.device} ({usage.total//1073741824}G, usado {usage.used//1073741824}G)")
+                    total_gb = usage.total // 1073741824
+                    used_gb = usage.used // 1073741824
+                    disks.append(f"{part.device} ({total_gb}G, usado {used_gb}G)")
                 except:
                     continue
-        return "\n".join(disks[:3]) if disks else "Nenhum disco detectado"
+            return "\n".join(disks[:3]) if disks else "Nenhum disco detectado"
+        except Exception as e:
+            return f"Erro ao ler discos: {e}"
 
     def get_uptime(self):
         return str(datetime.timedelta(seconds=int(time.time() - psutil.boot_time())))

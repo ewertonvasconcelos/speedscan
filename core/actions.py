@@ -40,6 +40,10 @@ class ActionMapper:
         self.runner = runner
         self.turbo_active = turbo_active
 
+    def _in_container(self):
+        """Detecta se está rodando dentro de um container."""
+        return os.path.exists('/.dockerenv') or os.path.exists('/run/.containerenv') or os.environ.get('container') is not None
+
     def get_command(self, symbolic, **kwargs):
         """Retorna o comando real para um dado simbólico."""
         # Otimização
@@ -171,14 +175,21 @@ class ActionMapper:
         return None
 
     def dns_command(self, dns):
-        """Retorna comando de configuração de DNS."""
+        """Retorna comando de configuração de DNS, com detecção de container."""
+        if self._in_container():
+            return "echo 'A configuração de DNS não pode ser alterada dentro de um container. Execute este comando no sistema host.'"
         if self.so == "Linux":
+            # Tenta nmcli primeiro
             iface = self.runner.check_output("nmcli -t -f DEVICE,STATE dev | grep connected | cut -d: -f1 | head -n1")
-            if not iface:
-                return "echo 'Interface não encontrada'"
+            if iface:
+                if dns == "auto":
+                    return f"nmcli dev mod {iface} ipv4.dns ''"
+                return f"nmcli dev mod {iface} ipv4.dns '{dns}'"
+            # Fallback: tenta editar /etc/resolv.conf (requer sudo)
             if dns == "auto":
-                return f"nmcli dev mod {iface} ipv4.dns ''"
-            return f"nmcli dev mod {iface} ipv4.dns '{dns}'"
+                return "sudo cp /etc/resolv.conf.backup /etc/resolv.conf 2>/dev/null || echo 'Backup não encontrado'"
+            else:
+                return f"echo 'nameserver {dns}' | sudo tee /etc/resolv.conf > /dev/null"
         elif self.so == "Windows":
             iface = self.runner.check_output("wmic nic where netenabled=true get NetConnectionID | findstr /v NetConnectionID")
             iface = iface.strip() if iface else None
