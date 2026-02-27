@@ -46,3 +46,11 @@ run.sh
 # IDEs
 .vscode/
 .idea/
+
+# Build artifacts (already in releases)
+*.deb
+*.rpm
+*.flatpak
+*.AppImage
+dist/
+build/
