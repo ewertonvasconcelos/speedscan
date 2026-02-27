@@ -8,9 +8,11 @@ import json
 import sys
 import re
 import time
+import subprocess
 from pathlib import Path
 from PIL import Image, ImageDraw
 
+# Importações absolutas dos módulos
 from core.hardware import HardwareInfo
 from core.actions import CommandRunner, ActionMapper
 from core.scheduler import Scheduler
@@ -18,11 +20,12 @@ from core import ui
 
 # Constantes
 CONFIG_FILE = Path.home() / ".speedscan_conf"
-ICON_PATH = Path.home() / "speedscan" / "icon.png"
+ICON_PATH = Path.home() / "speedscan" / "assets" / "icon.png"
 LOG_DIR = Path.home() / "speedscan" / "logs"
 AGENT_SCRIPT = Path.home() / "speedscan" / "speedscan-agent.py"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+# Versão
 VERSION = "0.0.9-beta"
 
 DEFAULT_CONFIG = {
@@ -87,12 +90,11 @@ class SpeedScan(ctk.CTk):
         self.ping_active = False
         self.current_module = "sistema"
         self.sidebar_buttons = {}
-        self.ping_label = None  # será criado na aba Rede
+        self.detail_buttons = {}
+        self.logs = {}
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
-
-        self.scheduler = Scheduler(self.SO, LOG_DIR, AGENT_SCRIPT)
 
         self._build_sidebar()
         self.frames = self._build_frames()
@@ -228,7 +230,6 @@ class SpeedScan(ctk.CTk):
         self._fill_sobre(frames["sobre"])
         return frames
 
-    # ---------- Sistema ----------
     def _fill_sistema(self, parent):
         ctk.CTkLabel(parent, text="Informações do Sistema", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,30))
@@ -277,7 +278,6 @@ class SpeedScan(ctk.CTk):
         except Exception as e:
             print(f"Erro ao atualizar sistema: {e}")
 
-    # ---------- Otimização ----------
     def _fill_otimizacao(self, parent):
         ctk.CTkLabel(parent, text="Otimização", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
@@ -295,18 +295,14 @@ class SpeedScan(ctk.CTk):
             ("Goverlay", "goverlay", False),
             ("🎮 Emulador Dolphin", "dolphin", False)
         ]
-        self._create_action_grid(parent, items, "ot")
-        self._add_console(parent, "ot")
+        ui.create_card_grid(parent, items, "ot", self.acc_color, self.bg_color, self.run_card_action)
+        btn, log = ui.add_console(parent, "ot", self.acc_color, self.toggle_console)
+        self.detail_buttons["ot"] = btn
+        self.logs["ot"] = log
 
-    # ---------- Rede ----------
     def _fill_rede(self, parent):
         ctk.CTkLabel(parent, text="Rede", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
-        grid = ctk.CTkFrame(parent, fg_color="transparent")
-        grid.pack(fill="both", expand=True, pady=10)
-        for i in range(3):
-            grid.columnconfigure(i, weight=1)
-
         items = [
             ("📡 Ping", "ping", False),
             ("☁️ Cloudflare DNS", "1.1.1.1", True),
@@ -321,34 +317,13 @@ class SpeedScan(ctk.CTk):
             ("📶 Informações Wi-Fi", "wifi", False),
             ("🌍 Testar DNS", "testdns", False)
         ]
+        ping_labels = ui.create_card_grid(parent, items, "net", self.acc_color, self.bg_color, self.run_card_action)
+        if ping_labels:
+            self.ping_label = ping_labels[0]
+        btn, log = ui.add_console(parent, "net", self.acc_color, self.toggle_console)
+        self.detail_buttons["net"] = btn
+        self.logs["net"] = log
 
-        for idx, (title, cmd, is_dns) in enumerate(items):
-            row, col = divmod(idx, 3)
-            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10,
-                                 border_width=1, border_color=self.acc_color)
-            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
-            card.grid_propagate(False)
-            card.configure(height=150)
-
-            ctk.CTkLabel(card, text=title, font=("Inter",14,"bold"),
-                         text_color=self.acc_color).pack(pady=(10,5))
-
-            if title == "Ping":
-                btn = ctk.CTkButton(card, text="Iniciar", fg_color=self.acc_color,
-                                     command=self.toggle_ping, cursor="hand2")
-                btn.pack(pady=5)
-                self.ping_label = ctk.CTkLabel(card, text="-- ms", font=("Consolas",14), text_color="#10b981")
-                self.ping_label.pack()
-            else:
-                btn_text = "Aplicar" if is_dns else "Executar"
-                btn = ctk.CTkButton(card, text=btn_text, fg_color=self.acc_color,
-                                     command=lambda c=cmd, t="net", d=is_dns: self.run_card_action(c, t, d),
-                                     cursor="hand2")
-                btn.pack(pady=5)
-
-        self._add_console(parent, "net")
-
-    # ---------- Drivers ----------
     def _fill_drivers(self, parent):
         ctk.CTkLabel(parent, text="Drivers", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
@@ -363,118 +338,11 @@ class SpeedScan(ctk.CTk):
             ("🌐 Drivers de Rede", "net_drv", False),
             ("🔄 Atualizações Automáticas", "auto_update", False)
         ]
-        self._create_action_grid(parent, items, "drv")
-        self._add_console(parent, "drv")
+        ui.create_card_grid(parent, items, "drv", self.acc_color, self.bg_color, self.run_card_action)
+        btn, log = ui.add_console(parent, "drv", self.acc_color, self.toggle_console)
+        self.detail_buttons["drv"] = btn
+        self.logs["drv"] = log
 
-    def _create_action_grid(self, parent, items, tag):
-        grid = ctk.CTkFrame(parent, fg_color="transparent")
-        grid.pack(fill="both", expand=True, pady=10)
-        for i in range(3):
-            grid.columnconfigure(i, weight=1)
-
-        for idx, (title, cmd, is_dns) in enumerate(items):
-            row, col = divmod(idx, 3)
-            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10,
-                                 border_width=1, border_color=self.acc_color)
-            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
-            card.grid_propagate(False)
-            card.configure(height=150)
-
-            ctk.CTkLabel(card, text=title, font=("Inter",14,"bold"),
-                         text_color=self.acc_color).pack(pady=(10,5))
-
-            btn_text = "Aplicar" if is_dns else "Executar"
-            btn = ctk.CTkButton(card, text=btn_text, fg_color=self.acc_color,
-                                 command=lambda c=cmd, t=tag, d=is_dns: self.run_card_action(c, t, d),
-                                 cursor="hand2")
-            btn.pack(pady=5)
-
-    def _add_console(self, parent, tag):
-        btn = ctk.CTkButton(
-            parent,
-            text="Detalhes ⌄",
-            fg_color="transparent",
-            text_color=self.acc_color,
-            hover_color=self.acc_color,
-            corner_radius=20,
-            command=lambda: self.toggle_console(tag),
-            cursor="hand2"
-        )
-        # Não empacotar agora (invisível)
-        setattr(self, f"detail_btn_{tag}", btn)
-        log = ctk.CTkTextbox(parent, height=150, fg_color="#000000", text_color="#10b981", font=("Consolas",11))
-        setattr(self, f"log_{tag}", log)
-        self.consoles_visible[tag] = False
-
-    def toggle_console(self, tag):
-        btn = getattr(self, f"detail_btn_{tag}", None)
-        log = getattr(self, f"log_{tag}", None)
-        if btn is None or log is None:
-            return
-        if self.consoles_visible.get(tag, False):
-            log.pack_forget()
-            btn.pack_forget()  # some ao fechar
-            self.consoles_visible[tag] = False
-        else:
-            log.pack(fill="x", pady=5, before=btn)
-            btn.configure(text="Detalhes ⌃")
-            self.consoles_visible[tag] = True
-
-    def run_card_action(self, cmd, tag, is_dns):
-        log = getattr(self, f"log_{tag}")
-        log.delete("1.0", "end")
-        # Esconder o botão detalhes (se estiver visível)
-        btn = getattr(self, f"detail_btn_{tag}")
-        if btn.winfo_ismapped():
-            btn.pack_forget()
-            self.consoles_visible[tag] = False
-        threading.Thread(target=self._execute_command, args=(cmd, log, tag, is_dns), daemon=True).start()
-
-    def _execute_command(self, cmd, log, tag, is_dns):
-        if is_dns:
-            mapper = ActionMapper(self.SO, self.runner, self.turbo_active)
-            real_cmd = mapper.dns_command(cmd)
-        else:
-            if cmd in ["video_drv", "net_drv", "auto_update"]:
-                self._special_command(cmd, log)
-                self.after(0, lambda: self._show_details_button(tag))
-                return
-            mapper = ActionMapper(self.SO, self.runner, self.turbo_active)
-            real_cmd = mapper.get_command(cmd)
-            if real_cmd is None:
-                self.after(0, lambda: log.insert("end", f"Comando {cmd} não suportado neste SO.\n"))
-                self.after(0, lambda: self._show_details_button(tag))
-                return
-        proc = self.runner.run(real_cmd)
-        if proc:
-            for line in proc.stdout:
-                self.after(0, lambda l=line: log.insert("end", l))
-            proc.wait()
-            self.after(0, lambda: log.insert("end", "\n-- COMANDO FINALIZADO --\n"))
-        else:
-            self.after(0, lambda: log.insert("end", "Erro ao executar comando.\n"))
-        self.after(0, lambda: self._show_details_button(tag))
-
-    def _special_command(self, cmd, log):
-        if cmd == "video_drv":
-            log.insert("end", "Detectando GPU...\n")
-            # lógica real de instalação de drivers pode ser adicionada depois
-            log.insert("end", "Funcionalidade em desenvolvimento.\n")
-        elif cmd == "net_drv":
-            log.insert("end", "Detectando placa de rede...\n")
-            log.insert("end", "Funcionalidade em desenvolvimento.\n")
-        elif cmd == "auto_update":
-            log.insert("end", "Configurando atualizações automáticas...\n")
-            log.insert("end", "Funcionalidade em desenvolvimento.\n")
-
-    def _show_details_button(self, tag):
-        btn = getattr(self, f"detail_btn_{tag}", None)
-        if btn and not btn.winfo_ismapped():
-            btn.pack(anchor="e", pady=5)
-        if btn:
-            btn.configure(text="Detalhes ⌄")
-
-    # ---------- Agente IA ----------
     def _fill_agente(self, parent):
         ctk.CTkLabel(parent, text="Agente de IA", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(pady=(0,30))
@@ -503,20 +371,91 @@ class SpeedScan(ctk.CTk):
         self.ai_status = ctk.CTkLabel(parent, text="", font=("Inter",12),
                                        text_color=self.acc_color)
         self.ai_status.pack(pady=20)
-        self._add_console(parent, "agente")
+        btn, log = ui.add_console(parent, "agente", self.acc_color, self.toggle_console)
+        self.detail_buttons["agente"] = btn
+        self.logs["agente"] = log
 
     def connect_ai(self, ia_name):
         self.ai_status.configure(text=f"Conectado a {ia_name} (simulação)")
 
     def configure_local_ai(self):
-        if not hasattr(self, "log_agente"):
-            self._add_console(self.frames["agente"], "agente")
-        log = getattr(self, "log_agente")
+        log = self.logs.get("agente")
+        if not log:
+            return
         log.delete("1.0", "end")
         log.insert("end", "Configurando IA local...\nInstalando Ollama...\n")
         self.run_card_action("curl -fsSL https://ollama.com/install.sh | sh", "agente", False)
 
-    # ---------- Ping ----------
+    def run_card_action(self, cmd, tag, is_dns):
+        """Callback para os cards das abas."""
+        log = self.logs.get(tag)
+        if not log:
+            return
+        log.delete("1.0", "end")
+        # Esconde o botão de detalhes se estiver visível
+        if tag in self.detail_buttons:
+            self.detail_buttons[tag].pack_forget()
+        self.consoles_visible[tag] = False
+        threading.Thread(target=self._execute_command, args=(cmd, log, tag, is_dns), daemon=True).start()
+
+    def _execute_command(self, cmd, log, tag, is_dns):
+        if is_dns:
+            mapper = ActionMapper(self.SO, self.runner, self.turbo_active)
+            real_cmd = mapper.dns_command(cmd)
+        else:
+            if cmd in ["video_drv", "net_drv", "auto_update"]:
+                self._special_command(cmd, log)
+                self._show_details_button(tag)
+                return
+            mapper = ActionMapper(self.SO, self.runner, self.turbo_active)
+            real_cmd = mapper.get_command(cmd)
+            if real_cmd is None:
+                self.after(0, lambda: log.insert("end", f"Comando {cmd} não suportado neste SO.\n"))
+                self.after(0, lambda: self._show_details_button(tag))
+                return
+        proc = self.runner.run(real_cmd)
+        if proc:
+            for line in proc.stdout:
+                self.after(0, lambda l=line: log.insert("end", l))
+            proc.wait()
+            self.after(0, lambda: log.insert("end", "\n-- COMANDO FINALIZADO --\n"))
+        else:
+            self.after(0, lambda: log.insert("end", "Erro ao executar comando.\n"))
+        self.after(0, lambda: self._show_details_button(tag))
+
+    def _special_command(self, cmd, log):
+        if cmd == "video_drv":
+            log.insert("end", "Detectando GPU...\n")
+            # Implementar lógica de instalação de drivers de vídeo
+            log.insert("end", "Funcionalidade em desenvolvimento.\n")
+        elif cmd == "net_drv":
+            log.insert("end", "Detectando placa de rede...\n")
+            log.insert("end", "Funcionalidade em desenvolvimento.\n")
+        elif cmd == "auto_update":
+            log.insert("end", "Configurando atualizações automáticas...\n")
+            log.insert("end", "Funcionalidade em desenvolvimento.\n")
+
+    def _show_details_button(self, tag):
+        btn = self.detail_buttons.get(tag)
+        if btn and not btn.winfo_ismapped():
+            btn.pack(anchor="e", pady=5)
+        if btn:
+            btn.configure(text="Detalhes ⌄")
+
+    def toggle_console(self, tag):
+        btn = self.detail_buttons.get(tag)
+        log = self.logs.get(tag)
+        if not btn or not log:
+            return
+        if self.consoles_visible.get(tag, False):
+            log.pack_forget()
+            btn.pack_forget()
+            self.consoles_visible[tag] = False
+        else:
+            log.pack(fill="x", pady=5, before=btn)
+            btn.configure(text="Detalhes ⌃")
+            self.consoles_visible[tag] = True
+
     def toggle_ping(self):
         if not self.ping_active:
             self.ping_active = True
@@ -537,7 +476,34 @@ class SpeedScan(ctk.CTk):
                 self.after(0, lambda: self.ping_label.configure(text="-- ms"))
             time.sleep(2)
 
-    # ---------- Agendamento ----------
+    def _monitor_loop(self):
+        while True:
+            if self.current_module == "sistema":
+                self.after(0, self._update_sys_info)
+            time.sleep(3)
+
+    def _on_mousewheel(self, event):
+        widget = event.widget
+        if self.SO == "Linux":
+            delta = -1 if event.num == 4 else 1
+        else:
+            delta = -1 * (event.delta / 120)
+        while widget:
+            if isinstance(widget, ctk.CTkScrollableFrame):
+                if self.SO == "Linux":
+                    widget._parent_canvas.yview_scroll(delta, "units")
+                else:
+                    widget._parent_canvas.yview_scroll(int(delta), "units")
+                return
+            widget = widget.master
+
+    def _setup_bindings(self):
+        if self.SO == "Linux":
+            self.bind_all("<Button-4>", self._on_mousewheel)
+            self.bind_all("<Button-5>", self._on_mousewheel)
+        else:
+            self.bind_all("<MouseWheel>", self._on_mousewheel)
+
     def _fill_config(self, parent):
         ctk.CTkLabel(parent, text="Configurações", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,30))
@@ -590,7 +556,7 @@ class SpeedScan(ctk.CTk):
         self.tab_var = ctk.StringVar(value="Na guia" if self.config.get("open_file_in_tab") else "Nova janela")
         ctk.CTkOptionMenu(f_tab, values=["Na guia", "Nova janela"], variable=self.tab_var, width=300).pack(anchor="w")
 
-        # --- SEÇÃO DE AGENDAMENTO ---
+        # === SEÇÃO DE AGENDAMENTO AUTOMÁTICO ===
         separator = ctk.CTkFrame(parent, height=2, fg_color=self.acc_color)
         separator.pack(fill="x", pady=20)
 
@@ -600,67 +566,53 @@ class SpeedScan(ctk.CTk):
         self.schedule_enabled_var = ctk.BooleanVar(value=self.config.get("schedule", {}).get("enabled", False))
         schedule_check = ctk.CTkCheckBox(parent, text="Executar tarefas de otimização automaticamente",
                                           variable=self.schedule_enabled_var, onvalue=True, offvalue=False,
-                                          command=self._toggle_schedule_options)
+                                          command=self.toggle_schedule_options)
         schedule_check.pack(anchor="w", pady=5)
 
         self.schedule_options_frame = ctk.CTkFrame(parent, fg_color="transparent")
 
-        # Frequência
         freq_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
         freq_frame.pack(fill="x", pady=5)
-        ctk.CTkLabel(freq_frame, text="Frequência:", font=("Inter",13),
-                     text_color=self.text_color).pack(side="left", padx=5)
+        ctk.CTkLabel(freq_frame, text="Frequência:", font=("Inter",13), text_color=self.text_color).pack(side="left", padx=5)
         self.schedule_freq_var = ctk.StringVar(value=self.config.get("schedule", {}).get("frequency", "weekly"))
         freq_menu = ctk.CTkOptionMenu(freq_frame, values=["daily", "weekly", "monthly", "custom"],
                                        variable=self.schedule_freq_var,
-                                       command=self._update_schedule_visibility, width=150)
+                                       command=self.update_schedule_visibility, width=150)
         freq_menu.pack(side="left", padx=5)
 
-        # Horário
         time_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
         time_frame.pack(fill="x", pady=5)
-        ctk.CTkLabel(time_frame, text="Horário (HH:MM):", font=("Inter",13),
-                     text_color=self.text_color).pack(side="left", padx=5)
+        ctk.CTkLabel(time_frame, text="Horário (HH:MM):", font=("Inter",13), text_color=self.text_color).pack(side="left", padx=5)
         self.schedule_hour_var = ctk.StringVar(value=self.config.get("schedule", {}).get("hour", "03:00"))
         hour_entry = ctk.CTkEntry(time_frame, textvariable=self.schedule_hour_var, placeholder_text="03:00", width=100)
         hour_entry.pack(side="left", padx=5)
 
-        # Dia da semana (para weekly)
         self.weekday_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
         self.weekday_frame.pack_forget()
-        ctk.CTkLabel(self.weekday_frame, text="Dia da semana:", font=("Inter",13),
-                     text_color=self.text_color).pack(side="left", padx=5)
+        ctk.CTkLabel(self.weekday_frame, text="Dia da semana:", font=("Inter",13), text_color=self.text_color).pack(side="left", padx=5)
         self.schedule_weekday_var = ctk.StringVar(value=self.config.get("schedule", {}).get("day_of_week", "monday"))
         weekday_menu = ctk.CTkOptionMenu(self.weekday_frame,
-                                         values=["monday","tuesday","wednesday","thursday","friday","saturday","sunday"],
-                                         variable=self.schedule_weekday_var, width=150)
+                                          values=["monday","tuesday","wednesday","thursday","friday","saturday","sunday"],
+                                          variable=self.schedule_weekday_var, width=150)
         weekday_menu.pack(side="left", padx=5)
 
-        # Dia do mês (para monthly)
         self.monthday_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
         self.monthday_frame.pack_forget()
-        ctk.CTkLabel(self.monthday_frame, text="Dia do mês:", font=("Inter",13),
-                     text_color=self.text_color).pack(side="left", padx=5)
+        ctk.CTkLabel(self.monthday_frame, text="Dia do mês:", font=("Inter",13), text_color=self.text_color).pack(side="left", padx=5)
         self.schedule_monthday_var = ctk.IntVar(value=self.config.get("schedule", {}).get("day_of_month", 1))
-        monthday_entry = ctk.CTkEntry(self.monthday_frame, textvariable=self.schedule_monthday_var,
-                                       placeholder_text="1", width=50)
+        monthday_entry = ctk.CTkEntry(self.monthday_frame, textvariable=self.schedule_monthday_var, placeholder_text="1", width=50)
         monthday_entry.pack(side="left", padx=5)
 
-        # Intervalo customizado
         self.custom_interval_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
         self.custom_interval_frame.pack_forget()
-        ctk.CTkLabel(self.custom_interval_frame, text="Intervalo (dias):", font=("Inter",13),
-                     text_color=self.text_color).pack(side="left", padx=5)
+        ctk.CTkLabel(self.custom_interval_frame, text="Intervalo (dias):", font=("Inter",13), text_color=self.text_color).pack(side="left", padx=5)
         self.schedule_interval_var = ctk.IntVar(value=self.config.get("schedule", {}).get("interval_days", 7))
-        interval_entry = ctk.CTkEntry(self.custom_interval_frame, textvariable=self.schedule_interval_var,
-                                       placeholder_text="7", width=50)
+        interval_entry = ctk.CTkEntry(self.custom_interval_frame, textvariable=self.schedule_interval_var, placeholder_text="7", width=50)
         interval_entry.pack(side="left", padx=5)
 
-        # Tarefas
         tasks_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
         tasks_frame.pack(fill="x", pady=10)
-        ctk.CTkLabel(tasks_frame, text="Tarefas a executar:", font=("Inter",13,"bold"),
-                     text_color=self.acc_color).pack(anchor="w", pady=5)
+        ctk.CTkLabel(tasks_frame, text="Tarefas a executar:", font=("Inter",13,"bold"), text_color=self.acc_color).pack(anchor="w", pady=5)
 
         self.schedule_tasks = {}
         task_list = [
@@ -677,35 +629,37 @@ class SpeedScan(ctk.CTk):
             cb.pack(anchor="w", padx=20, pady=2)
             self.schedule_tasks[task_key] = var
 
-        # Elevado
         self.schedule_elevated_var = ctk.BooleanVar(value=self.config.get("schedule", {}).get("elevated", False))
-        elevated_check = ctk.CTkCheckBox(self.schedule_options_frame,
-                                          text="Executar com privilégios de administrador (quando necessário)",
+        elevated_check = ctk.CTkCheckBox(self.schedule_options_frame, text="Executar com privilégios de administrador (quando necessário)",
                                           variable=self.schedule_elevated_var, onvalue=True, offvalue=False)
         elevated_check.pack(anchor="w", pady=5)
 
-        # Botão salvar
-        btn_save = ctk.CTkButton(self.schedule_options_frame, text="Salvar configurações de agendamento",
-                                  fg_color=self.acc_color, command=self._save_schedule_config,
-                                  width=300, height=40)
-        btn_save.pack(pady=15)
+        log_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
+        log_frame.pack(fill="x", pady=5)
+        ctk.CTkLabel(log_frame, text=f"Logs salvos em: {LOG_DIR}", font=("Inter",11), text_color=self.text_color).pack(side="left", padx=5)
+        btn_open_logs = ctk.CTkButton(log_frame, text="Abrir pasta", command=self.open_logs_folder, width=100, height=25)
+        btn_open_logs.pack(side="left", padx=5)
 
-        self._toggle_schedule_options()
-        self._update_schedule_visibility(self.schedule_freq_var.get())
+        btn_save_schedule = ctk.CTkButton(self.schedule_options_frame, text="Salvar configurações de agendamento",
+                                          fg_color=self.acc_color, command=self.save_schedule_config, width=300, height=40)
+        btn_save_schedule.pack(pady=15)
+
+        self.toggle_schedule_options()
+        self.update_schedule_visibility(self.schedule_freq_var.get())
 
         self.schedule_options_frame.pack(fill="x", pady=10)
 
         separator2 = ctk.CTkFrame(parent, height=2, fg_color=self.acc_color)
         separator2.pack(fill="x", pady=20)
 
-        ctk.CTkLabel(parent, text="* - As alterações serão aplicadas após reiniciar",
+        ctk.CTkLabel(parent, text="* - As alterações serão aplicadas após reiniciar o aplicativo",
                      font=("Inter",10), text_color="#888888").pack(anchor="w", pady=20)
 
-        btn_apply = ctk.CTkButton(parent, text="Aplicar", fg_color=self.acc_color,
-                                   command=self.apply_config, width=200, height=40, cursor="hand2")
+        btn_apply = ctk.CTkButton(parent, text="Aplicar", fg_color=self.acc_color, command=self.apply_config,
+                                  width=200, height=40, cursor="hand2")
         btn_apply.pack(pady=20)
 
-    def _toggle_schedule_options(self):
+    def toggle_schedule_options(self):
         if self.schedule_enabled_var.get():
             for child in self.schedule_options_frame.winfo_children():
                 self._enable_widget(child)
@@ -733,7 +687,7 @@ class SpeedScan(ctk.CTk):
             except:
                 pass
 
-    def _update_schedule_visibility(self, choice):
+    def update_schedule_visibility(self, choice):
         self.weekday_frame.pack_forget()
         self.monthday_frame.pack_forget()
         self.custom_interval_frame.pack_forget()
@@ -744,7 +698,18 @@ class SpeedScan(ctk.CTk):
         elif choice == "custom":
             self.custom_interval_frame.pack(fill="x", pady=5)
 
-    def _save_schedule_config(self):
+    def open_logs_folder(self):
+        try:
+            if self.SO == "Windows":
+                os.startfile(LOG_DIR)
+            elif self.SO == "Darwin":
+                subprocess.run(["open", LOG_DIR])
+            else:
+                subprocess.run(["xdg-open", LOG_DIR])
+        except Exception as e:
+            print(f"Erro ao abrir pasta de logs: {e}")
+
+    def save_schedule_config(self):
         schedule = {
             "enabled": self.schedule_enabled_var.get(),
             "frequency": self.schedule_freq_var.get(),
@@ -757,16 +722,17 @@ class SpeedScan(ctk.CTk):
         }
         self.config["schedule"] = schedule
         self._save_config()
-        self.scheduler.create_schedule(schedule)
-        self._show_toast("Configurações salvas!")
+        scheduler = Scheduler(self.SO, LOG_DIR, AGENT_SCRIPT)
+        scheduler.create_schedule(schedule)
+        self.show_toast("Configurações salvas!")
 
-    def _show_toast(self, message, duration=3000):
+    def show_toast(self, message, duration=3000):
         toast = ctk.CTkLabel(self, text=message,
-                              fg_color=self.acc_color,
-                              text_color="white",
-                              corner_radius=10,
-                              font=("Inter",12),
-                              padx=20, pady=10)
+                             fg_color=self.acc_color,
+                             text_color="white",
+                             corner_radius=10,
+                             font=("Inter",12),
+                             padx=20, pady=10)
         toast.place(relx=0.5, rely=0.5, anchor="center")
         self.after(duration, toast.destroy)
 
@@ -786,7 +752,6 @@ class SpeedScan(ctk.CTk):
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
-    # ---------- Sobre ----------
     def _fill_sobre(self, parent):
         parent.grid_rowconfigure(0, weight=1)
         parent.grid_columnconfigure(0, weight=1)
@@ -818,35 +783,6 @@ class SpeedScan(ctk.CTk):
         )
         ctk.CTkLabel(card, text=info, font=("Inter",12), justify="left",
                      text_color=self.text_color).pack(pady=20, padx=30)
-
-    # ---------- Monitor e scroll ----------
-    def _monitor_loop(self):
-        while True:
-            if self.current_module == "sistema":
-                self.after(0, self._update_sys_info)
-            time.sleep(3)
-
-    def _setup_bindings(self):
-        if self.SO == "Linux":
-            self.bind_all("<Button-4>", self._on_mousewheel)
-            self.bind_all("<Button-5>", self._on_mousewheel)
-        else:
-            self.bind_all("<MouseWheel>", self._on_mousewheel)
-
-    def _on_mousewheel(self, event):
-        widget = event.widget
-        if self.SO == "Linux":
-            delta = -1 if event.num == 4 else 1
-        else:
-            delta = -1 * (event.delta / 120)
-        while widget:
-            if isinstance(widget, ctk.CTkScrollableFrame):
-                if self.SO == "Linux":
-                    widget._parent_canvas.yview_scroll(delta, "units")
-                else:
-                    widget._parent_canvas.yview_scroll(int(delta), "units")
-                return
-            widget = widget.master
 
 if __name__ == "__main__":
     app = SpeedScan()
