@@ -20,3 +20,29 @@ dist/
 
 # Pasta extraída do AppImage
 squashfs-root/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Builds
+dist/
+build/
+*.spec
+*.deb
+*.rpm
+*.flatpak
+*.AppImage
+
+# Logs e temporários
+logs/
+*.log
+*.bak
+*.atual
+test_*.txt
+run.sh
+
+# IDEs
+.vscode/
+.idea/
