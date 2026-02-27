@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=SpeedScan
-Comment=Ferramenta de diagnóstico e otimização de sistemas
-Exec=speedscan
-Icon=org.speedscan.SpeedScan
-Terminal=false
-Type=Application
-Categories=Utility;System;
