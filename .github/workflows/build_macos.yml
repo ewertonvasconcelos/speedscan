@@ -1,0 +1,23 @@
+name: Build macOS App
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pyinstaller dmgbuild customtkinter psutil Pillow
+      - run: pyinstaller --windowed --name "SpeedScan" --add-data "core:core" --add-data "assets:assets" --icon "assets/icon.icns" core/main.py
+      - run: dmgbuild -s settings.py "SpeedScan" SpeedScan.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speedscan-macos-dmg
+          path: SpeedScan.dmg
+

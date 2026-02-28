@@ -1,0 +1,21 @@
+name: Build Windows Executable
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pyinstaller customtkinter psutil Pillow
+      - run: pyinstaller --onefile --windowed --name speedscan --add-data "core;core" --add-data "assets;assets" core/main.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speedscan-windows-exe
+          path: dist/speedscan.exe
