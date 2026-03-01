@@ -3,8 +3,12 @@ name: Build SpeedScan
 on:
   push:
     tags:
-      - 'v*'          # Executa quando uma tag com 'v' for criada (ex: v1.0.0)
-  workflow_dispatch:   # Permite executar manualmente pelo site do GitHub
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  TELEGRAM_TO: ${{ secrets.TELEGRAM_CHAT_ID }}
+  TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
 
 jobs:
   build-linux:
@@ -18,10 +22,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies (Linux)
+      - name: Install system dependencies
         run: |
           sudo apt update
-          sudo apt install -y python3-pip python3-venv libfuse2 smartmontools lm-sensors
+          sudo apt install -y python3-pip python3-venv libfuse2 smartmontools lm-sensors rpm
 
       - name: Install Python dependencies
         run: |
@@ -32,26 +36,74 @@ jobs:
         run: |
           pyinstaller --onefile --windowed --name SpeedScan core/main.py
 
-      - name: Upload artifact (Linux)
+      - name: Create .deb package
+        run: |
+          mkdir -p package/usr/local/bin
+          cp dist/SpeedScan package/usr/local/bin/
+          mkdir -p package/DEBIAN
+          cat > package/DEBIAN/control <<EOF
+          Package: speedscan
+          Version: ${GITHUB_REF_NAME#v}
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Ewerton Vasconcelos <ewerton@example.com>
+          Description: SpeedScan - Ferramenta all-in-one de diagnóstico e otimização
+          EOF
+          dpkg-deb --build package speedscan-${GITHUB_REF_NAME#v}.deb
+
+      - name: Create .rpm package
+        run: |
+          mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          cat > rpmbuild/SPECS/speedscan.spec <<EOF
+          Name: speedscan
+          Version: ${GITHUB_REF_NAME#v}
+          Release: 1
+          Summary: Ferramenta de diagnóstico e otimização
+          License: GPL
+          URL: https://github.com/ewertonvasconcelos/speedscan
+          BuildArch: x86_64
+          %description
+          SpeedScan - Diagnóstico e otimização com IA.
+          %install
+          mkdir -p %{buildroot}/usr/local/bin
+          cp %{_sourcedir}/SpeedScan %{buildroot}/usr/local/bin/
+          %files
+          /usr/local/bin/SpeedScan
+          EOF
+          cp dist/SpeedScan rpmbuild/SOURCES/
+          rpmbuild -ba rpmbuild/SPECS/speedscan.spec --define "_topdir $(pwd)/rpmbuild"
+          cp rpmbuild/RPMS/x86_64/speedscan-*.rpm .
+
+      - name: Create AppImage
+        run: |
+          wget -c "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+          chmod +x linuxdeploy-x86_64.AppImage
+          mkdir -p AppDir/usr/bin
+          cp dist/SpeedScan AppDir/usr/bin/
+          cp assets/icon.png AppDir/icon.png
+          cat > AppDir/speedscan.desktop <<EOF
+          [Desktop Entry]
+          Name=SpeedScan
+          Comment=Ferramenta de diagnóstico e otimização
+          Exec=SpeedScan
+          Icon=icon
+          Terminal=false
+          Type=Application
+          Categories=Utility;
+          EOF
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          mv SpeedScan*.AppImage dist/
+
+      - name: Upload artifacts (Linux)
         uses: actions/upload-artifact@v4
         with:
           name: SpeedScan-linux
-          path: dist/SpeedScan
-
-      - name: Create AppImage (opcional)
-        run: |
-          # Baixa linuxdeploy e cria AppImage
-          wget -c "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-          chmod +x linuxdeploy-x86_64.AppImage
-          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
-          mv SpeedScan*.AppImage dist/
-        continue-on-error: true
-
-      - name: Upload AppImage
-        uses: actions/upload-artifact@v4
-        with:
-          name: SpeedScan-linux-appimage
-          path: dist/*.AppImage
+          path: |
+            dist/SpeedScan
+            speedscan-*.deb
+            speedscan-*.rpm
+            dist/*.AppImage
 
   build-windows:
     runs-on: windows-latest
@@ -72,6 +124,17 @@ jobs:
       - name: Build with PyInstaller (Windows)
         run: |
           pyinstaller --onefile --windowed --name SpeedScan core/main.py
+
+      - name: Sign executable (optional)
+        if: success() && secrets.WINDOWS_CERTIFICATE != ''
+        run: |
+          # Necessário ter o certificado e a senha nos secrets
+          echo "$env:WINDOWS_CERTIFICATE" | base64 --decode > cert.pfx
+          signtool sign /fd SHA256 /a /f cert.pfx /p "$env:WINDOWS_CERT_PASSWORD" dist/SpeedScan.exe
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
 
       - name: Upload artifact (Windows)
         uses: actions/upload-artifact@v4
@@ -99,6 +162,19 @@ jobs:
         run: |
           pyinstaller --onefile --windowed --name SpeedScan core/main.py
 
+      - name: Code sign (macOS)
+        if: success() && secrets.MACOS_CERTIFICATE != ''
+        run: |
+          echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
+          security create-keychain -p temp build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p temp build.keychain
+          security import certificate.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          codesign --force --timestamp --options runtime --sign "Developer ID Application: Your Name (TEAMID)" dist/SpeedScan
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+
       - name: Upload artifact (macOS)
         uses: actions/upload-artifact@v4
         with:
@@ -118,7 +194,23 @@ jobs:
         with:
           files: |
             SpeedScan-linux/SpeedScan
-            SpeedScan-linux-appimage/*.AppImage
+            SpeedScan-linux/*.deb
+            SpeedScan-linux/*.rpm
+            SpeedScan-linux/*.AppImage
             SpeedScan-windows/SpeedScan.exe
             SpeedScan-macos/SpeedScan
           generate_release_notes: true
+
+      - name: Send Telegram notification on success
+        if: success()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="✅ Build concluído com sucesso!%0A%0ARepositório: ${{ github.repository }}%0ARef: ${{ github.ref }}%0ARelease criada: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+
+      - name: Send Telegram notification on failure
+        if: failure()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="❌ Falha no build!%0A%0ARepositório: ${{ github.repository }}%0ARef: ${{ github.ref }}%0AVeja os logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
