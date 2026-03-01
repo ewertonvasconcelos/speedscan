@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
 # core/main.py
+# =============================================================================
+#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
+#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
+#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
+#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
+#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
+#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
+# =============================================================================
+# SpeedScan - Ferramenta all-in-one de diagnóstico e otimização de sistema
+# Versão: 0.0.9-beta
+# Desenvolvedor: Ewerton Vasconcelos
+# =============================================================================
+
 import customtkinter as ctk
 import os
 import platform
@@ -17,6 +30,10 @@ from core.hardware import HardwareInfo
 from core.actions import CommandRunner, ActionMapper
 from core.scheduler import Scheduler
 from core import ui
+from core.health_score import HealthScore
+from core.temperature_monitor import TemperatureMonitor
+from core.smart_monitor import SmartMonitor
+from core.browser_cleaner import BrowserCleaner
 
 # Constantes
 CONFIG_FILE = Path.home() / ".speedscan_conf"
@@ -93,11 +110,24 @@ class SpeedScan(ctk.CTk):
         self.detail_buttons = {}
         self.logs = {}
 
+        # Monitores
+        self.health_monitor = HealthScore()
+        self.health_score_var = ctk.StringVar(value="Calculando...")
+        self.temp_monitor = TemperatureMonitor()
+        self.smart_monitor = SmartMonitor()
+        self.browser_cleaner = BrowserCleaner()
+
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
         self._build_sidebar()
         self.frames = self._build_frames()
+
+        # Garantir que todos os botões de detalhes comecem ocultos
+        for btn in self.detail_buttons.values():
+            btn.pack_forget()
+        self.consoles_visible = {tag: False for tag in self.detail_buttons.keys()}
+
         self.show_frame("sistema")
 
         self._setup_bindings()
@@ -174,7 +204,7 @@ class SpeedScan(ctk.CTk):
         nav_items = [
             ("🚀", "Otimização", "otimizacao"),
             ("🌐", "Rede", "rede"),
-            ("🛠️", "Drivers", "drivers"),
+            ("🛠", "Drivers", "drivers"),
             ("🤖", "Agente IA", "agente")
         ]
         for icon, text, target in nav_items:
@@ -185,7 +215,7 @@ class SpeedScan(ctk.CTk):
 
         bottom = ctk.CTkFrame(sidebar, fg_color="transparent")
         bottom.pack(side="bottom", fill="x", pady=20)
-        for icon, text, target in [("⚙️", "Configurações", "config"), ("ℹ️", "Sobre", "sobre")]:
+        for icon, text, target in [("⚙", "Configurações", "config"), ("ℹ", "Sobre", "sobre")]:
             btn = self._sidebar_btn(bottom, icon, text, target)
             self.sidebar_buttons[target] = btn
 
@@ -230,39 +260,98 @@ class SpeedScan(ctk.CTk):
         self._fill_sobre(frames["sobre"])
         return frames
 
+    # ---------- Aba Sistema ----------
     def _fill_sistema(self, parent):
+        # Título único
         ctk.CTkLabel(parent, text="Informações do Sistema", font=("Inter",28,"bold"),
-                     text_color=self.acc_color).pack(anchor="w", pady=(0,30))
-        grid = ctk.CTkFrame(parent, fg_color="transparent")
-        grid.pack(fill="both", expand=True)
+                     text_color=self.acc_color).pack(anchor="w", pady=(0,20))
+
+        # Primeira linha: 3 cards lado a lado
+        top_grid = ctk.CTkFrame(parent, fg_color="transparent")
+        top_grid.pack(fill="x", pady=(0,20))
         for i in range(3):
-            grid.columnconfigure(i, weight=1)
+            top_grid.columnconfigure(i, weight=1)
+
+        # Card 1: Saúde do Sistema (conteúdo centralizado)
+        health_card = ctk.CTkFrame(top_grid, fg_color=self.bg_color, corner_radius=10,
+                                    border_width=1, border_color=self.acc_color)
+        health_card.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
+        health_card.grid_propagate(False)
+        health_card.configure(height=150)
+
+        ctk.CTkLabel(health_card, text="❤️ Saúde do Sistema", font=("Inter", 14, "bold"),
+                     text_color=self.acc_color).pack(pady=(10,5))
+        self.health_label = ctk.CTkLabel(health_card, textvariable=self.health_score_var,
+                                         font=("Inter", 24, "bold"), text_color=self.text_color)
+        self.health_label.pack(expand=True)
+
+        # Card 2: Temperaturas (conteúdo centralizado em label multilinha)
+        temp_card = ctk.CTkFrame(top_grid, fg_color=self.bg_color, corner_radius=10,
+                                  border_width=1, border_color=self.acc_color)
+        temp_card.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
+        temp_card.grid_propagate(False)
+        temp_card.configure(height=150)
+
+        ctk.CTkLabel(temp_card, text="🌡 Temperaturas", font=("Inter", 14, "bold"),
+                     text_color=self.acc_color).pack(pady=(10,5))
+
+        self.temp_label = ctk.CTkLabel(temp_card, text="Carregando...",
+                                        font=("Consolas", 11), text_color=self.text_color,
+                                        justify="center")
+        self.temp_label.pack(expand=True, padx=10, pady=5)
+
+        # Card 3: S.M.A.R.T. (conteúdo centralizado)
+        smart_card = ctk.CTkFrame(top_grid, fg_color=self.bg_color, corner_radius=10,
+                                   border_width=1, border_color=self.acc_color)
+        smart_card.grid(row=0, column=2, padx=5, pady=5, sticky="nsew")
+        smart_card.grid_propagate(False)
+        smart_card.configure(height=150)
+
+        header_smart = ctk.CTkFrame(smart_card, fg_color="transparent")
+        header_smart.pack(fill="x", padx=10, pady=(10,5))
+        ctk.CTkLabel(header_smart, text="💾", font=("Inter", 16)).pack(side="left", padx=(0,5))
+        ctk.CTkLabel(header_smart, text="Saúde dos Discos", font=("Inter", 12, "bold"),
+                     text_color=self.acc_color).pack(side="left")
+
+        self.smart_summary_label = ctk.CTkLabel(smart_card, text="Carregando...",
+                                                 font=("Inter", 11), text_color=self.text_color,
+                                                 wraplength=180, justify="center")
+        self.smart_summary_label.pack(expand=True, padx=10)
+
+        # Cards de informações detalhadas (sem título adicional)
+        details_grid = ctk.CTkFrame(parent, fg_color="transparent")
+        details_grid.pack(fill="both", expand=True)
+        for i in range(3):
+            details_grid.columnconfigure(i, weight=1)
 
         fields = [
             ("💻 Hostname", "hostname", lambda: platform.node()),
             ("💿 Distribuição", "distro", self.hw.get_distro),
             ("🐧 Kernel", "kernel", platform.release),
-            ("🖥️ CPU", "cpu", self.hw.get_cpu),
+            ("🖥 CPU", "cpu", self.hw.get_cpu),
             ("📟 RAM", "ram", self.hw.get_ram),
             ("🎮 GPU", "gpu", self.hw.get_gpu),
             ("💽 Discos", "disks", self.hw.get_disks_detailed),
-            ("⏱️ Uptime", "uptime", self.hw.get_uptime),
+            ("⏱ Uptime", "uptime", self.hw.get_uptime),
             ("🔋 Bateria", "battery", self.hw.get_battery)
         ]
         self.sys_labels = {}
         for i, (label, key, func) in enumerate(fields):
             row, col = divmod(i, 3)
-            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10,
+            card = ctk.CTkFrame(details_grid, fg_color=self.bg_color, corner_radius=10,
                                  border_width=1, border_color=self.acc_color)
-            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            card.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
             card.grid_propagate(False)
             card.configure(height=150)
-            ctk.CTkLabel(card, text=label, font=("Inter",14,"bold"),
-                         text_color=self.acc_color).pack(pady=(10,5))
-            lbl = ctk.CTkLabel(card, text="...", font=("Consolas",11),
-                                text_color=self.text_color, wraplength=180, justify="left")
-            lbl.pack(expand=True, fill="both", padx=5, pady=(0,10))
+            ctk.CTkLabel(card, text=label, font=("Inter", 12, "bold"),
+                         text_color=self.acc_color).pack(pady=(5, 2))
+            lbl = ctk.CTkLabel(card, text="...", font=("Consolas", 10),
+                                text_color=self.text_color, wraplength=180, justify="center")
+            lbl.pack(expand=True, fill="both", padx=5, pady=(0, 5))
             self.sys_labels[key] = lbl
+
+        # Atualização inicial do SMART
+        self.update_smart_card()
 
     def _update_sys_info(self):
         try:
@@ -278,6 +367,67 @@ class SpeedScan(ctk.CTk):
         except Exception as e:
             print(f"Erro ao atualizar sistema: {e}")
 
+        # Atualizar Health Score
+        try:
+            health_data = self.health_monitor.calculate_health_score()
+            score = health_data['score']
+            self.health_score_var.set(f"{score}/100")
+        except Exception as e:
+            print(f"Erro no health score: {e}")
+            self.health_score_var.set("Erro")
+
+        # Atualizar temperaturas (centralizadas)
+        try:
+            temps = self.temp_monitor.get_all_temperatures()
+            lines = []
+            for sensor, value in temps.items():
+                if value is not None:
+                    lines.append(f"{sensor}: {value}°C")
+            if lines:
+                self.temp_label.configure(text="\n".join(lines))
+            else:
+                self.temp_label.configure(text="Sensores não disponíveis")
+        except Exception as e:
+            print(f"Erro ao obter temperaturas: {e}")
+            self.temp_label.configure(text="Erro ao ler sensores")
+
+    # ---------- Métodos do S.M.A.R.T. ----------
+    def update_smart_card(self):
+        if hasattr(self, 'smart_monitor'):
+            summary = self.smart_monitor.get_summary_text()
+            self.smart_summary_label.configure(text=summary)
+            color = self.smart_monitor.get_status_color()
+            if color == "red":
+                self.smart_summary_label.configure(text_color="red")
+            elif color == "yellow":
+                self.smart_summary_label.configure(text_color="orange")
+            else:
+                self.smart_summary_label.configure(text_color="green" if color == "green" else self.text_color)
+        self.after(3000, self.update_smart_card)
+
+    # ---------- Métodos do Browser Cleaner ----------
+    def _run_browser_clean(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "Iniciando limpeza de navegadores...\n")
+        results = self.browser_cleaner.clean_all_browsers()
+        total_freed = 0
+        for browser, data in results.items():
+            if data['cache_freed'] or data['cookies_freed'] or data['history_freed']:
+                log.insert("end", f"\n{data['name']}:\n")
+                if data['cache_freed']:
+                    log.insert("end", f"  Cache: {self.browser_cleaner.format_bytes(data['cache_freed'])}\n")
+                    total_freed += data['cache_freed']
+                if data['cookies_freed']:
+                    log.insert("end", f"  Cookies: {self.browser_cleaner.format_bytes(data['cookies_freed'])}\n")
+                    total_freed += data['cookies_freed']
+                if data['history_freed']:
+                    log.insert("end", f"  Histórico: {self.browser_cleaner.format_bytes(data['history_freed'])}\n")
+                    total_freed += data['history_freed']
+                if data['errors']:
+                    log.insert("end", f"  Erros: {', '.join(data['errors'])}\n")
+        log.insert("end", f"\n✅ Total liberado: {self.browser_cleaner.format_bytes(total_freed)}\n")
+
+    # ---------- Aba Otimização ----------
     def _fill_otimizacao(self, parent):
         ctk.CTkLabel(parent, text="Otimização", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
@@ -293,21 +443,23 @@ class SpeedScan(ctk.CTk):
             ("Wine", "wine", False),
             ("MangoHud", "mangohud", False),
             ("Goverlay", "goverlay", False),
-            ("🎮 Emulador Dolphin", "dolphin", False)
+            ("🎮 Emulador Dolphin", "dolphin", False),
+            ("🧹 Limpeza de Navegadores", "browsers", False)
         ]
         ui.create_card_grid(parent, items, "ot", self.acc_color, self.bg_color, self.run_card_action)
         btn, log = ui.add_console(parent, "ot", self.acc_color, self.toggle_console)
         self.detail_buttons["ot"] = btn
         self.logs["ot"] = log
 
+    # ---------- Aba Rede ----------
     def _fill_rede(self, parent):
         ctk.CTkLabel(parent, text="Rede", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
         items = [
             ("📡 Ping", "ping", False),
-            ("☁️ Cloudflare DNS", "1.1.1.1", True),
+            ("☁ Cloudflare DNS", "1.1.1.1", True),
             ("🔵 Google DNS", "8.8.8.8", True),
-            ("🛡️ AdGuard DNS", "94.140.14.14", True),
+            ("🛡 AdGuard DNS", "94.140.14.14", True),
             ("🔄 DNS Automático", "auto", True),
             ("🌐 Testar Velocidade", "speedtest", False),
             ("🔌 Diagnóstico Placa", "ethtool", False),
@@ -324,16 +476,17 @@ class SpeedScan(ctk.CTk):
         self.detail_buttons["net"] = btn
         self.logs["net"] = log
 
+    # ---------- Aba Drivers ----------
     def _fill_drivers(self, parent):
         ctk.CTkLabel(parent, text="Drivers", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
         items = [
-            ("🖥️ PCI (Vídeo/Rede)", "pci", False),
+            ("🖥 PCI (Vídeo/Rede)", "pci", False),
             ("📦 Atualizar Sistema", "update", False),
             ("🔌 USB Conectados", "usb", False),
             ("🧩 Módulos Kernel", "modules", False),
-            ("⚙️ CPU Detalhada", "cpu_info", False),
-            ("⚠️ Firmware Erros", "firmware", False),
+            ("⚙ CPU Detalhada", "cpu_info", False),
+            ("⚠ Firmware Erros", "firmware", False),
             ("🎮 Drivers de Vídeo", "video_drv", False),
             ("🌐 Drivers de Rede", "net_drv", False),
             ("🔄 Atualizações Automáticas", "auto_update", False)
@@ -343,6 +496,7 @@ class SpeedScan(ctk.CTk):
         self.detail_buttons["drv"] = btn
         self.logs["drv"] = log
 
+    # ---------- Aba Agente IA ----------
     def _fill_agente(self, parent):
         ctk.CTkLabel(parent, text="Agente de IA", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(pady=(0,30))
@@ -386,13 +540,12 @@ class SpeedScan(ctk.CTk):
         log.insert("end", "Configurando IA local...\nInstalando Ollama...\n")
         self.run_card_action("curl -fsSL https://ollama.com/install.sh | sh", "agente", False)
 
+    # ---------- Execução de comandos ----------
     def run_card_action(self, cmd, tag, is_dns):
-        """Callback para os cards das abas."""
         log = self.logs.get(tag)
         if not log:
             return
         log.delete("1.0", "end")
-        # Esconde o botão de detalhes se estiver visível
         if tag in self.detail_buttons:
             self.detail_buttons[tag].pack_forget()
         self.consoles_visible[tag] = False
@@ -405,6 +558,10 @@ class SpeedScan(ctk.CTk):
         else:
             if cmd in ["video_drv", "net_drv", "auto_update"]:
                 self._special_command(cmd, log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "browsers":
+                self._run_browser_clean(log)
                 self._show_details_button(tag)
                 return
             mapper = ActionMapper(self.SO, self.runner, self.turbo_active)
@@ -426,7 +583,6 @@ class SpeedScan(ctk.CTk):
     def _special_command(self, cmd, log):
         if cmd == "video_drv":
             log.insert("end", "Detectando GPU...\n")
-            # Implementar lógica de instalação de drivers de vídeo
             log.insert("end", "Funcionalidade em desenvolvimento.\n")
         elif cmd == "net_drv":
             log.insert("end", "Detectando placa de rede...\n")
@@ -438,6 +594,7 @@ class SpeedScan(ctk.CTk):
     def _show_details_button(self, tag):
         btn = self.detail_buttons.get(tag)
         if btn and not btn.winfo_ismapped():
+            btn.configure(fg_color=self.acc_color, text_color="white")
             btn.pack(anchor="e", pady=5)
         if btn:
             btn.configure(text="Detalhes ⌄")
@@ -504,6 +661,7 @@ class SpeedScan(ctk.CTk):
         else:
             self.bind_all("<MouseWheel>", self._on_mousewheel)
 
+    # ---------- Configurações ----------
     def _fill_config(self, parent):
         ctk.CTkLabel(parent, text="Configurações", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,30))
@@ -752,6 +910,7 @@ class SpeedScan(ctk.CTk):
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
+    # ---------- Sobre ----------
     def _fill_sobre(self, parent):
         parent.grid_rowconfigure(0, weight=1)
         parent.grid_columnconfigure(0, weight=1)
@@ -778,7 +937,11 @@ class SpeedScan(ctk.CTk):
             "• Diagnóstico e atualização de drivers\n"
             "• Conexão com modelos de IA\n"
             "• Temas personalizáveis\n"
-            "• Agendamento automático de tarefas\n\n"
+            "• Agendamento automático de tarefas\n"
+            "• Score de Saúde do Sistema (0-100)\n"
+            "• Monitoramento de Temperaturas\n"
+            "• Saúde dos Discos (S.M.A.R.T.)\n"
+            "• Limpeza de Navegadores (Chrome, Firefox, Edge, etc.)\n\n"
             "© 2026 Ewerton Vasconcelos. Todos os direitos reservados."
         )
         ctk.CTkLabel(card, text=info, font=("Inter",12), justify="left",
