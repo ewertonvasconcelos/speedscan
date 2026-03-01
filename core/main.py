@@ -34,6 +34,7 @@ from core.health_score import HealthScore
 from core.temperature_monitor import TemperatureMonitor
 from core.smart_monitor import SmartMonitor
 from core.browser_cleaner import BrowserCleaner
+from core.speed_test import SpeedTester   # <--- NOVO
 
 # Constantes
 CONFIG_FILE = Path.home() / ".speedscan_conf"
@@ -116,6 +117,7 @@ class SpeedScan(ctk.CTk):
         self.temp_monitor = TemperatureMonitor()
         self.smart_monitor = SmartMonitor()
         self.browser_cleaner = BrowserCleaner()
+        self.speed_tester = SpeedTester()   # <--- NOVO
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -427,6 +429,19 @@ class SpeedScan(ctk.CTk):
                     log.insert("end", f"  Erros: {', '.join(data['errors'])}\n")
         log.insert("end", f"\n✅ Total liberado: {self.browser_cleaner.format_bytes(total_freed)}\n")
 
+    # ---------- Método para Teste de Velocidade ----------
+    def _run_speed_test(self, log):
+        """Executa teste de velocidade e mostra resultados no console."""
+        log.delete("1.0", "end")
+        log.insert("end", "Iniciando teste de velocidade...\n")
+        log.insert("end", "Isso pode levar alguns segundos.\n\n")
+        
+        def update_log(result):
+            self.after(0, lambda: log.insert("end", "\n" + self.speed_tester.format_result(result) + "\n"))
+            self.after(0, lambda: log.insert("end", "\n✅ Teste concluído.\n"))
+        
+        self.speed_tester.run_test(callback=update_log)
+
     # ---------- Aba Otimização ----------
     def _fill_otimizacao(self, parent):
         ctk.CTkLabel(parent, text="Otimização", font=("Inter",28,"bold"),
@@ -556,12 +571,17 @@ class SpeedScan(ctk.CTk):
             mapper = ActionMapper(self.SO, self.runner, self.turbo_active)
             real_cmd = mapper.dns_command(cmd)
         else:
-            if cmd in ["video_drv", "net_drv", "auto_update"]:
-                self._special_command(cmd, log)
+            # Comandos especiais
+            if cmd == "speedtest":
+                self._run_speed_test(log)
                 self._show_details_button(tag)
                 return
             elif cmd == "browsers":
                 self._run_browser_clean(log)
+                self._show_details_button(tag)
+                return
+            elif cmd in ["video_drv", "net_drv", "auto_update"]:
+                self._special_command(cmd, log)
                 self._show_details_button(tag)
                 return
             mapper = ActionMapper(self.SO, self.runner, self.turbo_active)
@@ -941,7 +961,8 @@ class SpeedScan(ctk.CTk):
             "• Score de Saúde do Sistema (0-100)\n"
             "• Monitoramento de Temperaturas\n"
             "• Saúde dos Discos (S.M.A.R.T.)\n"
-            "• Limpeza de Navegadores (Chrome, Firefox, Edge, etc.)\n\n"
+            "• Limpeza de Navegadores (Chrome, Firefox, Edge, etc.)\n"
+            "• Teste de Velocidade de Internet\n\n"
             "© 2026 Ewerton Vasconcelos. Todos os direitos reservados."
         )
         ctk.CTkLabel(card, text=info, font=("Inter",12), justify="left",
