@@ -4,7 +4,7 @@ import psutil
 import subprocess
 import time
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 import os
 
@@ -92,7 +92,7 @@ class HardwareInfo:
             return f"Erro ao ler discos: {e}"
 
     def get_uptime(self):
-        return str(datetime.timedelta(seconds=int(time.time() - psutil.boot_time())))
+        return str(timedelta(seconds=int(time.time() - psutil.boot_time())))
 
     def get_battery(self):
         bat = psutil.sensors_battery()
