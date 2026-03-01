@@ -1,12 +1,10 @@
-name: Build SpeedScan Packages
+name: Build SpeedScan
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  release:
-    types: [ published ]
+    tags:
+      - 'v*'          # Executa quando uma tag com 'v' for criada (ex: v1.0.0)
+  workflow_dispatch:   # Permite executar manualmente pelo site do GitHub
 
 jobs:
   build-linux:
@@ -16,58 +14,44 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install system dependencies (Linux)
         run: |
-          pip install pyinstaller customtkinter psutil Pillow
           sudo apt update
-          sudo apt install -y binutils rpm dpkg flatpak flatpak-builder
+          sudo apt install -y python3-pip python3-venv libfuse2 smartmontools lm-sensors
 
-      - name: Build executable with PyInstaller
+      - name: Install Python dependencies
         run: |
-          pyinstaller --onefile --windowed --name speedscan \
-            --add-data "core:core" \
-            --add-data "icon.png:." \
-            --hidden-import customtkinter \
-            --hidden-import PIL \
-            --hidden-import psutil \
-            --hidden-import platform \
-            --hidden-import subprocess \
-            --hidden-import threading \
-            --hidden-import json \
-            --hidden-import time \
-            --hidden-import sys \
-            --hidden-import re \
-            --hidden-import datetime \
-            core/speedscan_app.py
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
 
-      - name: Build .deb package
+      - name: Build with PyInstaller (Linux)
         run: |
-          chmod +x build_deb.sh
-          ./build_deb.sh
+          pyinstaller --onefile --windowed --name SpeedScan core/main.py
 
-      - name: Build .rpm package
-        run: |
-          chmod +x build_rpm.sh
-          ./build_rpm.sh
-
-      - name: Build .flatpak package
-        run: |
-          chmod +x build_flatpak.sh
-          ./build_flatpak.sh
-
-      - name: Upload artifacts
+      - name: Upload artifact (Linux)
         uses: actions/upload-artifact@v4
         with:
-          name: linux-packages
-          path: |
-            *.deb
-            *.rpm
-            *.flatpak
-            dist/speedscan
+          name: SpeedScan-linux
+          path: dist/SpeedScan
+
+      - name: Create AppImage (opcional)
+        run: |
+          # Baixa linuxdeploy e cria AppImage
+          wget -c "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+          chmod +x linuxdeploy-x86_64.AppImage
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          mv SpeedScan*.AppImage dist/
+        continue-on-error: true
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpeedScan-linux-appimage
+          path: dist/*.AppImage
 
   build-windows:
     runs-on: windows-latest
@@ -76,37 +60,24 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
-          pip install pyinstaller customtkinter psutil Pillow
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
 
-      - name: Build executable with PyInstaller
+      - name: Build with PyInstaller (Windows)
         run: |
-          pyinstaller --onefile --windowed --name speedscan.exe `
-            --add-data "core;core" `
-            --add-data "icon.png;." `
-            --hidden-import customtkinter `
-            --hidden-import PIL `
-            --hidden-import psutil `
-            --hidden-import platform `
-            --hidden-import subprocess `
-            --hidden-import threading `
-            --hidden-import json `
-            --hidden-import time `
-            --hidden-import sys `
-            --hidden-import re `
-            --hidden-import datetime `
-            core/speedscan_app.py
+          pyinstaller --onefile --windowed --name SpeedScan core/main.py
 
-      - name: Upload artifact
+      - name: Upload artifact (Windows)
         uses: actions/upload-artifact@v4
         with:
-          name: windows-exe
-          path: dist/speedscan.exe
+          name: SpeedScan-windows
+          path: dist/SpeedScan.exe
 
   build-macos:
     runs-on: macos-latest
@@ -115,39 +86,39 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
-          pip install pyinstaller customtkinter psutil Pillow
+          pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
 
-      - name: Build executable with PyInstaller
+      - name: Build with PyInstaller (macOS)
         run: |
-          pyinstaller --onefile --windowed --name speedscan \
-            --add-data "core:core" \
-            --add-data "icon.png:." \
-            --hidden-import customtkinter \
-            --hidden-import PIL \
-            --hidden-import psutil \
-            --hidden-import platform \
-            --hidden-import subprocess \
-            --hidden-import threading \
-            --hidden-import json \
-            --hidden-import time \
-            --hidden-import sys \
-            --hidden-import re \
-            --hidden-import datetime \
-            core/speedscan_app.py
+          pyinstaller --onefile --windowed --name SpeedScan core/main.py
 
-      - name: Create .dmg (optional)
-        run: |
-          # Você pode adicionar um script para gerar .dmg aqui
-          echo "TODO: create .dmg"
-
-      - name: Upload artifact
+      - name: Upload artifact (macOS)
         uses: actions/upload-artifact@v4
         with:
-          name: macos-app
-          path: dist/speedscan
+          name: SpeedScan-macos
+          path: dist/SpeedScan
+
+  release:
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            SpeedScan-linux/SpeedScan
+            SpeedScan-linux-appimage/*.AppImage
+            SpeedScan-windows/SpeedScan.exe
+            SpeedScan-macos/SpeedScan
+          generate_release_notes: true
