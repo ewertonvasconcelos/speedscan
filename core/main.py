@@ -8,7 +8,7 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# SpeedScan - Versão 0.0.9-beta (Etapa 5: IA Proativa + Cursor arrow)
+# SpeedScan - Versão 0.0.9-beta (Etapa 5: IA Proativa + Cursor padrão)
 # Desenvolvedor: Ewerton Vasconcelos
 # =============================================================================
 
@@ -38,7 +38,7 @@ from core.speed_test import SpeedTester
 from core.process_manager import ProcessManager
 from core.historical_metrics import MetricsCollector, MetricsDB
 from core.lan_scanner import LANScanner
-from core.ai_proactive import AIProactive  # <--- NOVO
+from core.ai_proactive import AIProactive
 
 import matplotlib
 matplotlib.use('TkAgg')
@@ -128,7 +128,7 @@ class SpeedScan(ctk.CTk):
         self.metrics_collector = MetricsCollector(interval=5)
         self.metrics_db = MetricsDB()
         self.lan_scanner = LANScanner()
-        self.ai_proactive = AIProactive(self.metrics_db, self.health_monitor)  # <--- NOVO
+        self.ai_proactive = AIProactive(self.metrics_db, self.health_monitor)
         self.metrics_collector.start()
         self.proc_manager.start_monitoring()
 
@@ -204,11 +204,11 @@ class SpeedScan(ctk.CTk):
         if icon:
             btn = ctk.CTkButton(top, image=icon, text="", width=96, height=96, corner_radius=20,
                                  fg_color="transparent", hover_color=self.acc_color,
-                                 cursor="arrow", command=lambda: self.show_frame("sistema"))
+                                 command=lambda: self.show_frame("sistema"))
         else:
             btn = ctk.CTkButton(top, text="⚡", width=96, height=96, corner_radius=20,
                                  fg_color="transparent", hover_color=self.acc_color,
-                                 font=("Inter",48), cursor="arrow", command=lambda: self.show_frame("sistema"))
+                                 font=("Inter",48), command=lambda: self.show_frame("sistema"))
         btn.pack()
 
         center = ctk.CTkFrame(sidebar, fg_color="transparent")
@@ -242,7 +242,6 @@ class SpeedScan(ctk.CTk):
                              fg_color="transparent", hover_color=self.acc_color,
                              font=("Inter",13), corner_radius=10,
                              text_color=self.text_color,
-                             cursor="arrow",
                              command=lambda: self.show_frame(target))
         btn.pack(fill="x")
         return btn
@@ -559,7 +558,7 @@ class SpeedScan(ctk.CTk):
         self.detail_buttons["drv"] = btn
         self.logs["drv"] = log
 
-    # ---------- Aba Processos (já existente) ----------
+    # ---------- Aba Processos ----------
     def _fill_processos(self, parent):
         ctk.CTkLabel(parent, text="Gerenciador de Processos", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
@@ -575,7 +574,7 @@ class SpeedScan(ctk.CTk):
         ctk.CTkLabel(toolbar, text="Ordenar por:", font=("Inter",12)).pack(side="left", padx=(10,5))
         self.sort_var = ctk.StringVar(value="cpu_percent")
         sort_menu = ctk.CTkOptionMenu(toolbar, values=["cpu_percent", "memory_percent", "name", "pid"],
-                                       variable=self.sort_var, command=self._on_sort_change, width=120, cursor="arrow")
+                                       variable=self.sort_var, command=self._on_sort_change, width=120)
         sort_menu.pack(side="left", padx=(0,10))
 
         self.reverse_var = ctk.BooleanVar(value=True)
@@ -584,7 +583,7 @@ class SpeedScan(ctk.CTk):
         reverse_check.pack(side="left", padx=(0,10))
 
         refresh_btn = ctk.CTkButton(toolbar, text="🔄 Atualizar", command=self._refresh_process_list,
-                                     width=100, fg_color=self.acc_color, cursor="arrow")
+                                     width=100, fg_color=self.acc_color)
         refresh_btn.pack(side="right", padx=5)
 
         from tkinter import ttk
@@ -623,15 +622,15 @@ class SpeedScan(ctk.CTk):
         action_frame.pack(fill="x", pady=10)
 
         kill_btn = ctk.CTkButton(action_frame, text="Finalizar processo", fg_color="#d32f2f",
-                                  command=self._kill_selected_process, width=150, cursor="arrow")
+                                  command=self._kill_selected_process, width=150)
         kill_btn.pack(side="left", padx=5)
 
         suspend_btn = ctk.CTkButton(action_frame, text="Suspender", fg_color="#f57c00",
-                                     command=self._suspend_selected_process, width=100, cursor="arrow")
+                                     command=self._suspend_selected_process, width=100)
         suspend_btn.pack(side="left", padx=5)
 
         resume_btn = ctk.CTkButton(action_frame, text="Continuar", fg_color="#388e3c",
-                                    command=self._resume_selected_process, width=100, cursor="arrow")
+                                    command=self._resume_selected_process, width=100)
         resume_btn.pack(side="left", padx=5)
 
         ctk.CTkLabel(action_frame, text="Nice:", font=("Inter",12)).pack(side="left", padx=(20,5))
@@ -639,7 +638,7 @@ class SpeedScan(ctk.CTk):
         nice_spin = ctk.CTkEntry(action_frame, textvariable=self.nice_var, width=50)
         nice_spin.pack(side="left", padx=(0,5))
         set_nice_btn = ctk.CTkButton(action_frame, text="Definir", command=self._set_nice_selected,
-                                      width=70, fg_color=self.acc_color, cursor="arrow")
+                                      width=70, fg_color=self.acc_color)
         set_nice_btn.pack(side="left", padx=5)
 
         self._refresh_process_list()
@@ -746,17 +745,17 @@ class SpeedScan(ctk.CTk):
         ctk.CTkLabel(control_frame, text="Período:", font=("Inter",12)).pack(side="left", padx=(0,5))
         self.period_var = ctk.StringVar(value="1h")
         period_menu = ctk.CTkOptionMenu(control_frame, values=["1h", "6h", "24h", "7d"],
-                                        variable=self.period_var, command=self._on_period_change, width=100, cursor="arrow")
+                                        variable=self.period_var, command=self._on_period_change, width=100)
         period_menu.pack(side="left", padx=(0,10))
 
         ctk.CTkLabel(control_frame, text="Métrica:", font=("Inter",12)).pack(side="left", padx=(10,5))
         self.metric_var = ctk.StringVar(value="cpu")
         metric_menu = ctk.CTkOptionMenu(control_frame, values=["cpu", "memory", "disk"],
-                                        variable=self.metric_var, command=self._on_metric_change, width=100, cursor="arrow")
+                                        variable=self.metric_var, command=self._on_metric_change, width=100)
         metric_menu.pack(side="left", padx=(0,10))
 
         refresh_btn = ctk.CTkButton(control_frame, text="🔄 Atualizar", command=self._update_graphs,
-                                     width=100, fg_color=self.acc_color, cursor="arrow")
+                                     width=100, fg_color=self.acc_color)
         refresh_btn.pack(side="right", padx=5)
 
         self.graph_frame = ctk.CTkFrame(parent, fg_color=self.bg_color, corner_radius=10)
@@ -827,12 +826,11 @@ class SpeedScan(ctk.CTk):
             self.stats_labels['mínimo'].configure(text=f"{stats['disk_min']:.1f}%")
             self.stats_labels['máximo'].configure(text=f"{stats['disk_max']:.1f}%")
 
-    # ---------- Aba Agente IA (MODIFICADA para incluir IA Proativa) ----------
+    # ---------- Aba Agente IA (sem cursor) ----------
     def _fill_agente(self, parent):
         ctk.CTkLabel(parent, text="Agente de IA", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(pady=(0,20))
 
-        # Área de sugestões da IA Proativa
         frame_sugestoes = ctk.CTkFrame(parent, fg_color=self.bg_color, corner_radius=10,
                                         border_width=1, border_color=self.acc_color)
         frame_sugestoes.pack(fill="x", pady=10, padx=10)
@@ -845,10 +843,9 @@ class SpeedScan(ctk.CTk):
         self.ai_sugestoes_text.pack(fill="both", expand=True, padx=10, pady=10)
 
         btn_atualizar = ctk.CTkButton(frame_sugestoes, text="🔄 Analisar Agora", fg_color=self.acc_color,
-                                       cursor="arrow", command=self._update_ai_suggestions)
+                                       command=self._update_ai_suggestions)
         btn_atualizar.pack(pady=10)
 
-        # Linha separadora
         separator = ctk.CTkFrame(parent, height=2, fg_color=self.acc_color)
         separator.pack(fill="x", pady=20)
 
@@ -870,10 +867,10 @@ class SpeedScan(ctk.CTk):
                          text_color=self.acc_color).pack(pady=(10,5))
             if ia == "Configurar IA Local":
                 btn = ctk.CTkButton(card, text="Configurar", fg_color=self.acc_color,
-                                     cursor="arrow", command=self.configure_local_ai)
+                                     command=self.configure_local_ai)
             else:
                 btn = ctk.CTkButton(card, text="Conectar", fg_color=self.acc_color,
-                                     cursor="arrow", command=lambda i=ia: self.connect_ai(i))
+                                     command=lambda i=ia: self.connect_ai(i))
             btn.pack(pady=5)
         self.ai_status = ctk.CTkLabel(parent, text="", font=("Inter",12),
                                        text_color=self.acc_color)
@@ -882,11 +879,9 @@ class SpeedScan(ctk.CTk):
         self.detail_buttons["agente"] = btn
         self.logs["agente"] = log
 
-        # Já carrega as sugestões ao entrar na aba
         self._update_ai_suggestions()
 
     def _update_ai_suggestions(self):
-        """Atualiza o texto das sugestões da IA Proativa."""
         sugestoes = self.ai_proactive.get_summary()
         self.ai_sugestoes_text.delete("1.0", "end")
         self.ai_sugestoes_text.insert("1.0", sugestoes)
@@ -1031,7 +1026,7 @@ class SpeedScan(ctk.CTk):
         else:
             self.bind_all("<MouseWheel>", self._on_mousewheel)
 
-    # ---------- Configurações (com cursor="arrow" em todos os OptionMenu) ----------
+    # ---------- Configurações (sem cursor) ----------
     def _fill_config(self, parent):
         ctk.CTkLabel(parent, text="Configurações", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,30))
@@ -1043,7 +1038,7 @@ class SpeedScan(ctk.CTk):
         self.entry_user.insert(0, self.config.get("username", "ewerton"))
         self.entry_user.pack(anchor="w", pady=5)
         ctk.CTkButton(f_user, text="Voltar para o padrão", fg_color="transparent",
-                      text_color=self.acc_color, cursor="arrow",
+                      text_color=self.acc_color,
                       command=lambda: self.entry_user.delete(0,"end") or self.entry_user.insert(0,"ewerton"))
         f_user.pack(anchor="w")
 
@@ -1052,14 +1047,14 @@ class SpeedScan(ctk.CTk):
         ctk.CTkLabel(f_lang, text="Idioma de Interface", font=("Inter",14),
                      text_color=self.text_color).pack(anchor="w")
         self.lang_var = ctk.StringVar(value=LANGUAGES.get(self.config.get("language","pt_BR"), "Português Brasileiro"))
-        ctk.CTkOptionMenu(f_lang, values=list(LANGUAGES.values()), variable=self.lang_var, width=300, cursor="arrow").pack(anchor="w")
+        ctk.CTkOptionMenu(f_lang, values=list(LANGUAGES.values()), variable=self.lang_var, width=300).pack(anchor="w")
 
         f_scale = ctk.CTkFrame(parent, fg_color="transparent")
         f_scale.pack(fill="x", pady=10)
         ctk.CTkLabel(f_scale, text="Escala da interface *", font=("Inter",14),
                      text_color=self.text_color).pack(anchor="w")
         self.scale_var = ctk.StringVar(value=SCALES.get(self.config.get("ui_scale","auto"), "Automático"))
-        ctk.CTkOptionMenu(f_scale, values=list(SCALES.values()), variable=self.scale_var, width=300, cursor="arrow").pack(anchor="w")
+        ctk.CTkOptionMenu(f_scale, values=list(SCALES.values()), variable=self.scale_var, width=300).pack(anchor="w")
 
         f_theme = ctk.CTkFrame(parent, fg_color="transparent")
         f_theme.pack(fill="x", pady=10)
@@ -1069,14 +1064,14 @@ class SpeedScan(ctk.CTk):
         theme_keys = ["default", "grey", "dark", "light"]
         current = theme_keys.index(self.config.get("theme","default"))
         self.theme_name_var = ctk.StringVar(value=theme_names[current])
-        ctk.CTkOptionMenu(f_theme, values=theme_names, variable=self.theme_name_var, width=300, cursor="arrow").pack(anchor="w")
+        ctk.CTkOptionMenu(f_theme, values=theme_names, variable=self.theme_name_var, width=300).pack(anchor="w")
 
         f_tab = ctk.CTkFrame(parent, fg_color="transparent")
         f_tab.pack(fill="x", pady=10)
         ctk.CTkLabel(f_tab, text="Abrir arquivo", font=("Inter",14),
                      text_color=self.text_color).pack(anchor="w")
         self.tab_var = ctk.StringVar(value="Na guia" if self.config.get("open_file_in_tab") else "Nova janela")
-        ctk.CTkOptionMenu(f_tab, values=["Na guia", "Nova janela"], variable=self.tab_var, width=300, cursor="arrow").pack(anchor="w")
+        ctk.CTkOptionMenu(f_tab, values=["Na guia", "Nova janela"], variable=self.tab_var, width=300).pack(anchor="w")
 
         separator = ctk.CTkFrame(parent, height=2, fg_color=self.acc_color)
         separator.pack(fill="x", pady=20)
@@ -1098,7 +1093,7 @@ class SpeedScan(ctk.CTk):
         self.schedule_freq_var = ctk.StringVar(value=self.config.get("schedule", {}).get("frequency", "weekly"))
         freq_menu = ctk.CTkOptionMenu(freq_frame, values=["daily", "weekly", "monthly", "custom"],
                                        variable=self.schedule_freq_var,
-                                       command=self.update_schedule_visibility, width=150, cursor="arrow")
+                                       command=self.update_schedule_visibility, width=150)
         freq_menu.pack(side="left", padx=5)
 
         time_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
@@ -1114,7 +1109,7 @@ class SpeedScan(ctk.CTk):
         self.schedule_weekday_var = ctk.StringVar(value=self.config.get("schedule", {}).get("day_of_week", "monday"))
         weekday_menu = ctk.CTkOptionMenu(self.weekday_frame,
                                           values=["monday","tuesday","wednesday","thursday","friday","saturday","sunday"],
-                                          variable=self.schedule_weekday_var, width=150, cursor="arrow")
+                                          variable=self.schedule_weekday_var, width=150)
         weekday_menu.pack(side="left", padx=5)
 
         self.monthday_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
@@ -1158,11 +1153,11 @@ class SpeedScan(ctk.CTk):
         log_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
         log_frame.pack(fill="x", pady=5)
         ctk.CTkLabel(log_frame, text=f"Logs salvos em: {LOG_DIR}", font=("Inter",11), text_color=self.text_color).pack(side="left", padx=5)
-        btn_open_logs = ctk.CTkButton(log_frame, text="Abrir pasta", command=self.open_logs_folder, width=100, height=25, cursor="arrow")
+        btn_open_logs = ctk.CTkButton(log_frame, text="Abrir pasta", command=self.open_logs_folder, width=100, height=25)
         btn_open_logs.pack(side="left", padx=5)
 
         btn_save_schedule = ctk.CTkButton(self.schedule_options_frame, text="Salvar configurações de agendamento",
-                                          fg_color=self.acc_color, command=self.save_schedule_config, width=300, height=40, cursor="arrow")
+                                          fg_color=self.acc_color, command=self.save_schedule_config, width=300, height=40)
         btn_save_schedule.pack(pady=15)
 
         self.toggle_schedule_options()
@@ -1176,7 +1171,7 @@ class SpeedScan(ctk.CTk):
                      font=("Inter",10), text_color="#888888").pack(anchor="w", pady=20)
 
         btn_apply = ctk.CTkButton(parent, text="Aplicar", fg_color=self.acc_color, command=self.apply_config,
-                                  width=200, height=40, cursor="arrow")
+                                  width=200, height=40)
         btn_apply.pack(pady=20)
 
     def toggle_schedule_options(self):

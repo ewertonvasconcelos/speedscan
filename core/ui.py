@@ -8,7 +8,7 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# Funções auxiliares para interface do SpeedScan (com cursor="arrow")
+# Funções auxiliares para interface do SpeedScan (cursor padrão do sistema)
 # =============================================================================
 
 import customtkinter as ctk
@@ -17,7 +17,7 @@ def create_card_grid(parent, items, tag_prefix, acc_color, bg_color, text_color,
     """
     Cria uma grade de cards baseada na lista de itens.
     Retorna uma lista de labels de ping (se houver).
-    Todos os botões com cursor="arrow".
+    Sem definição de cursor (usa o padrão do sistema).
     """
     grid_frame = ctk.CTkFrame(parent, fg_color="transparent")
     grid_frame.pack(fill="x", pady=5)
@@ -42,15 +42,13 @@ def create_card_grid(parent, items, tag_prefix, acc_color, bg_color, text_color,
                                        text_color=text_color)
             ping_label.pack(expand=True)
             ping_labels.append(ping_label)
-            # Botão para iniciar/parar ping (cursor arrow)
+            # Botão para iniciar/parar ping (cursor padrão)
             btn = ctk.CTkButton(card, text="Iniciar", fg_color=acc_color,
-                                 cursor="arrow",
                                  command=lambda c=cmd, t=tag_prefix, d=is_dns: command_callback(c, t, d))
             btn.pack(pady=5)
         else:
-            # Botão de ação padrão (cursor arrow)
+            # Botão de ação padrão (cursor padrão)
             btn = ctk.CTkButton(card, text="Executar", fg_color=acc_color,
-                                 cursor="arrow",
                                  command=lambda c=cmd, t=tag_prefix, d=is_dns: command_callback(c, t, d))
             btn.pack(expand=True)
 
@@ -67,8 +65,7 @@ def add_console(parent, tag_prefix, acc_color, toggle_callback):
     """
     console = ctk.CTkTextbox(parent, height=150, fg_color="#1e1e1e", text_color="#ffffff",
                               font=("Consolas", 10), corner_radius=10)
-    # Botão para mostrar/esconder console (cursor arrow)
+    # Botão para mostrar/esconder console (cursor padrão)
     btn = ctk.CTkButton(parent, text="Detalhes ⌄", fg_color=acc_color,
-                         cursor="arrow",
                          command=lambda: toggle_callback(tag_prefix))
     return btn, console
