@@ -8,7 +8,7 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# SpeedScan - Versão 0.0.9-beta (Etapa 5: IA Proativa + Cursor padrão)
+# SpeedScan - Versão 0.6.1-beta (Ajustes na barra lateral)
 # Desenvolvedor: Ewerton Vasconcelos
 # =============================================================================
 
@@ -39,6 +39,7 @@ from core.process_manager import ProcessManager
 from core.historical_metrics import MetricsCollector, MetricsDB
 from core.lan_scanner import LANScanner
 from core.ai_proactive import AIProactive
+from core.security_scanner import SecurityScanner
 
 import matplotlib
 matplotlib.use('TkAgg')
@@ -51,7 +52,7 @@ LOG_DIR = Path.home() / "speedscan" / "logs"
 AGENT_SCRIPT = Path.home() / "speedscan" / "speedscan-agent.py"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-VERSION = "0.0.9-beta"
+VERSION = "0.6.1-beta"
 
 DEFAULT_CONFIG = {
     "theme": "default",
@@ -129,6 +130,7 @@ class SpeedScan(ctk.CTk):
         self.metrics_db = MetricsDB()
         self.lan_scanner = LANScanner()
         self.ai_proactive = AIProactive(self.metrics_db, self.health_monitor)
+        self.security_scanner = SecurityScanner(self.SO)
         self.metrics_collector.start()
         self.proc_manager.start_monitoring()
 
@@ -198,8 +200,9 @@ class SpeedScan(ctk.CTk):
         sidebar.grid(row=0, column=0, sticky="nsew")
         sidebar.grid_propagate(False)
 
+        # Topo com a logo
         top = ctk.CTkFrame(sidebar, fg_color="transparent")
-        top.pack(pady=(30,10))
+        top.pack(pady=(30, 5))  # Reduzido pady inferior de 10 para 5
         icon = self.round_image(str(ICON_PATH)) if ICON_PATH.exists() else None
         if icon:
             btn = ctk.CTkButton(top, image=icon, text="", width=96, height=96, corner_radius=20,
@@ -211,9 +214,9 @@ class SpeedScan(ctk.CTk):
                                  font=("Inter",48), command=lambda: self.show_frame("sistema"))
         btn.pack()
 
+        # Frame central com as abas principais
         center = ctk.CTkFrame(sidebar, fg_color="transparent")
-        center.pack(expand=True, fill="x", pady=20)
-        ctk.CTkLabel(center, text="").pack(expand=True)
+        center.pack(expand=False, fill="x", pady=(5, 0))  # pady superior reduzido de 20 para 5
 
         nav_items = [
             ("🚀", "Otimização", "otimizacao"),
@@ -221,23 +224,27 @@ class SpeedScan(ctk.CTk):
             ("🛠", "Drivers", "drivers"),
             ("📊", "Processos", "processos"),
             ("📈", "Histórico", "historico"),
+            ("🔒", "Segurança", "seguranca"),
             ("🤖", "Agente IA", "agente")
         ]
         for icon, text, target in nav_items:
             btn = self._sidebar_btn(center, icon, text, target)
             self.sidebar_buttons[target] = btn
 
-        ctk.CTkLabel(center, text="").pack(expand=True)
+        # Espaçador ajustado para controlar distância até o bottom
+        spacer = ctk.CTkLabel(center, text="", height=20)  # Altura fixa de 20px
+        spacer.pack(expand=False)
 
+        # Bottom com Configurações e Sobre
         bottom = ctk.CTkFrame(sidebar, fg_color="transparent")
-        bottom.pack(side="bottom", fill="x", pady=20)
+        bottom.pack(side="bottom", fill="x", pady=(5, 20))  # pady superior reduzido de 20 para 5
         for icon, text, target in [("⚙", "Configurações", "config"), ("ℹ", "Sobre", "sobre")]:
             btn = self._sidebar_btn(bottom, icon, text, target)
             self.sidebar_buttons[target] = btn
 
     def _sidebar_btn(self, parent, icon, text, target):
         frame = ctk.CTkFrame(parent, fg_color="transparent")
-        frame.pack(pady=5, fill="x", padx=10)
+        frame.pack(pady=5, fill="x", padx=10)  # pady entre botões mantido em 5
         btn = ctk.CTkButton(frame, text=f"{icon}  {text}", anchor="w", height=40,
                              fg_color="transparent", hover_color=self.acc_color,
                              font=("Inter",13), corner_radius=10,
@@ -269,23 +276,24 @@ class SpeedScan(ctk.CTk):
         container.grid_rowconfigure(0, weight=1)
 
         frames = {}
-        for name in ["sistema", "otimizacao", "rede", "drivers", "processos", "historico", "agente", "config", "sobre"]:
-            if name in ["sistema", "otimizacao", "rede", "drivers", "processos", "historico", "agente", "config"]:
-                frames[name] = ctk.CTkScrollableFrame(container, fg_color="transparent")
-            else:
-                frames[name] = ctk.CTkFrame(container, fg_color="transparent")
+        # Lista de nomes: todos os que precisam de scroll
+        scrollable_names = ["sistema", "otimizacao", "rede", "drivers", "processos", "historico", "seguranca", "agente", "config", "sobre"]
+        for name in scrollable_names:
+            frames[name] = ctk.CTkScrollableFrame(container, fg_color="transparent")
+        # Se houver algum que não precise, trataria separadamente, mas todos agora são roláveis.
         self._fill_sistema(frames["sistema"])
         self._fill_otimizacao(frames["otimizacao"])
         self._fill_rede(frames["rede"])
         self._fill_drivers(frames["drivers"])
         self._fill_processos(frames["processos"])
         self._fill_historico(frames["historico"])
+        self._fill_seguranca(frames["seguranca"])
         self._fill_agente(frames["agente"])
         self._fill_config(frames["config"])
         self._fill_sobre(frames["sobre"])
         return frames
 
-    # ---------- Aba Sistema (igual) ----------
+    # ---------- Aba Sistema ----------
     def _fill_sistema(self, parent):
         ctk.CTkLabel(parent, text="Informações do Sistema", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
@@ -491,6 +499,32 @@ class SpeedScan(ctk.CTk):
         log.insert("end", f"\nTotal de dispositivos ativos: {len(devices)}\n")
         log.insert("end", "✅ Scan concluído.\n")
 
+    # ---------- Métodos de Segurança ----------
+    def _run_port_scan(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "Escaneando portas abertas...\n")
+        ports = self.security_scanner.scan_open_ports()
+        if not ports:
+            log.insert("end", "Nenhuma porta aberta encontrada.\n")
+        else:
+            log.insert("end", "\n".join(ports))
+        log.insert("end", "\n✅ Scan concluído.\n")
+
+    def _run_firewall_check(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "Verificando status do firewall...\n")
+        status = self.security_scanner.check_firewall_status()
+        log.insert("end", status)
+        log.insert("end", "\n✅ Verificação concluída.\n")
+
+    def _run_security_updates(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "Verificando atualizações de segurança...\n")
+        updates = self.security_scanner.check_security_updates()
+        log.insert("end", "\n".join(updates))
+        log.insert("end", "\n✅ Verificação concluída.\n")
+
+    # ---------- Aba Otimização ----------
     def _fill_otimizacao(self, parent):
         ctk.CTkLabel(parent, text="Otimização", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
@@ -514,6 +548,7 @@ class SpeedScan(ctk.CTk):
         self.detail_buttons["ot"] = btn
         self.logs["ot"] = log
 
+    # ---------- Aba Rede ----------
     def _fill_rede(self, parent):
         ctk.CTkLabel(parent, text="Rede", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
@@ -539,6 +574,7 @@ class SpeedScan(ctk.CTk):
         self.detail_buttons["net"] = btn
         self.logs["net"] = log
 
+    # ---------- Aba Drivers ----------
     def _fill_drivers(self, parent):
         ctk.CTkLabel(parent, text="Drivers", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
@@ -826,7 +862,22 @@ class SpeedScan(ctk.CTk):
             self.stats_labels['mínimo'].configure(text=f"{stats['disk_min']:.1f}%")
             self.stats_labels['máximo'].configure(text=f"{stats['disk_max']:.1f}%")
 
-    # ---------- Aba Agente IA (sem cursor) ----------
+    # ---------- Aba Segurança ----------
+    def _fill_seguranca(self, parent):
+        ctk.CTkLabel(parent, text="Segurança do Sistema", font=("Inter",28,"bold"),
+                     text_color=self.acc_color).pack(anchor="w", pady=(0,20))
+
+        items = [
+            ("🔍 Portas Abertas", "ports", False),
+            ("🛡️ Firewall", "firewall", False),
+            ("🔎 Atualizações de Segurança", "sec_updates", False)
+        ]
+        ui.create_card_grid(parent, items, "sec", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
+        btn, log = ui.add_console(parent, "sec", self.acc_color, self.toggle_console)
+        self.detail_buttons["sec"] = btn
+        self.logs["sec"] = log
+
+    # ---------- Aba Agente IA ----------
     def _fill_agente(self, parent):
         ctk.CTkLabel(parent, text="Agente de IA", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(pady=(0,20))
@@ -923,6 +974,18 @@ class SpeedScan(ctk.CTk):
                 return
             elif cmd == "lanscan":
                 self._run_lan_scan(log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "ports":
+                self._run_port_scan(log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "firewall":
+                self._run_firewall_check(log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "sec_updates":
+                self._run_security_updates(log)
                 self._show_details_button(tag)
                 return
             elif cmd in ["video_drv", "net_drv", "auto_update"]:
@@ -1026,7 +1089,7 @@ class SpeedScan(ctk.CTk):
         else:
             self.bind_all("<MouseWheel>", self._on_mousewheel)
 
-    # ---------- Configurações (sem cursor) ----------
+    # ---------- Configurações ----------
     def _fill_config(self, parent):
         ctk.CTkLabel(parent, text="Configurações", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,30))
@@ -1271,14 +1334,15 @@ class SpeedScan(ctk.CTk):
         subprocess.Popen([str(restart_script), str(os.getpid())], start_new_session=True)
         self.quit()
 
-    # ---------- Aba Sobre ----------
+    # ---------- Aba Sobre (agora rolável) ----------
     def _fill_sobre(self, parent):
-        parent.grid_rowconfigure(0, weight=1)
-        parent.grid_columnconfigure(0, weight=1)
+        # parent já é um CTkScrollableFrame, então pode conter muito conteúdo
+        ctk.CTkLabel(parent, text="Sobre o SpeedScan", font=("Inter",28,"bold"),
+                     text_color=self.acc_color).pack(anchor="w", pady=(0,20))
+
         card = ctk.CTkFrame(parent, fg_color=self.light_bg, corner_radius=15,
                              border_width=2, border_color=self.acc_color)
-        card.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
-        card.grid_propagate(True)
+        card.pack(fill="both", expand=True, padx=20, pady=10)
 
         ctk.CTkLabel(card, text="⚡ SpeedScan", font=("Inter",36,"bold"),
                      text_color=self.acc_color).pack(pady=(40,10))
@@ -1308,7 +1372,8 @@ class SpeedScan(ctk.CTk):
             "• Gerenciador de Processos\n"
             "• Gráficos Históricos de Desempenho\n"
             "• Scanner de Rede Local\n"
-            "• IA Proativa com sugestões inteligentes\n\n"
+            "• IA Proativa com sugestões inteligentes\n"
+            "• Segurança do Sistema (portas, firewall, atualizações)\n\n"
             "© 2026 Ewerton Vasconcelos. Todos os direitos reservados."
         )
         label_info = ctk.CTkLabel(card, text=info, font=("Inter",12), justify="left",
