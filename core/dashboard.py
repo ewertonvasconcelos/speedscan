@@ -8,186 +8,216 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# Módulo de Dashboard Personalizável (com drag-and-drop) - CORRIGIDO
+# Dashboard com 3 slots fixos e todos os widgets do sistema (rotativo)
+# Versão 0.0.9-beta
 # =============================================================================
 
 import customtkinter as ctk
 import json
 from pathlib import Path
-import tkinter as tk
 
-# Constante para o arquivo de configuração dos widgets
 DASHBOARD_CONFIG = Path.home() / ".speedscan_dashboard.json"
 
-class DraggableWidget(ctk.CTkFrame):
-    """Widget que pode ser arrastado dentro do dashboard."""
-    def __init__(self, parent, widget_id, title, content_callback, delete_callback, **kwargs):
-        # Os kwargs já contêm fg_color e border_color passados pelo Dashboard
+# Lista completa de widgets disponíveis
+WIDGET_TYPES = [
+    {"id": "hostname", "name": "Hostname", "callback": "widget_hostname"},
+    {"id": "distro", "name": "Distribuição", "callback": "widget_distro"},
+    {"id": "kernel", "name": "Kernel", "callback": "widget_kernel"},
+    {"id": "uptime", "name": "Uptime", "callback": "widget_uptime"},
+    {"id": "cpu", "name": "CPU", "callback": "widget_cpu"},
+    {"id": "ram", "name": "Memória RAM", "callback": "widget_ram"},
+    {"id": "gpu", "name": "GPU", "callback": "widget_gpu"},
+    {"id": "disks", "name": "Discos", "callback": "widget_disks"},
+    {"id": "battery", "name": "Bateria", "callback": "widget_battery"},
+    {"id": "temps", "name": "Temperaturas", "callback": "widget_temps"},
+    {"id": "health", "name": "Saúde", "callback": "widget_health"},
+]
+
+class SlotWidget(ctk.CTkFrame):
+    """Representa um slot fixo que exibe um widget."""
+    def __init__(self, parent, slot_index, widget_type, app_instance, **kwargs):
         super().__init__(parent, **kwargs)
-        self.widget_id = widget_id
-        self.title = title
-        self.content_callback = content_callback
-        self.delete_callback = delete_callback
-        self.drag_start_x = 0
-        self.drag_start_y = 0
-        self._place_info = None  # Armazenará a posição durante o arrasto
+        self.slot_index = slot_index
+        self.widget_type = widget_type
+        self.app = app_instance
+        self.content_frame = None
 
-        # Configuração visual adicional
-        self.configure(corner_radius=10, border_width=1)
+        self.configure(fg_color=app_instance.bg_color, corner_radius=10,
+                       border_width=1, border_color=app_instance.acc_color)
         self.pack_propagate(False)
-        self.configure(height=200, width=300)
+        self.configure(height=200)
 
-        # Barra de título (arrastável)
-        title_bar = ctk.CTkFrame(self, fg_color=self.cget('border_color'), height=30, corner_radius=5)
-        title_bar.pack(fill="x", padx=2, pady=2)
-        title_bar.bind("<Button-1>", self.start_drag)
-        title_bar.bind("<B1-Motion>", self.on_drag)
+        # Título do slot (mostra o nome do widget)
+        self.title_label = ctk.CTkLabel(self, text=widget_type["name"], font=("Inter", 14, "bold"),
+                                         text_color=app_instance.acc_color)
+        self.title_label.pack(pady=(5, 0))
 
-        lbl_title = ctk.CTkLabel(title_bar, text=title, font=("Inter", 12, "bold"),
-                                  text_color="white")
-        lbl_title.pack(side="left", padx=5)
-        lbl_title.bind("<Button-1>", self.start_drag)
-        lbl_title.bind("<B1-Motion>", self.on_drag)
-
-        # Botão de fechar
-        btn_close = ctk.CTkButton(title_bar, text="✕", width=20, height=20,
-                                   fg_color="red", hover_color="darkred",
-                                   command=self.delete_widget)
-        btn_close.pack(side="right", padx=5)
-
-        # Área de conteúdo (chama o callback para preencher)
-        self.content_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.content_frame.pack(fill="both", expand=True, padx=5, pady=5)
         self.update_content()
 
-    def start_drag(self, event):
-        self.drag_start_x = event.x_root
-        self.drag_start_y = event.y_root
-        self._place_info = self.place_info()  # Salva a posição atual
-
-    def on_drag(self, event):
-        if self._place_info:
-            dx = event.x_root - self.drag_start_x
-            dy = event.y_root - self.drag_start_y
-            new_x = self._place_info['x'] + dx
-            new_y = self._place_info['y'] + dy
-            self.place(x=new_x, y=new_y)
-
     def update_content(self):
-        # Limpa o frame de conteúdo e chama o callback para preencher
-        for child in self.content_frame.winfo_children():
-            child.destroy()
-        self.content_callback(self.content_frame, self.widget_id)
+        """Recria o conteúdo do widget."""
+        if self.content_frame:
+            self.content_frame.destroy()
+        self.content_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.content_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
-    def delete_widget(self):
-        self.delete_callback(self.widget_id)
-        self.destroy()
+        # Obtém o callback do app
+        callback_name = self.widget_type["callback"]
+        callback = getattr(self.app, callback_name)
+        callback(self.content_frame, f"slot_{self.slot_index}")
+
+    def set_widget_type(self, new_type):
+        """Troca o tipo de widget exibido neste slot."""
+        self.widget_type = new_type
+        self.title_label.configure(text=new_type["name"])
+        self.update_content()
 
 class Dashboard(ctk.CTkFrame):
-    """
-    Frame principal do dashboard. Gerencia os widgets e sua persistência.
-    """
     def __init__(self, parent, app_instance, **kwargs):
         super().__init__(parent, **kwargs)
         self.app = app_instance
-        self.widgets = {}  # id -> widget
-        self.next_id = 0
+        self.slots = []  # lista de objetos SlotWidget
+        self.available_widgets = []  # widgets não utilizados nos slots
+
         self.configure(fg_color="transparent")
-        self.load_widgets()
 
-    def add_widget(self, widget_type, title, content_callback):
-        """Adiciona um novo widget ao dashboard."""
-        widget_id = str(self.next_id)
-        self.next_id += 1
-        widget = DraggableWidget(self, widget_id, title, content_callback,
-                                  self.remove_widget, fg_color=self.app.bg_color,
-                                  border_color=self.app.acc_color)
-        # Posição inicial: canto superior esquerdo, com pequeno deslocamento
-        x = (len(self.widgets) % 3) * 320
-        y = (len(self.widgets) // 3) * 220
-        widget.place(x=x, y=y)
-        self.widgets[widget_id] = widget
-        self.save_widgets()
+        self._build_ui()
+        self.load_state()
 
-    def remove_widget(self, widget_id):
-        if widget_id in self.widgets:
-            del self.widgets[widget_id]
-            self.save_widgets()
+    def _build_ui(self):
+        """Cria os 3 slots e a barra de widgets disponíveis."""
+        # Frame para os slots (dispostos horizontalmente)
+        slots_frame = ctk.CTkFrame(self, fg_color="transparent")
+        slots_frame.pack(fill="x", pady=10)
 
-    def save_widgets(self):
-        """Salva a posição e tipo de cada widget no arquivo de configuração."""
-        data = []
-        for wid, widget in self.widgets.items():
-            info = widget.place_info()
-            if info:  # Garante que place_info não seja None
-                data.append({
-                    'id': wid,
-                    'title': widget.title,
-                    'x': info['x'],
-                    'y': info['y'],
-                })
-        with open(DASHBOARD_CONFIG, 'w') as f:
+        # Cria os três slots vazios (apenas os frames)
+        for i in range(3):
+            slot_frame = ctk.CTkFrame(slots_frame, fg_color="transparent")
+            slot_frame.pack(side="left", fill="both", expand=True, padx=5)
+            self.slots.append(slot_frame)  # placeholder, será preenchido depois
+
+        # Barra de widgets disponíveis
+        available_label = ctk.CTkLabel(self, text="Widgets disponíveis:", font=("Inter", 14, "bold"),
+                                        text_color=self.app.acc_color)
+        available_label.pack(anchor="w", pady=(20, 5))
+
+        self.available_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.available_frame.pack(fill="x", pady=5)
+
+    def load_state(self):
+        """Carrega a configuração salva ou define o estado padrão."""
+        if DASHBOARD_CONFIG.exists():
+            try:
+                with open(DASHBOARD_CONFIG) as f:
+                    data = json.load(f)
+                    slot_ids = data.get("slots", [])
+                    available_ids = data.get("available", [])
+            except:
+                slot_ids = []
+                available_ids = []
+        else:
+            slot_ids = []
+            available_ids = []
+
+        # Se não houver configuração, define padrão: hostname, distro, uptime
+        if not slot_ids:
+            slot_ids = ["hostname", "distro", "uptime"]
+            available_ids = [w["id"] for w in WIDGET_TYPES if w["id"] not in slot_ids]
+
+        # Função para encontrar widget por id
+        def find_widget(wid):
+            for w in WIDGET_TYPES:
+                if w["id"] == wid:
+                    return w
+            return WIDGET_TYPES[0]  # fallback
+
+        # Constrói lista de widgets dos slots
+        slot_widgets = [find_widget(wid) for wid in slot_ids]
+
+        # Constrói lista de widgets disponíveis (garantindo que não estejam nos slots)
+        available_widgets = []
+        for wid in available_ids:
+            w = find_widget(wid)
+            if w not in slot_widgets:
+                available_widgets.append(w)
+        # Se algum widget da lista disponível já estiver nos slots, ignora
+        # Adiciona quaisquer widgets que não estejam nem nos slots nem em available_ids
+        for w in WIDGET_TYPES:
+            if w not in slot_widgets and w not in available_widgets:
+                available_widgets.append(w)
+
+        self.available_widgets = available_widgets
+
+        # Preenche os slots
+        for i, slot_frame in enumerate(self.slots):
+            if i < len(slot_widgets):
+                widget_type = slot_widgets[i]
+            else:
+                widget_type = WIDGET_TYPES[0]  # fallback
+            slot_widget = SlotWidget(slot_frame, i, widget_type, self.app,
+                                      fg_color=self.app.bg_color)
+            slot_widget.pack(fill="both", expand=True)
+            self.slots[i] = slot_widget  # substitui o frame pelo widget
+
+        self._update_available_buttons()
+        self.save_state()
+
+    def save_state(self):
+        """Salva a configuração atual dos slots e disponíveis."""
+        data = {
+            "slots": [slot.widget_type["id"] for slot in self.slots],
+            "available": [w["id"] for w in self.available_widgets]
+        }
+        with open(DASHBOARD_CONFIG, "w") as f:
             json.dump(data, f, indent=2)
 
-    def load_widgets(self):
-        """Carrega os widgets salvos anteriormente."""
-        if not DASHBOARD_CONFIG.exists():
-            # Cria alguns widgets padrão na primeira execução
-            self.add_default_widgets()
-            return
-        try:
-            with open(DASHBOARD_CONFIG) as f:
-                data = json.load(f)
-            for item in data:
-                widget_id = item['id']
-                title = item['title']
-                # Reconstrói o widget com o callback apropriado baseado no título
-                content_callback = self.get_callback_for_title(title)
-                widget = DraggableWidget(self, widget_id, title, content_callback,
-                                          self.remove_widget, fg_color=self.app.bg_color,
-                                          border_color=self.app.acc_color)
-                widget.place(x=item['x'], y=item['y'])
-                self.widgets[widget_id] = widget
-                # Atualiza o next_id
-                if int(widget_id) >= self.next_id:
-                    self.next_id = int(widget_id) + 1
-        except Exception as e:
-            print(f"Erro ao carregar dashboard: {e}")
-            self.add_default_widgets()
+    def _update_available_buttons(self):
+        """Recria os botões de widgets disponíveis."""
+        for child in self.available_frame.winfo_children():
+            child.destroy()
 
-    def add_default_widgets(self):
-        """Adiciona widgets iniciais."""
-        self.add_widget("cpu", "CPU", self.app.widget_cpu)
-        self.add_widget("ram", "Memória RAM", self.app.widget_ram)
-        self.add_widget("disk", "Disco", self.app.widget_disk)
+        for widget in self.available_widgets:
+            btn = ctk.CTkButton(self.available_frame, text=f"➕ {widget['name']}",
+                                 fg_color=self.app.acc_color,
+                                 command=lambda w=widget: self.add_to_slot(w))
+            btn.pack(side="left", padx=5, pady=5)
 
-    def get_callback_for_title(self, title):
-        """Retorna o callback apropriado baseado no título do widget."""
-        mapping = {
-            "CPU": self.app.widget_cpu,
-            "Memória RAM": self.app.widget_ram,
-            "Disco": self.app.widget_disk,
-            "Rede": self.app.widget_network,
-            "Temperaturas": self.app.widget_temps,
-            "Processos": self.app.widget_processes,
-        }
-        return mapping.get(title, self.app.widget_cpu)  # fallback
+    def add_to_slot(self, widget):
+        """
+        Adiciona o widget ao primeiro slot, rotacionando os demais.
+        O widget que estava no último slot vai para a lista de disponíveis.
+        """
+        # Lista atual dos tipos nos slots
+        current_slots = [slot.widget_type for slot in self.slots]
 
-    # Métodos para adicionar widgets específicos (chamados pelos botões)
-    def add_cpu_widget(self):
-        self.add_widget("cpu", "CPU", self.app.widget_cpu)
+        # O novo widget vai para o slot 0
+        new_slot0 = widget
 
-    def add_ram_widget(self):
-        self.add_widget("ram", "Memória RAM", self.app.widget_ram)
+        # O que estava no slot 0 vai para o slot 1
+        new_slot1 = current_slots[0]
 
-    def add_disk_widget(self):
-        self.add_widget("disk", "Disco", self.app.widget_disk)
+        # O que estava no slot 1 vai para o slot 2
+        new_slot2 = current_slots[1]
 
-    def add_network_widget(self):
-        self.add_widget("network", "Rede", self.app.widget_network)
+        # O que estava no slot 2 vai para disponíveis
+        removed = current_slots[2]
 
-    def add_temps_widget(self):
-        self.add_widget("temps", "Temperaturas", self.app.widget_temps)
+        # Atualiza os slots
+        self.slots[0].set_widget_type(new_slot0)
+        self.slots[1].set_widget_type(new_slot1)
+        self.slots[2].set_widget_type(new_slot2)
 
-    def add_processes_widget(self):
-        self.add_widget("processes", "Processos", self.app.widget_processes)
+        # Atualiza a lista de disponíveis
+        # Remove o widget adicionado se ele estava na lista
+        if widget in self.available_widgets:
+            self.available_widgets.remove(widget)
+        # Adiciona o removido, se ele não estiver já nos slots
+        if removed not in [s.widget_type for s in self.slots]:
+            self.available_widgets.append(removed)
+
+        # Garante que não haja duplicatas
+        # (opcional, mas por segurança)
+        self.available_widgets = list({w["id"]: w for w in self.available_widgets}.values())
+
+        self._update_available_buttons()
+        self.save_state()

@@ -8,7 +8,7 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# SpeedScan - Versão 0.9.1-beta (Correção de maximização)
+# SpeedScan - Versão 0.0.9-beta (Dashboard completo)
 # Desenvolvedor: Ewerton Vasconcelos
 # =============================================================================
 
@@ -25,7 +25,6 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 import psutil
 
-# Importações absolutas dos módulos
 from core.hardware import HardwareInfo
 from core.actions import CommandRunner, ActionMapper
 from core.scheduler import Scheduler
@@ -54,7 +53,7 @@ LOG_DIR = Path.home() / "speedscan" / "logs"
 AGENT_SCRIPT = Path.home() / "speedscan" / "speedscan-agent.py"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-VERSION = "0.9.1-beta"
+VERSION = "0.0.9-beta"
 
 DEFAULT_CONFIG = {
     "theme": "default",
@@ -108,19 +107,8 @@ class SpeedScan(ctk.CTk):
         self.config = self._load_config()
         self.update_theme_vars()
         self.title(f"SpeedScan {VERSION}")
-        
-        # Tenta maximizar a janela de forma compatível
-        try:
-            # Para Linux (X11) e Windows
-            self.attributes('-zoomed', True)
-        except:
-            try:
-                # Alternativa: state('zoomed') pode funcionar em alguns ambientes
-                self.state('zoomed')
-            except:
-                # Fallback: define um tamanho grande
-                self.geometry(f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}+0+0")
-        
+
+        self.geometry("1000x700")
         self.minsize(900, 600)
         self.configure(fg_color=self.bg_color)
 
@@ -164,6 +152,20 @@ class SpeedScan(ctk.CTk):
         self._setup_bindings()
         threading.Thread(target=self._monitor_loop, daemon=True).start()
         self._check_process_queue()
+
+        self.after(50, self._maximize_window)
+
+    def _maximize_window(self):
+        try:
+            self.attributes('-zoomed', True)
+        except:
+            try:
+                self.state('zoomed')
+            except:
+                w = self.winfo_screenwidth()
+                h = self.winfo_screenheight()
+                self.geometry(f"{w}x{h}+0+0")
+                self.update()
 
     def _load_config(self):
         if CONFIG_FILE.exists():
@@ -303,66 +305,79 @@ class SpeedScan(ctk.CTk):
 
     # ---------- Dashboard ----------
     def _fill_dashboard(self, parent):
-        ctk.CTkLabel(parent, text="Dashboard Personalizável", font=("Inter",28,"bold"),
+        ctk.CTkLabel(parent, text="Dashboard Rotativo", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
-
-        btn_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        btn_frame.pack(fill="x", pady=10)
 
         self.dashboard = Dashboard(parent, self, fg_color="transparent")
         self.dashboard.pack(fill="both", expand=True)
 
-        widgets = [
-            ("➕ CPU", self.dashboard.add_cpu_widget),
-            ("➕ RAM", self.dashboard.add_ram_widget),
-            ("➕ Disco", self.dashboard.add_disk_widget),
-            ("➕ Rede", self.dashboard.add_network_widget),
-            ("➕ Temperaturas", self.dashboard.add_temps_widget),
-            ("➕ Processos", self.dashboard.add_processes_widget),
-        ]
-        for text, cmd in widgets:
-            btn = ctk.CTkButton(btn_frame, text=text, fg_color=self.acc_color,
-                                 command=cmd, width=120)
-            btn.pack(side="left", padx=5, pady=5)
+    # ---------- Widgets ----------
+    def widget_hostname(self, parent, widget_id):
+        lbl = ctk.CTkLabel(parent, text=platform.node(), font=("Inter", 18, "bold"),
+                           text_color=self.acc_color)
+        lbl.pack(expand=True)
+
+    def widget_distro(self, parent, widget_id):
+        lbl = ctk.CTkLabel(parent, text=self.hw.get_distro(), font=("Inter", 18, "bold"),
+                           text_color=self.acc_color)
+        lbl.pack(expand=True)
+
+    def widget_kernel(self, parent, widget_id):
+        lbl = ctk.CTkLabel(parent, text=platform.release(), font=("Inter", 18, "bold"),
+                           text_color=self.acc_color)
+        lbl.pack(expand=True)
+
+    def widget_uptime(self, parent, widget_id):
+        lbl = ctk.CTkLabel(parent, text=self.hw.get_uptime(), font=("Inter", 18, "bold"),
+                           text_color=self.acc_color)
+        lbl.pack(expand=True)
 
     def widget_cpu(self, parent, widget_id):
-        ctk.CTkLabel(parent, text=f"CPU: {self.hw.get_cpu()}", font=("Inter",12),
-                     text_color=self.text_color).pack(pady=5)
-        ctk.CTkLabel(parent, text=f"Uso: {psutil.cpu_percent()}%", font=("Inter",12),
-                     text_color=self.text_color).pack(pady=5)
+        info = self.hw.get_cpu()
+        percent = psutil.cpu_percent()
+        text = f"{info}\nUso: {percent}%"
+        lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 14), justify="center",
+                           text_color=self.text_color)
+        lbl.pack(expand=True)
 
     def widget_ram(self, parent, widget_id):
         mem = psutil.virtual_memory()
-        ctk.CTkLabel(parent, text=f"RAM: {self.hw.get_ram()}", font=("Inter",12),
-                     text_color=self.text_color).pack(pady=5)
-        ctk.CTkLabel(parent, text=f"Uso: {mem.percent}%", font=("Inter",12),
-                     text_color=self.text_color).pack(pady=5)
+        info = self.hw.get_ram()
+        text = f"{info}\nUso: {mem.percent}%"
+        lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 14), justify="center",
+                           text_color=self.text_color)
+        lbl.pack(expand=True)
 
-    def widget_disk(self, parent, widget_id):
-        disk = psutil.disk_usage('/')
-        ctk.CTkLabel(parent, text=f"Disco: {self.hw.get_disks_detailed()}", font=("Inter",12),
-                     text_color=self.text_color).pack(pady=5)
-        ctk.CTkLabel(parent, text=f"Uso: {disk.percent}%", font=("Inter",12),
-                     text_color=self.text_color).pack(pady=5)
+    def widget_gpu(self, parent, widget_id):
+        info = self.hw.get_gpu()
+        lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 14), justify="center",
+                           wraplength=250, text_color=self.text_color)
+        lbl.pack(expand=True)
 
-    def widget_network(self, parent, widget_id):
-        net = psutil.net_io_counters()
-        ctk.CTkLabel(parent, text=f"Enviado: {self.browser_cleaner.format_bytes(net.bytes_sent)}",
-                     font=("Inter",12), text_color=self.text_color).pack(pady=5)
-        ctk.CTkLabel(parent, text=f"Recebido: {self.browser_cleaner.format_bytes(net.bytes_recv)}",
-                     font=("Inter",12), text_color=self.text_color).pack(pady=5)
+    def widget_disks(self, parent, widget_id):
+        info = self.hw.get_disks_detailed()
+        lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 12), justify="center",
+                           wraplength=250, text_color=self.text_color)
+        lbl.pack(expand=True)
+
+    def widget_battery(self, parent, widget_id):
+        info = self.hw.get_battery()
+        lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 14), justify="center",
+                           text_color=self.text_color)
+        lbl.pack(expand=True)
 
     def widget_temps(self, parent, widget_id):
         temps = self.temp_monitor.get_all_temperatures()
-        for sensor, temp in temps.items():
-            ctk.CTkLabel(parent, text=f"{sensor}: {temp}°C", font=("Inter",12),
-                         text_color=self.text_color).pack(pady=2)
+        text = "\n".join([f"{s}: {t}°C" for s, t in temps.items()])
+        lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 12), justify="center",
+                           text_color=self.text_color)
+        lbl.pack(expand=True)
 
-    def widget_processes(self, parent, widget_id):
-        procs = sorted(self.proc_manager.get_process_list(), key=lambda x: x['cpu_percent'], reverse=True)[:5]
-        for p in procs:
-            ctk.CTkLabel(parent, text=f"{p['name']}: {p['cpu_percent']}%", font=("Inter",12),
-                         text_color=self.text_color).pack(anchor="w", pady=1)
+    def widget_health(self, parent, widget_id):
+        score = self.health_monitor.calculate_health_score()['score']
+        lbl = ctk.CTkLabel(parent, text=f"Saúde: {score}/100", font=("Inter", 18, "bold"),
+                           text_color=self.acc_color)
+        lbl.pack(expand=True)
 
     # ---------- Métodos auxiliares (browser, speed, lan, security, lancache) ----------
     def _run_browser_clean(self, log):
@@ -1316,7 +1331,7 @@ class SpeedScan(ctk.CTk):
             "Este software está em fase de desenvolvimento.\n"
             "Não foi lançado oficialmente.\n\n"
             "Funcionalidades:\n"
-            "• Dashboard personalizável com drag-and-drop\n"
+            "• Dashboard rotativo com todos os widgets do sistema\n"
             "• Monitoramento de hardware em tempo real\n"
             "• Otimização de sistema (cache, swap, turbo)\n"
             "• Instalação de apps gamers (Steam, Lutris, Dolphin)\n"
