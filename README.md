@@ -1,7 +1,7 @@
 # ⚡ SpeedScan
 
 <div align="center">
-  <img src="link-para-uma-imagem-banner-do-projeto.png" alt="SpeedScan Banner" width="600"/>
+  <img src="link-para-uma-imagem-banner.png" alt="SpeedScan Banner" width="600"/>
   <br>
   <strong>Ferramenta all-in-one de diagnóstico e otimização de sistema com IA integrada</strong>
 </div>
