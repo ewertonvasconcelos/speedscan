@@ -8,7 +8,7 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# SpeedScan - Versão 0.6.1-beta (Ajustes na barra lateral)
+# SpeedScan - Versão 0.9.1-beta (Correção de maximização)
 # Desenvolvedor: Ewerton Vasconcelos
 # =============================================================================
 
@@ -40,6 +40,8 @@ from core.historical_metrics import MetricsCollector, MetricsDB
 from core.lan_scanner import LANScanner
 from core.ai_proactive import AIProactive
 from core.security_scanner import SecurityScanner
+from core.dashboard import Dashboard
+from core.lan_cache import LANCacheManager
 
 import matplotlib
 matplotlib.use('TkAgg')
@@ -52,7 +54,7 @@ LOG_DIR = Path.home() / "speedscan" / "logs"
 AGENT_SCRIPT = Path.home() / "speedscan" / "speedscan-agent.py"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-VERSION = "0.6.1-beta"
+VERSION = "0.9.1-beta"
 
 DEFAULT_CONFIG = {
     "theme": "default",
@@ -106,7 +108,19 @@ class SpeedScan(ctk.CTk):
         self.config = self._load_config()
         self.update_theme_vars()
         self.title(f"SpeedScan {VERSION}")
-        self.geometry("1000x700")
+        
+        # Tenta maximizar a janela de forma compatível
+        try:
+            # Para Linux (X11) e Windows
+            self.attributes('-zoomed', True)
+        except:
+            try:
+                # Alternativa: state('zoomed') pode funcionar em alguns ambientes
+                self.state('zoomed')
+            except:
+                # Fallback: define um tamanho grande
+                self.geometry(f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}+0+0")
+        
         self.minsize(900, 600)
         self.configure(fg_color=self.bg_color)
 
@@ -114,7 +128,7 @@ class SpeedScan(ctk.CTk):
         self.turbo_active = False
         self.consoles_visible = {}
         self.ping_active = False
-        self.current_module = "sistema"
+        self.current_module = "dashboard"
         self.sidebar_buttons = {}
         self.detail_buttons = {}
         self.logs = {}
@@ -131,6 +145,7 @@ class SpeedScan(ctk.CTk):
         self.lan_scanner = LANScanner()
         self.ai_proactive = AIProactive(self.metrics_db, self.health_monitor)
         self.security_scanner = SecurityScanner(self.SO)
+        self.lan_cache = LANCacheManager(self.SO)
         self.metrics_collector.start()
         self.proc_manager.start_monitoring()
 
@@ -144,7 +159,7 @@ class SpeedScan(ctk.CTk):
             btn.pack_forget()
         self.consoles_visible = {tag: False for tag in self.detail_buttons.keys()}
 
-        self.show_frame("sistema")
+        self.show_frame("dashboard")
 
         self._setup_bindings()
         threading.Thread(target=self._monitor_loop, daemon=True).start()
@@ -200,25 +215,21 @@ class SpeedScan(ctk.CTk):
         sidebar.grid(row=0, column=0, sticky="nsew")
         sidebar.grid_propagate(False)
 
-        # Topo com a logo
         top = ctk.CTkFrame(sidebar, fg_color="transparent")
-        top.pack(pady=(30, 5))  # Reduzido pady inferior de 10 para 5
+        top.pack(pady=(30, 5))
         icon = self.round_image(str(ICON_PATH)) if ICON_PATH.exists() else None
         if icon:
-            btn = ctk.CTkButton(top, image=icon, text="", width=96, height=96, corner_radius=20,
-                                 fg_color="transparent", hover_color=self.acc_color,
-                                 command=lambda: self.show_frame("sistema"))
+            lbl_icon = ctk.CTkLabel(top, image=icon, text="", width=96, height=96)
         else:
-            btn = ctk.CTkButton(top, text="⚡", width=96, height=96, corner_radius=20,
-                                 fg_color="transparent", hover_color=self.acc_color,
-                                 font=("Inter",48), command=lambda: self.show_frame("sistema"))
-        btn.pack()
+            lbl_icon = ctk.CTkLabel(top, text="⚡", font=("Inter",48), width=96, height=96,
+                                     text_color=self.acc_color)
+        lbl_icon.pack()
 
-        # Frame central com as abas principais
         center = ctk.CTkFrame(sidebar, fg_color="transparent")
-        center.pack(expand=False, fill="x", pady=(5, 0))  # pady superior reduzido de 20 para 5
+        center.pack(expand=False, fill="x", pady=(19, 0))
 
         nav_items = [
+            ("📊", "Dashboard", "dashboard"),
             ("🚀", "Otimização", "otimizacao"),
             ("🌐", "Rede", "rede"),
             ("🛠", "Drivers", "drivers"),
@@ -231,20 +242,18 @@ class SpeedScan(ctk.CTk):
             btn = self._sidebar_btn(center, icon, text, target)
             self.sidebar_buttons[target] = btn
 
-        # Espaçador ajustado para controlar distância até o bottom
-        spacer = ctk.CTkLabel(center, text="", height=20)  # Altura fixa de 20px
+        spacer = ctk.CTkLabel(center, text="", height=20)
         spacer.pack(expand=False)
 
-        # Bottom com Configurações e Sobre
         bottom = ctk.CTkFrame(sidebar, fg_color="transparent")
-        bottom.pack(side="bottom", fill="x", pady=(5, 20))  # pady superior reduzido de 20 para 5
+        bottom.pack(side="bottom", fill="x", pady=(5, 20))
         for icon, text, target in [("⚙", "Configurações", "config"), ("ℹ", "Sobre", "sobre")]:
             btn = self._sidebar_btn(bottom, icon, text, target)
             self.sidebar_buttons[target] = btn
 
     def _sidebar_btn(self, parent, icon, text, target):
         frame = ctk.CTkFrame(parent, fg_color="transparent")
-        frame.pack(pady=5, fill="x", padx=10)  # pady entre botões mantido em 5
+        frame.pack(pady=5, fill="x", padx=10)
         btn = ctk.CTkButton(frame, text=f"{icon}  {text}", anchor="w", height=40,
                              fg_color="transparent", hover_color=self.acc_color,
                              font=("Inter",13), corner_radius=10,
@@ -260,8 +269,8 @@ class SpeedScan(ctk.CTk):
         self.current_module = target
         for key, btn in self.sidebar_buttons.items():
             btn.configure(fg_color=self.acc_color if key == target else "transparent")
-        if target == "sistema":
-            self._update_sys_info()
+        if target == "dashboard":
+            pass
         elif target == "processos":
             self._refresh_process_list()
         elif target == "historico":
@@ -276,12 +285,11 @@ class SpeedScan(ctk.CTk):
         container.grid_rowconfigure(0, weight=1)
 
         frames = {}
-        # Lista de nomes: todos os que precisam de scroll
-        scrollable_names = ["sistema", "otimizacao", "rede", "drivers", "processos", "historico", "seguranca", "agente", "config", "sobre"]
+        scrollable_names = ["dashboard", "otimizacao", "rede", "drivers", "processos", "historico", "seguranca", "agente", "config", "sobre"]
         for name in scrollable_names:
             frames[name] = ctk.CTkScrollableFrame(container, fg_color="transparent")
-        # Se houver algum que não precise, trataria separadamente, mas todos agora são roláveis.
-        self._fill_sistema(frames["sistema"])
+
+        self._fill_dashboard(frames["dashboard"])
         self._fill_otimizacao(frames["otimizacao"])
         self._fill_rede(frames["rede"])
         self._fill_drivers(frames["drivers"])
@@ -293,154 +301,70 @@ class SpeedScan(ctk.CTk):
         self._fill_sobre(frames["sobre"])
         return frames
 
-    # ---------- Aba Sistema ----------
-    def _fill_sistema(self, parent):
-        ctk.CTkLabel(parent, text="Informações do Sistema", font=("Inter",28,"bold"),
+    # ---------- Dashboard ----------
+    def _fill_dashboard(self, parent):
+        ctk.CTkLabel(parent, text="Dashboard Personalizável", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
 
-        top_grid = ctk.CTkFrame(parent, fg_color="transparent")
-        top_grid.pack(fill="x", pady=(0,20))
-        for i in range(3):
-            top_grid.columnconfigure(i, weight=1)
+        btn_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        btn_frame.pack(fill="x", pady=10)
 
-        health_card = ctk.CTkFrame(top_grid, fg_color=self.bg_color, corner_radius=10,
-                                    border_width=1, border_color=self.acc_color)
-        health_card.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
-        health_card.grid_propagate(False)
-        health_card.configure(height=150)
-        ctk.CTkLabel(health_card, text="❤️ Saúde do Sistema", font=("Inter", 14, "bold"),
-                     text_color=self.acc_color).pack(pady=(10,5))
-        self.health_label = ctk.CTkLabel(health_card, textvariable=self.health_score_var,
-                                         font=("Inter", 24, "bold"), text_color=self.text_color)
-        self.health_label.pack(expand=True)
+        self.dashboard = Dashboard(parent, self, fg_color="transparent")
+        self.dashboard.pack(fill="both", expand=True)
 
-        temp_card = ctk.CTkFrame(top_grid, fg_color=self.bg_color, corner_radius=10,
-                                  border_width=1, border_color=self.acc_color)
-        temp_card.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
-        temp_card.grid_propagate(False)
-        temp_card.configure(height=150)
-        ctk.CTkLabel(temp_card, text="🌡 Temperaturas", font=("Inter", 14, "bold"),
-                     text_color=self.acc_color).pack(pady=(10,5))
-        self.temp_label = ctk.CTkLabel(temp_card, text="Carregando...",
-                                        font=("Consolas", 11), text_color=self.text_color,
-                                        justify="center")
-        self.temp_label.pack(expand=True, padx=10, pady=5)
-
-        smart_card = ctk.CTkFrame(top_grid, fg_color=self.bg_color, corner_radius=10,
-                                   border_width=1, border_color=self.acc_color)
-        smart_card.grid(row=0, column=2, padx=5, pady=5, sticky="nsew")
-        smart_card.grid_propagate(False)
-        smart_card.configure(height=150)
-        header_smart = ctk.CTkFrame(smart_card, fg_color="transparent")
-        header_smart.pack(fill="x", padx=10, pady=(10,5))
-        ctk.CTkLabel(header_smart, text="💾", font=("Inter", 16)).pack(side="left", padx=(0,5))
-        ctk.CTkLabel(header_smart, text="Saúde dos Discos", font=("Inter", 12, "bold"),
-                     text_color=self.acc_color).pack(side="left")
-        self.smart_summary_label = ctk.CTkLabel(smart_card, text="Carregando...",
-                                                 font=("Inter", 11), text_color=self.text_color,
-                                                 wraplength=180, justify="center")
-        self.smart_summary_label.pack(expand=True, padx=10)
-
-        details_grid = ctk.CTkFrame(parent, fg_color="transparent")
-        details_grid.pack(fill="both", expand=True)
-        for i in range(3):
-            details_grid.columnconfigure(i, weight=1)
-
-        fields = [
-            ("💻 Hostname", "hostname", lambda: platform.node()),
-            ("💿 Distribuição", "distro", self.hw.get_distro),
-            ("🐧 Kernel", "kernel", platform.release),
-            ("🖥 CPU", "cpu", self.hw.get_cpu),
-            ("📟 RAM", "ram", self.hw.get_ram),
-            ("🎮 GPU", "gpu", self.hw.get_gpu),
-            ("💽 Discos", "disks", self.hw.get_disks_detailed),
-            ("⏱ Uptime", "uptime", self.hw.get_uptime),
-            ("🔋 Bateria", "battery", self.hw.get_battery)
+        widgets = [
+            ("➕ CPU", self.dashboard.add_cpu_widget),
+            ("➕ RAM", self.dashboard.add_ram_widget),
+            ("➕ Disco", self.dashboard.add_disk_widget),
+            ("➕ Rede", self.dashboard.add_network_widget),
+            ("➕ Temperaturas", self.dashboard.add_temps_widget),
+            ("➕ Processos", self.dashboard.add_processes_widget),
         ]
-        self.sys_labels = {}
-        for i, (label, key, func) in enumerate(fields):
-            row, col = divmod(i, 3)
-            card = ctk.CTkFrame(details_grid, fg_color=self.bg_color, corner_radius=10,
-                                 border_width=1, border_color=self.acc_color)
-            card.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
-            card.grid_propagate(False)
-            card.configure(height=150)
-            ctk.CTkLabel(card, text=label, font=("Inter", 12, "bold"),
-                         text_color=self.acc_color).pack(pady=(5, 2))
-            lbl = ctk.CTkLabel(card, text="...", font=("Consolas", 10),
-                                text_color=self.text_color, wraplength=180, justify="center")
-            lbl.pack(expand=True, fill="both", padx=5, pady=(0, 5))
-            self.sys_labels[key] = lbl
+        for text, cmd in widgets:
+            btn = ctk.CTkButton(btn_frame, text=text, fg_color=self.acc_color,
+                                 command=cmd, width=120)
+            btn.pack(side="left", padx=5, pady=5)
 
-        self.update_smart_card()
-        self._update_sys_info()
+    def widget_cpu(self, parent, widget_id):
+        ctk.CTkLabel(parent, text=f"CPU: {self.hw.get_cpu()}", font=("Inter",12),
+                     text_color=self.text_color).pack(pady=5)
+        ctk.CTkLabel(parent, text=f"Uso: {psutil.cpu_percent()}%", font=("Inter",12),
+                     text_color=self.text_color).pack(pady=5)
 
-    def _update_sys_info(self):
-        """Atualiza os labels com as informações do hardware."""
-        try:
-            self.sys_labels["hostname"].configure(text=platform.node())
-        except: pass
-        try:
-            self.sys_labels["distro"].configure(text=self.hw.get_distro())
-        except: pass
-        try:
-            self.sys_labels["kernel"].configure(text=platform.release())
-        except: pass
-        try:
-            self.sys_labels["cpu"].configure(text=self.hw.get_cpu())
-        except: pass
-        try:
-            self.sys_labels["ram"].configure(text=self.hw.get_ram())
-        except: pass
-        try:
-            self.sys_labels["gpu"].configure(text=self.hw.get_gpu())
-        except: pass
-        try:
-            self.sys_labels["disks"].configure(text=self.hw.get_disks_detailed())
-        except: pass
-        try:
-            self.sys_labels["uptime"].configure(text=self.hw.get_uptime())
-        except: pass
-        try:
-            self.sys_labels["battery"].configure(text=self.hw.get_battery())
-        except: pass
+    def widget_ram(self, parent, widget_id):
+        mem = psutil.virtual_memory()
+        ctk.CTkLabel(parent, text=f"RAM: {self.hw.get_ram()}", font=("Inter",12),
+                     text_color=self.text_color).pack(pady=5)
+        ctk.CTkLabel(parent, text=f"Uso: {mem.percent}%", font=("Inter",12),
+                     text_color=self.text_color).pack(pady=5)
 
-        try:
-            health_data = self.health_monitor.calculate_health_score()
-            score = health_data['score']
-            self.health_score_var.set(f"{score}/100")
-        except Exception as e:
-            print(f"Erro no health score: {e}")
-            self.health_score_var.set("Erro")
+    def widget_disk(self, parent, widget_id):
+        disk = psutil.disk_usage('/')
+        ctk.CTkLabel(parent, text=f"Disco: {self.hw.get_disks_detailed()}", font=("Inter",12),
+                     text_color=self.text_color).pack(pady=5)
+        ctk.CTkLabel(parent, text=f"Uso: {disk.percent}%", font=("Inter",12),
+                     text_color=self.text_color).pack(pady=5)
 
-        try:
-            temps = self.temp_monitor.get_all_temperatures()
-            lines = []
-            for sensor, value in temps.items():
-                if value is not None:
-                    lines.append(f"{sensor}: {value}°C")
-            if lines:
-                self.temp_label.configure(text="\n".join(lines))
-            else:
-                self.temp_label.configure(text="Sensores não disponíveis")
-        except Exception as e:
-            print(f"Erro ao obter temperaturas: {e}")
-            self.temp_label.configure(text="Erro ao ler sensores")
+    def widget_network(self, parent, widget_id):
+        net = psutil.net_io_counters()
+        ctk.CTkLabel(parent, text=f"Enviado: {self.browser_cleaner.format_bytes(net.bytes_sent)}",
+                     font=("Inter",12), text_color=self.text_color).pack(pady=5)
+        ctk.CTkLabel(parent, text=f"Recebido: {self.browser_cleaner.format_bytes(net.bytes_recv)}",
+                     font=("Inter",12), text_color=self.text_color).pack(pady=5)
 
-    def update_smart_card(self):
-        if hasattr(self, 'smart_monitor'):
-            summary = self.smart_monitor.get_summary_text()
-            self.smart_summary_label.configure(text=summary)
-            color = self.smart_monitor.get_status_color()
-            if color == "red":
-                self.smart_summary_label.configure(text_color="red")
-            elif color == "yellow":
-                self.smart_summary_label.configure(text_color="orange")
-            else:
-                self.smart_summary_label.configure(text_color="green" if color == "green" else self.text_color)
-        self.after(3000, self.update_smart_card)
+    def widget_temps(self, parent, widget_id):
+        temps = self.temp_monitor.get_all_temperatures()
+        for sensor, temp in temps.items():
+            ctk.CTkLabel(parent, text=f"{sensor}: {temp}°C", font=("Inter",12),
+                         text_color=self.text_color).pack(pady=2)
 
-    # ---------- Métodos auxiliares (browser, speed, lan) ----------
+    def widget_processes(self, parent, widget_id):
+        procs = sorted(self.proc_manager.get_process_list(), key=lambda x: x['cpu_percent'], reverse=True)[:5]
+        for p in procs:
+            ctk.CTkLabel(parent, text=f"{p['name']}: {p['cpu_percent']}%", font=("Inter",12),
+                         text_color=self.text_color).pack(anchor="w", pady=1)
+
+    # ---------- Métodos auxiliares (browser, speed, lan, security, lancache) ----------
     def _run_browser_clean(self, log):
         log.delete("1.0", "end")
         log.insert("end", "Iniciando limpeza de navegadores...\n")
@@ -499,7 +423,6 @@ class SpeedScan(ctk.CTk):
         log.insert("end", f"\nTotal de dispositivos ativos: {len(devices)}\n")
         log.insert("end", "✅ Scan concluído.\n")
 
-    # ---------- Métodos de Segurança ----------
     def _run_port_scan(self, log):
         log.delete("1.0", "end")
         log.insert("end", "Escaneando portas abertas...\n")
@@ -523,6 +446,40 @@ class SpeedScan(ctk.CTk):
         updates = self.security_scanner.check_security_updates()
         log.insert("end", "\n".join(updates))
         log.insert("end", "\n✅ Verificação concluída.\n")
+
+    def _run_lan_cache_setup(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🔄 Verificando Docker...\n")
+        if not self.lan_cache.is_docker_installed():
+            log.insert("end", "Docker não encontrado. Tentando instalar...\n")
+            cmds = self.lan_cache.install_docker()
+            for cmd in cmds:
+                log.insert("end", f"Executando: {cmd}\n")
+                proc = self.runner.run(cmd)
+                if proc:
+                    for line in proc.stdout:
+                        self.after(0, lambda l=line: log.insert("end", l))
+                    proc.wait()
+        else:
+            log.insert("end", "✅ Docker já instalado.\n")
+
+        log.insert("end", "\n📦 Baixando e iniciando LANCache...\n")
+        cmds = self.lan_cache.get_install_commands()
+        for cmd in cmds:
+            log.insert("end", f"Executando: {cmd}\n")
+            proc = self.runner.run(cmd)
+            if proc:
+                for line in proc.stdout:
+                    self.after(0, lambda l=line: log.insert("end", l))
+                proc.wait()
+
+        log.insert("end", "\n🔍 Status do LANCache:\n")
+        status = self.lan_cache.get_status()
+        log.insert("end", status + "\n")
+
+        log.insert("end", "\n✅ Configuração concluída.\n")
+        log.insert("end", "Agora você pode acessar http://lancache:80 para ver a interface web.\n")
+        log.insert("end", "Para usar o cache, configure o DNS da sua rede para o IP deste servidor.\n")
 
     # ---------- Aba Otimização ----------
     def _fill_otimizacao(self, parent):
@@ -565,7 +522,8 @@ class SpeedScan(ctk.CTk):
             ("📶 Traceroute", "traceroute", False),
             ("📶 Informações Wi-Fi", "wifi", False),
             ("🌍 Testar DNS", "testdns", False),
-            ("🔍 Scanner LAN", "lanscan", False)
+            ("🔍 Scanner LAN", "lanscan", False),
+            ("🚀 LANCache", "lancache", False)
         ]
         ping_labels = ui.create_card_grid(parent, items, "net", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
         if ping_labels:
@@ -988,6 +946,10 @@ class SpeedScan(ctk.CTk):
                 self._run_security_updates(log)
                 self._show_details_button(tag)
                 return
+            elif cmd == "lancache":
+                self._run_lan_cache_setup(log)
+                self._show_details_button(tag)
+                return
             elif cmd in ["video_drv", "net_drv", "auto_update"]:
                 self._special_command(cmd, log)
                 self._show_details_button(tag)
@@ -1063,8 +1025,8 @@ class SpeedScan(ctk.CTk):
 
     def _monitor_loop(self):
         while True:
-            if self.current_module == "sistema":
-                self.after(0, self._update_sys_info)
+            if self.current_module == "dashboard" and hasattr(self, 'dashboard'):
+                pass
             time.sleep(3)
 
     def _on_mousewheel(self, event):
@@ -1329,14 +1291,12 @@ class SpeedScan(ctk.CTk):
         self.config["open_file_in_tab"] = (self.tab_var.get() == "Na guia")
         self._save_config()
 
-        # Opção C: Script externo de reinicialização
         restart_script = Path.home() / "speedscan" / "restart_speedscan.sh"
         subprocess.Popen([str(restart_script), str(os.getpid())], start_new_session=True)
         self.quit()
 
-    # ---------- Aba Sobre (agora rolável) ----------
+    # ---------- Aba Sobre ----------
     def _fill_sobre(self, parent):
-        # parent já é um CTkScrollableFrame, então pode conter muito conteúdo
         ctk.CTkLabel(parent, text="Sobre o SpeedScan", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
 
@@ -1356,6 +1316,7 @@ class SpeedScan(ctk.CTk):
             "Este software está em fase de desenvolvimento.\n"
             "Não foi lançado oficialmente.\n\n"
             "Funcionalidades:\n"
+            "• Dashboard personalizável com drag-and-drop\n"
             "• Monitoramento de hardware em tempo real\n"
             "• Otimização de sistema (cache, swap, turbo)\n"
             "• Instalação de apps gamers (Steam, Lutris, Dolphin)\n"
@@ -1373,7 +1334,8 @@ class SpeedScan(ctk.CTk):
             "• Gráficos Históricos de Desempenho\n"
             "• Scanner de Rede Local\n"
             "• IA Proativa com sugestões inteligentes\n"
-            "• Segurança do Sistema (portas, firewall, atualizações)\n\n"
+            "• Segurança do Sistema (portas, firewall, atualizações)\n"
+            "• LANCache - Servidor de cache para jogos\n\n"
             "© 2026 Ewerton Vasconcelos. Todos os direitos reservados."
         )
         label_info = ctk.CTkLabel(card, text=info, font=("Inter",12), justify="left",
