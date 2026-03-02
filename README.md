@@ -1,51 +1,61 @@
 # ⚡ SpeedScan
 
-![Versão](https://img.shields.io/badge/version-0.0.9--beta-blue)
-![Licença](https://img.shields.io/badge/license-MIT-green)
-![Plataformas](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android-lightgrey)
-[![GitHub stars](https://img.shields.io/github/stars/ewertonvasconcelos/speedscan?style=social)](https://github.com/ewertonvasconcelos/speedscan/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/ewertonvasconcelos/speedscan?style=social)](https://github.com/ewertonvasconcelos/speedscan/network/members)
+<div align="center">
+  <img src="link-para-uma-imagem-banner-do-projeto.png" alt="SpeedScan Banner" width="600"/>
+  <br>
+  <strong>Ferramenta all-in-one de diagnóstico e otimização de sistema com IA integrada</strong>
+</div>
 
-SpeedScan é uma ferramenta de diagnóstico e otimização de sistemas desenvolvida em Python com CustomTkinter. Oferece monitoramento em tempo real, otimização de desempenho, configuração de rede e diagnóstico de drivers, tudo em uma interface moderna e intuitiva.
+<p align="center">
+  <img src="https://img.shields.io/badge/version-0.0.9--beta-blue" alt="Version">
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python">
+  <img src="https://img.shields.io/github/license/ewertonvasconcelos/speedscan" alt="License">
+  <img src="https://img.shields.io/github/stars/ewertonvasconcelos/speedscan?style=social" alt="Stars">
+</p>
 
-## ✨ Funcionalidades
+## 📋 Índice
+- [Sobre o Projeto](#sobre-o-projeto)
+- [Funcionalidades](#-funcionalidades)
+- [Capturas de Tela](#-capturas-de-tela)
+- [Tecnologias Utilizadas](#-tecnologias-utilizadas)
+- [Instalação e Uso](#-instalação-e-uso)
+- [Como Contribuir](#-como-contribuir)
+- [Roadmap](#-roadmap)
+- [Licença](#-licença)
 
-- **📊 Monitoramento do Sistema**: CPU, RAM, GPU, discos, uptime e bateria
-- **🚀 Otimização**: Limpeza de cache, reset de swap, verificação de erros
-- **🔥 Modo Turbo**: Ajusta o governador de CPU para máxima performance (Linux) ou plano de energia (Windows)
-- **🌐 Rede**: Teste de ping, configuração de DNS (Cloudflare, Google, AdGuard), traceroute, informações Wi-Fi
-- **🛠️ Drivers**: Diagnóstico de hardware, atualização de drivers de vídeo/rede
-- **🤖 Agente IA**: Conexão com modelos de IA (DeepSeek, GPT, Gemini, etc.) e configuração local (Ollama)
-- **🎨 Temas**: Personalização com temas dark/light e reinicialização instantânea
-- **⏰ Agendamento Automático**: Execute tarefas de otimização em horários programados
+## 📖 Sobre o Projeto
+O SpeedScan nasceu da necessidade de ter uma ferramenta centralizada para diagnosticar e otimizar sistemas. Ele oferece desde informações detalhadas de hardware até um dashboard interativo e sugestões de melhorias baseadas em IA. É o canivete suíço para quem quer manter o computador sempre no máximo desempenho.
 
-## 📸 Capturas de Tela
+## ⚙️ Funcionalidades
+- **Dashboard Rotativo:** Acompanhe CPU, RAM, Disco e mais em widgets personalizáveis.
+- **Monitoramento em Tempo Real:** Temperaturas, saúde dos discos (S.M.A.R.T.) e processos.
+- **Otimização do Sistema:** Limpeza de cache, reset de swap e modo turbo.
+- **Análise de Rede:** Teste de velocidade, scanner de LAN e configuração de DNS.
+- **Gerenciador de Processos:** Visualize e gerencie processos em execução.
+- **IA Proativa:** Receba sugestões inteligentes para otimizar seu sistema.
+- **Segurança:** Verificação de portas abertas, status do firewall e atualizações de segurança.
+- **LANCache:** Acelere seus downloads de jogos com um cache local.
+- **Temas Customizáveis:** Escolha entre temas claro e escuro.
 
-| Sistema | Otimização | Rede |
-|--------|------------|------|
-| ![Sistema](screenshots/sistema.png) | ![Otimização](screenshots/otimizacao.png) | ![Rede](screenshots/rede.png) |
-| Monitoramento em tempo real | Limpeza e turbo | Ping, DNS e portas |
+## 🖼️ Capturas de Tela
+<div align="center">
+  <img src="screenshots/dashboard.png" alt="Dashboard" width="400"/>
+  <img src="screenshots/otimizacao.png" alt="Otimização" width="400"/>
+  <img src="screenshots/agente-ia.png" alt="Agente IA" width="400"/>
+  <p><em>Exemplo do Dashboard, aba de Otimização e Agente IA.</em></p>
+</div>
 
-> **Nota**: As imagens acima são placeholders. Substitua pelos prints reais do software em ação.
+## 🛠️ Tecnologias Utilizadas
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![CustomTkinter](https://img.shields.io/badge/CustomTkinter-^5.2.2-blue?style=for-the-badge)
+![Psutil](https://img.shields.io/badge/Psutil-^5.9.0-blue?style=for-the-badge)
+![Matplotlib](https://img.shields.io/badge/Matplotlib-^3.5.0-blue?style=for-the-badge)
+![Speedtest-cli](https://img.shields.io/badge/Speedtest--cli-^2.1.3-blue?style=for-the-badge)
 
-## 🖥️ Plataformas Suportadas
+## 💻 Instalação e Uso
+Siga estes passos para rodar o SpeedScan no seu ambiente local:
 
-| Sistema | Status | Observações |
-|---------|--------|-------------|
-| 🐧 Linux | ✅ Funcional | Testado em Fedora, Solus, openSUSE, KDE Linux. Pacotes `.deb` e `.rpm` disponíveis. |
-| 🪟 Windows | ✅ Funcional | Requer winget para instalação de apps |
-| 🍏 macOS | ✅ Funcional | Requer Homebrew para instalação de apps |
-| 📱 Android | 🚧 Em desenvolvimento | Versão separada com Kivy/BeeWare |
-
-## 🚀 Instalação
-
-### Linux – Pacotes `.deb` e `.rpm`
-
-Baixe os pacotes da [página de releases](https://github.com/ewertonvasconcelos/speedscan/releases) ou diretamente do repositório:
-
-```bash
-# Debian/Ubuntu
-sudo dpkg -i speedscan_0.9.0_amd64.deb
-
-# Fedora/openSUSE
-sudo rpm -ivh speedscan-0.9.0-1.x86_64.rpm
+1.  **Clone o repositório**
+    ```bash
+    git clone https://github.com/ewertonvasconcelos/speedscan.git
+    cd speedscan
