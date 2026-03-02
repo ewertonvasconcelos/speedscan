@@ -1,216 +1,198 @@
-name: Build SpeedScan
+name: Build SpeedScan Multi-Platform
 
 on:
   push:
     tags:
-      - 'v*'
-  workflow_dispatch:
-
-env:
-  TELEGRAM_TO: ${{ secrets.TELEGRAM_CHAT_ID }}
-  TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      - 'v*'  # Dispara em tags como v0.5.0-beta
+  workflow_dispatch:  # Permite execução manual
 
 jobs:
-  build-linux:
+  build-executables:
+    name: Build executables on ${{ matrix.os }}
+    strategy:
+      fail-fast: false  # Não interrompe outros jobs se um falhar
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10']
+        include:
+          - os: ubuntu-linux
+            artifact-name: speedscan-linux
+            executable-suffix: ''
+          - os: windows-latest
+            artifact-name: speedscan-windows
+            executable-suffix: '.exe'
+          - os: macos-latest
+            artifact-name: speedscan-macos
+            executable-suffix: ''
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        pip install -r requirements.txt
+
+    - name: Build executable with PyInstaller
+      run: |
+        pyinstaller --onefile --name speedscan core/main.py
+
+    - name: Test executable
+      run: |
+        dist/speedscan${{ matrix.executable-suffix }} --version || true
+
+    - name: Upload executable artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact-name }}-executable
+        path: dist/speedscan${{ matrix.executable-suffix }}
+
+  package-linux:
+    name: Package Linux (.deb, .rpm, .snap, .flatpak)
+    needs: build-executables
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+    - name: Download Linux executable
+      uses: actions/download-artifact@v4
+      with:
+        name: speedscan-linux-executable
+        path: dist/
 
-      - name: Install system dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y python3-pip python3-venv libfuse2 smartmontools lm-sensors rpm
+    - name: Make executable
+      run: chmod +x dist/speedscan
 
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+    - name: Install packaging tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y rpm fpm snapcraft flatpak flatpak-builder
 
-      - name: Build with PyInstaller (Linux)
-        run: |
-          pyinstaller --onefile --windowed --name SpeedScan core/main.py
+    - name: Create .deb package
+      run: |
+        fpm -s dir -t deb -n speedscan -v ${GITHUB_REF_NAME#v} \
+          --prefix /usr/local/bin \
+          dist/speedscan=speedscan
 
-      - name: Create .deb package
-        run: |
-          mkdir -p package/usr/local/bin
-          cp dist/SpeedScan package/usr/local/bin/
-          mkdir -p package/DEBIAN
-          cat > package/DEBIAN/control <<EOF
-          Package: speedscan
-          Version: ${GITHUB_REF_NAME#v}
-          Section: utils
-          Priority: optional
-          Architecture: amd64
-          Maintainer: Ewerton Vasconcelos <ewerton@example.com>
-          Description: SpeedScan - Ferramenta all-in-one de diagnóstico e otimização
-          EOF
-          dpkg-deb --build package speedscan-${GITHUB_REF_NAME#v}.deb
+    - name: Create .rpm package
+      run: |
+        fpm -s dir -t rpm -n speedscan -v ${GITHUB_REF_NAME#v} \
+          --prefix /usr/local/bin \
+          dist/speedscan=speedscan
 
-      - name: Create .rpm package
-        run: |
-          mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-          cat > rpmbuild/SPECS/speedscan.spec <<EOF
-          Name: speedscan
-          Version: ${GITHUB_REF_NAME#v}
-          Release: 1
-          Summary: Ferramenta de diagnóstico e otimização
-          License: GPL
-          URL: https://github.com/ewertonvasconcelos/speedscan
-          BuildArch: x86_64
-          %description
-          SpeedScan - Diagnóstico e otimização com IA.
-          %install
-          mkdir -p %{buildroot}/usr/local/bin
-          cp %{_sourcedir}/SpeedScan %{buildroot}/usr/local/bin/
-          %files
-          /usr/local/bin/SpeedScan
-          EOF
-          cp dist/SpeedScan rpmbuild/SOURCES/
-          rpmbuild -ba rpmbuild/SPECS/speedscan.spec --define "_topdir $(pwd)/rpmbuild"
-          cp rpmbuild/RPMS/x86_64/speedscan-*.rpm .
+    - name: Build Snap package
+      run: |
+        # Garantir que o snapcraft.yaml existe
+        if [ -f "snap/snapcraft.yaml" ]; then
+          snapcraft
+        else
+          echo "snap/snapcraft.yaml not found"
+          exit 1
+        fi
 
-      - name: Create AppImage
-        run: |
-          wget -c "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-          chmod +x linuxdeploy-x86_64.AppImage
-          mkdir -p AppDir/usr/bin
-          cp dist/SpeedScan AppDir/usr/bin/
-          cp assets/icon.png AppDir/icon.png
-          cat > AppDir/speedscan.desktop <<EOF
-          [Desktop Entry]
-          Name=SpeedScan
-          Comment=Ferramenta de diagnóstico e otimização
-          Exec=SpeedScan
-          Icon=icon
-          Terminal=false
-          Type=Application
-          Categories=Utility;
-          EOF
-          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
-          mv SpeedScan*.AppImage dist/
+    - name: Build Flatpak package
+      run: |
+        # Adicionar repositório Flathub
+        flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+        # Instalar runtime e SDK se necessário
+        flatpak install -y flathub org.freedesktop.Platform//23.08 org.freedesktop.Sdk//23.08
+        # Construir
+        flatpak-builder --force-clean build-dir io.github.ewertonvasconcelos.speedscan.yml
+        # Criar bundle
+        flatpak build-bundle build-dir speedscan.flatpak io.github.ewertonvasconcelos.speedscan
 
-      - name: Upload artifacts (Linux)
-        uses: actions/upload-artifact@v4
-        with:
-          name: SpeedScan-linux
-          path: |
-            dist/SpeedScan
-            speedscan-*.deb
-            speedscan-*.rpm
-            dist/*.AppImage
+    - name: Upload Linux packages
+      uses: actions/upload-artifact@v4
+      with:
+        name: speedscan-linux-packages
+        path: |
+          *.deb
+          *.rpm
+          *.snap
+          speedscan.flatpak
 
-  build-windows:
-    runs-on: windows-latest
+  package-windows:
+    name: Package Windows
+    needs: build-executables
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Download Windows executable
+      uses: actions/download-artifact@v4
+      with:
+        name: speedscan-windows-executable
+        path: dist/
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+    - name: Rename executable
+      run: mv dist/speedscan.exe dist/SpeedScan.exe
 
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+    - name: Upload Windows executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: speedscan-windows
+        path: dist/SpeedScan.exe
 
-      - name: Build with PyInstaller (Windows)
-        run: |
-          pyinstaller --onefile --windowed --name SpeedScan core/main.py
-
-      - name: Sign executable (optional)
-        if: success() && secrets.WINDOWS_CERTIFICATE != ''
-        run: |
-          # Necessário ter o certificado e a senha nos secrets
-          echo "$env:WINDOWS_CERTIFICATE" | base64 --decode > cert.pfx
-          signtool sign /fd SHA256 /a /f cert.pfx /p "$env:WINDOWS_CERT_PASSWORD" dist/SpeedScan.exe
-        shell: pwsh
-        env:
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-
-      - name: Upload artifact (Windows)
-        uses: actions/upload-artifact@v4
-        with:
-          name: SpeedScan-windows
-          path: dist/SpeedScan.exe
-
-  build-macos:
+  package-macos:
+    name: Package macOS
+    needs: build-executables
     runs-on: macos-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Download macOS executable
+      uses: actions/download-artifact@v4
+      with:
+        name: speedscan-macos-executable
+        path: dist/
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+    - name: Make executable
+      run: chmod +x dist/speedscan
 
-      - name: Install Python dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+    - name: Create .app bundle
+      run: |
+        mkdir -p SpeedScan.app/Contents/MacOS
+        cp dist/speedscan SpeedScan.app/Contents/MacOS/
+        chmod +x SpeedScan.app/Contents/MacOS/speedscan
 
-      - name: Build with PyInstaller (macOS)
-        run: |
-          pyinstaller --onefile --windowed --name SpeedScan core/main.py
+    - name: Create .dmg
+      run: |
+        hdiutil create -volname SpeedScan -srcfolder SpeedScan.app -ov -format UDZO speedscan.dmg
 
-      - name: Code sign (macOS)
-        if: success() && secrets.MACOS_CERTIFICATE != ''
-        run: |
-          echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
-          security create-keychain -p temp build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p temp build.keychain
-          security import certificate.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
-          codesign --force --timestamp --options runtime --sign "Developer ID Application: Your Name (TEAMID)" dist/SpeedScan
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+    - name: Upload macOS DMG
+      uses: actions/upload-artifact@v4
+      with:
+        name: speedscan-macos
+        path: speedscan.dmg
 
-      - name: Upload artifact (macOS)
-        uses: actions/upload-artifact@v4
-        with:
-          name: SpeedScan-macos
-          path: dist/SpeedScan
-
-  release:
-    needs: [build-linux, build-windows, build-macos]
+  create-release:
+    name: Create GitHub Release
+    needs: [package-linux, package-windows, package-macos]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            SpeedScan-linux/SpeedScan
-            SpeedScan-linux/*.deb
-            SpeedScan-linux/*.rpm
-            SpeedScan-linux/*.AppImage
-            SpeedScan-windows/SpeedScan.exe
-            SpeedScan-macos/SpeedScan
-          generate_release_notes: true
+    - name: Display structure of downloaded files
+      run: ls -R artifacts/
 
-      - name: Send Telegram notification on success
-        if: success()
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="✅ Build concluído com sucesso!%0A%0ARepositório: ${{ github.repository }}%0ARef: ${{ github.ref }}%0ARelease criada: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
-
-      - name: Send Telegram notification on failure
-        if: failure()
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="❌ Falha no build!%0A%0ARepositório: ${{ github.repository }}%0ARef: ${{ github.ref }}%0AVeja os logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+        files: |
+          artifacts/**/*
+        draft: false
+        prerelease: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

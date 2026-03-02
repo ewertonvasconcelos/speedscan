@@ -1,0 +1,55 @@
+name: speedscan
+version: '0.5.0-beta'
+summary: Ferramenta de diagnóstico e otimização de sistema
+description: |
+  SpeedScan é uma ferramenta all-in-one para monitoramento e otimização de sistema,
+  com suporte a IA proativa, scanner de rede, gráficos históricos e muito mais.
+  Desenvolvido em Python com interface CustomTkinter.
+
+grade: stable
+confinement: strict
+base: core22
+
+apps:
+  speedscan:
+    command: bin/speedscan
+    plugs:
+      - home
+      - network
+      - network-bind
+      - system-observe
+      - hardware-observe
+      - process-control
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+
+parts:
+  speedscan:
+    plugin: python
+    source: .
+    python-requirements:
+      - requirements.txt
+    build-packages:
+      - python3-dev
+      - libcairo2-dev
+      - libgirepository1.0-dev
+      - gir1.2-gtk-3.0
+      - pkg-config
+    stage-packages:
+      - python3-tk
+      - python3-pil
+      - python3-pil.imagetk
+      - libgtk-3-0
+      - libcairo2
+      - libgdk-pixbuf2.0-0
+      - libglib2.0-0
+      - shared-mime-info
+      - fonts-dejavu-core
+    override-build: |
+      snapcraftctl build
+      # Opcional: se quiser usar PyInstaller em vez do entry point
+      # pip install pyinstaller
+      # pyinstaller --onefile --name speedscan core/main.py
+      # cp dist/speedscan $SNAPCRAFT_PART_INSTALL/bin/

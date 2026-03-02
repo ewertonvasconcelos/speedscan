@@ -1,0 +1,34 @@
+id: io.github.ewertonvasconcelos.speedscan
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+command: speedscan
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --share=network
+  - --filesystem=home
+  - --device=dri
+  - --system-talk-name=org.freedesktop.UDisks2
+  - --system-talk-name=org.freedesktop.login1
+  - --talk-name=org.freedesktop.NetworkManager
+
+modules:
+  - name: python-dependencies
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=/app -r requirements.txt
+
+  - name: speedscan
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/bin
+      - cp core/main.py /app/bin/speedscan
+      - chmod +x /app/bin/speedscan
+    sources:
+      - type: git
+        url: https://github.com/ewertonvasconcelos/speedscan.git
+        tag: v0.5.0-beta
+      - type: file
+        path: requirements.txt
