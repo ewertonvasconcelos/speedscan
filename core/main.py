@@ -8,7 +8,7 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# SpeedScan - Versão 0.0.9-beta
+# SpeedScan - Versão 0.0.9-beta (Com novos cards de serviços e logs)
 # Desenvolvedor: Ewerton Vasconcelos
 # =============================================================================
 
@@ -496,7 +496,71 @@ class SpeedScan(ctk.CTk):
         log.insert("end", "Agora você pode acessar http://lancache:80 para ver a interface web.\n")
         log.insert("end", "Para usar o cache, configure o DNS da sua rede para o IP deste servidor.\n")
 
-    # ---------- Aba Otimização ----------
+    # ---------- Novos métodos: Serviços e Logs ----------
+    def _run_services_manager(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🔍 Analisando serviços em execução...\n\n")
+        if self.SO == "Linux":
+            log.insert("end", "Serviços ativos (systemctl):\n")
+            log.insert("end", "="*40 + "\n")
+            proc = self.runner.run("systemctl list-units --type=service --state=running --no-pager")
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        elif self.SO == "Windows":
+            log.insert("end", "Serviços do Windows (via sc query):\n")
+            log.insert("end", "="*40 + "\n")
+            proc = self.runner.run("sc query | findstr /C:\"SERVICE_NAME\" /C:\"STATE\"")
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        elif self.SO == "Darwin":
+            log.insert("end", "Serviços macOS (launchctl):\n")
+            log.insert("end", "="*40 + "\n")
+            proc = self.runner.run("launchctl list")
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        else:
+            log.insert("end", "Sistema não suportado para gerenciamento de serviços.\n")
+        log.insert("end", "\n✅ Análise concluída.\n")
+
+    def _run_log_analysis(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "📋 Analisando logs do sistema (últimos erros)...\n\n")
+        if self.SO == "Linux":
+            log.insert("end", "Erros recentes (journalctl):\n")
+            log.insert("end", "="*40 + "\n")
+            proc = self.runner.run("journalctl -p 3 -b --no-pager | head -20")
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        elif self.SO == "Windows":
+            log.insert("end", "Erros no Log de Eventos (PowerShell):\n")
+            log.insert("end", "="*40 + "\n")
+            cmd = 'powershell -Command "Get-EventLog -LogName System -EntryType Error -Newest 20 | Format-Table -AutoSize"'
+            proc = self.runner.run(cmd)
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        elif self.SO == "Darwin":
+            log.insert("end", "Erros recentes (log show):\n")
+            log.insert("end", "="*40 + "\n")
+            proc = self.runner.run('log show --predicate \'eventMessage contains "error"\' --last 1h | head -20')
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        else:
+            log.insert("end", "Sistema não suportado para análise de logs.\n")
+        log.insert("end", "\n✅ Análise concluída.\n")
+
+    # ---------- Aba Otimização (com 15 cards) ----------
     def _fill_otimizacao(self, parent):
         ctk.CTkLabel(parent, text="Otimização", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
@@ -513,7 +577,9 @@ class SpeedScan(ctk.CTk):
             ("MangoHud", "mangohud", False),
             ("Goverlay", "goverlay", False),
             ("🎮 Emulador Dolphin", "dolphin", False),
-            ("🧹 Limpeza de Navegadores", "browsers", False)
+            ("🧹 Limpeza de Navegadores", "browsers", False),
+            ("⚙️ Gerenciar Serviços", "services", False),
+            ("📊 Análise de Logs", "logs", False)
         ]
         ui.create_card_grid(parent, items, "ot", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
         btn, log = ui.add_console(parent, "ot", self.acc_color, self.toggle_console)
@@ -965,6 +1031,14 @@ class SpeedScan(ctk.CTk):
                 self._run_lan_cache_setup(log)
                 self._show_details_button(tag)
                 return
+            elif cmd == "services":
+                self._run_services_manager(log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "logs":
+                self._run_log_analysis(log)
+                self._show_details_button(tag)
+                return
             elif cmd in ["video_drv", "net_drv", "auto_update"]:
                 self._special_command(cmd, log)
                 self._show_details_button(tag)
@@ -1350,7 +1424,9 @@ class SpeedScan(ctk.CTk):
             "• Scanner de Rede Local\n"
             "• IA Proativa com sugestões inteligentes\n"
             "• Segurança do Sistema (portas, firewall, atualizações)\n"
-            "• LANCache - Servidor de cache para jogos\n\n"
+            "• LANCache - Servidor de cache para jogos\n"
+            "• Gerenciamento de Serviços\n"
+            "• Análise de Logs\n\n"
             "© 2026 Ewerton Vasconcelos. Todos os direitos reservados."
         )
         label_info = ctk.CTkLabel(card, text=info, font=("Inter",12), justify="left",

@@ -29,6 +29,6 @@ modules:
     sources:
       - type: git
         url: https://github.com/ewertonvasconcelos/speedscan.git
-        tag: v0.5.0-beta
+        tag: v0.0.9-beta
       - type: file
         path: requirements.txt

@@ -9,6 +9,7 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Mapeamento de comandos para diferentes sistemas operacionais
+# Versão 0.0.9-beta
 # =============================================================================
 
 import subprocess
@@ -18,7 +19,6 @@ class CommandRunner:
         self.so = so
 
     def run(self, cmd):
-        """Executa um comando e retorna o processo (stdout pode ser lido)."""
         try:
             proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
             return proc
@@ -159,7 +159,18 @@ class ActionMapper:
                 "Linux": "ping -c 4 google.com",
                 "Windows": "ping -n 4 google.com",
                 "Darwin": "ping -c 4 google.com"
-            }
+            },
+            # NOVOS COMANDOS
+            "services": {
+                "Linux": "systemctl list-units --type=service --state=running --no-pager",
+                "Windows": "sc query | findstr /C:\"SERVICE_NAME\" /C:\"STATE\"",
+                "Darwin": "launchctl list"
+            },
+            "logs": {
+                "Linux": "journalctl -p 3 -b --no-pager | head -20",
+                "Windows": "Get-EventLog -LogName System -EntryType Error -Newest 20 | Format-Table -AutoSize",
+                "Darwin": "log show --predicate 'eventMessage contains \"error\"' --last 1h | head -20"
+            },
         }
         if action in commands:
             return commands[action].get(self.so, "Comando não suportado neste SO")

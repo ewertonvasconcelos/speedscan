@@ -10,12 +10,12 @@ jobs:
   build-executables:
     name: Build executables on ${{ matrix.os }}
     strategy:
-      fail-fast: false  # Não interrompe outros jobs se um falhar
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ['3.10']
         include:
-          - os: ubuntu-linux
+          - os: ubuntu-latest
             artifact-name: speedscan-linux
             executable-suffix: ''
           - os: windows-latest
@@ -91,23 +91,15 @@ jobs:
 
     - name: Build Snap package
       run: |
-        # Garantir que o snapcraft.yaml existe
-        if [ -f "snap/snapcraft.yaml" ]; then
-          snapcraft
-        else
-          echo "snap/snapcraft.yaml not found"
-          exit 1
-        fi
+        mkdir -p snap/stage/bin
+        cp dist/speedscan snap/stage/bin/
+        snapcraft
 
     - name: Build Flatpak package
       run: |
-        # Adicionar repositório Flathub
         flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-        # Instalar runtime e SDK se necessário
         flatpak install -y flathub org.freedesktop.Platform//23.08 org.freedesktop.Sdk//23.08
-        # Construir
         flatpak-builder --force-clean build-dir io.github.ewertonvasconcelos.speedscan.yml
-        # Criar bundle
         flatpak build-bundle build-dir speedscan.flatpak io.github.ewertonvasconcelos.speedscan
 
     - name: Upload Linux packages
