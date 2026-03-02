@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 # core/speed_test.py
+# =============================================================================
+#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
+#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
+#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
+#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
+#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
+#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
+# =============================================================================
 # Módulo de teste de velocidade de internet
+# Versão 0.0.9-beta
+# =============================================================================
 
 import subprocess
 import re
@@ -8,9 +18,7 @@ import time
 import threading
 import sys
 import os
-from pathlib import Path
 
-# Tentar importar speedtest-cli, se não estiver instalado, instalar automaticamente
 try:
     import speedtest
 except ImportError:
@@ -19,13 +27,6 @@ except ImportError:
     import speedtest
 
 class SpeedTester:
-    """
-    Classe para executar testes de velocidade.
-    Suporta dois modos:
-      - speedtest-cli (mais preciso, usa servidores dedicados)
-      - Fallback: download de um arquivo de teste (curl/wget) para estimativa simples.
-    """
-    
     def __init__(self, use_fallback=False):
         self.use_fallback = use_fallback
         self.result = {
@@ -36,42 +37,32 @@ class SpeedTester:
             'timestamp': None,
             'error': None
         }
-    
+
     def test_with_speedtest(self):
-        """Executa teste usando speedtest-cli (recomendado)."""
         try:
             st = speedtest.Speedtest(secure=True)
             st.get_best_server()
             self.result['ping'] = round(st.results.ping, 1)
             self.result['server'] = f"{st.results.server['name']} ({st.results.server['country']})"
-            # Download
             download_bps = st.download()
-            self.result['download'] = round(download_bps / 1_000_000, 2)  # Mbps
-            # Upload
+            self.result['download'] = round(download_bps / 1_000_000, 2)
             upload_bps = st.upload()
-            self.result['upload'] = round(upload_bps / 1_000_000, 2)  # Mbps
+            self.result['upload'] = round(upload_bps / 1_000_000, 2)
             self.result['timestamp'] = time.time()
             return True
         except Exception as e:
             self.result['error'] = str(e)
             return False
-    
+
     def test_fallback(self):
-        """
-        Método alternativo: baixa um arquivo de tamanho conhecido para estimar download,
-        e envia dados para um servidor echo (simples) para upload.
-        Menos preciso, mas funciona sem speedtest-cli.
-        """
         import requests
         import tempfile
         try:
-            # Teste de ping (simples)
             start = time.time()
             requests.get("https://www.google.com", timeout=5)
-            ping = (time.time() - start) * 1000  # ms
+            ping = (time.time() - start) * 1000
             self.result['ping'] = round(ping, 1)
-            
-            # Download: baixar um arquivo de 10 MB
+
             url_download = "http://speedtest.tele2.net/10MB.zip"
             with tempfile.NamedTemporaryFile() as tmp:
                 start = time.time()
@@ -82,49 +73,39 @@ class SpeedTester:
                         size += len(chunk)
                         tmp.write(chunk)
                 elapsed = time.time() - start
-                # bits por segundo = (size * 8) / elapsed
                 download_mbps = (size * 8) / elapsed / 1_000_000
                 self.result['download'] = round(download_mbps, 2)
-            
-            # Upload: enviar dados para httpbin.org/post (simulação)
-            # Gerar 5 MB de dados aleatórios
+
             data = os.urandom(5 * 1024 * 1024)
             start = time.time()
             requests.post("https://httpbin.org/post", data=data, timeout=30)
             elapsed = time.time() - start
             upload_mbps = (len(data) * 8) / elapsed / 1_000_000
             self.result['upload'] = round(upload_mbps, 2)
-            
+
             self.result['server'] = "Fallback (servidores públicos)"
             self.result['timestamp'] = time.time()
             return True
         except Exception as e:
             self.result['error'] = str(e)
             return False
-    
+
     def run_test(self, callback=None):
-        """
-        Executa o teste em uma thread separada.
-        Se callback for fornecido, será chamado ao final com o resultado.
-        """
         def _run():
             if self.use_fallback:
                 success = self.test_fallback()
             else:
                 success = self.test_with_speedtest()
                 if not success:
-                    # Se speedtest falhar, tenta fallback
                     self.use_fallback = True
                     success = self.test_fallback()
             if callback:
                 callback(self.result)
-        
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
         return thread
-    
+
     def format_result(self, result=None):
-        """Retorna uma string formatada do resultado."""
         if result is None:
             result = self.result
         if result.get('error'):
@@ -144,10 +125,8 @@ class SpeedTester:
             lines.append(f"🕒 {dt.strftime('%d/%m/%Y %H:%M:%S')}")
         return "\n".join(lines)
 
-# Exemplo de uso direto (para testes)
 if __name__ == "__main__":
     tester = SpeedTester()
     print("Iniciando teste de velocidade...")
     tester.run_test(callback=lambda res: print(tester.format_result(res)))
-    # Aguarda término (em uso real, a thread continua)
     time.sleep(60)

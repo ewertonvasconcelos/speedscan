@@ -9,6 +9,7 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Módulo de monitoramento de temperaturas (CPU, GPU, discos)
+# Versão 0.0.9-beta
 # =============================================================================
 
 import psutil
@@ -23,7 +24,6 @@ class TemperatureMonitor:
         """Retorna temperaturas da CPU usando psutil (Linux)."""
         temps = {}
         try:
-            # psutil.sensors_temperatures() retorna um dicionário
             thermal = psutil.sensors_temperatures()
             if 'coretemp' in thermal:
                 for entry in thermal['coretemp']:
@@ -63,13 +63,11 @@ class TemperatureMonitor:
         """Tenta obter temperatura de discos via smartctl (requer sudo)."""
         temps = {}
         try:
-            # Lista discos
             out = subprocess.run(["lsblk", "-d", "-o", "NAME"], capture_output=True, text=True)
-            disks = out.stdout.splitlines()[1:]  # Ignora cabeçalho
+            disks = out.stdout.splitlines()[1:]
             for disk in disks:
                 disk = disk.strip()
                 if disk:
-                    # Tenta smartctl
                     smart = subprocess.run(["sudo", "smartctl", "-A", f"/dev/{disk}"], 
                                           capture_output=True, text=True, timeout=2)
                     for line in smart.stdout.splitlines():
