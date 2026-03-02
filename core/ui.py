@@ -1,44 +1,70 @@
+#!/usr/bin/env python3
 # core/ui.py
+# =============================================================================
+#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
+#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
+#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
+#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
+#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
+#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
+# =============================================================================
+# Funções auxiliares para interface do SpeedScan
+# =============================================================================
+
 import customtkinter as ctk
 
-def create_card_grid(parent, items, tag, acc_color, bg_color, command_callback):
-    """Cria um grid de cards (3 colunas) com título e botão."""
-    grid = ctk.CTkFrame(parent, fg_color="transparent")
-    grid.pack(fill="both", expand=True, pady=10)
-    for i in range(3):
-        grid.columnconfigure(i, weight=1)
+def create_card_grid(parent, items, tag_prefix, acc_color, bg_color, command_callback):
+    """
+    Cria uma grade de cards baseada na lista de itens.
+    Retorna uma lista de labels de ping (se houver).
+    """
+    grid_frame = ctk.CTkFrame(parent, fg_color="transparent")
+    grid_frame.pack(fill="x", pady=5)
 
-    for idx, (title, cmd, is_dns) in enumerate(items):
+    ping_labels = []
+    for idx, (label, cmd, is_dns) in enumerate(items):
         row, col = divmod(idx, 3)
-        card = ctk.CTkFrame(grid, fg_color=bg_color, corner_radius=10,
+        card = ctk.CTkFrame(grid_frame, fg_color=bg_color, corner_radius=10,
                              border_width=1, border_color=acc_color)
-        card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+        card.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
         card.grid_propagate(False)
         card.configure(height=150)
 
-        ctk.CTkLabel(card, text=title, font=("Inter",14,"bold"),
-                     text_color=acc_color).pack(pady=(10,5))
+        # Título do card
+        title = ctk.CTkLabel(card, text=label, font=("Inter", 14, "bold"),
+                              text_color=acc_color)
+        title.pack(pady=(10,5))
 
-        if title == "Ping":
+        if cmd == "ping":
+            # Card especial para ping: label dinâmico + botão
+            ping_label = ctk.CTkLabel(card, text="-- ms", font=("Inter", 18, "bold"),
+                                       text_color=acc_color)
+            ping_label.pack(expand=True)
+            ping_labels.append(ping_label)
+            # Botão para iniciar/parar ping (sem cursor)
             btn = ctk.CTkButton(card, text="Iniciar", fg_color=acc_color,
-                                 command=lambda: command_callback("ping", tag, False), cursor="hand2")
+                                 command=lambda c=cmd, t=tag_prefix, d=is_dns: command_callback(c, t, d))
             btn.pack(pady=5)
-            # Será preciso um label de ping separado; faremos depois
         else:
-            btn_text = "Aplicar" if is_dns else "Executar"
-            btn = ctk.CTkButton(card, text=btn_text, fg_color=acc_color,
-                                 command=lambda c=cmd, t=tag, d=is_dns: command_callback(c, t, d),
-                                 cursor="hand2")
-            btn.pack(pady=5)
+            # Botão de ação padrão (sem cursor)
+            btn = ctk.CTkButton(card, text="Executar", fg_color=acc_color,
+                                 command=lambda c=cmd, t=tag_prefix, d=is_dns: command_callback(c, t, d))
+            btn.pack(expand=True)
 
-def add_console(parent, tag, acc_color, toggle_callback):
-    """Adiciona um console expansível."""
-    btn = ctk.CTkButton(parent, text="Detalhes ⌄", fg_color="transparent",
-                         text_color=acc_color, hover_color=acc_color,
-                         corner_radius=20, command=lambda: toggle_callback(tag),
-                         cursor="hand2")
-    btn.pack(anchor="e", pady=5)
-    log = ctk.CTkTextbox(parent, height=150, fg_color="#000000",
-                          text_color="#10b981", font=("Consolas",11))
-    return btn, log
+    # Configurar colunas do grid_frame para expandir igualmente
+    for i in range(3):
+        grid_frame.columnconfigure(i, weight=1)
 
+    return ping_labels
+
+def add_console(parent, tag_prefix, acc_color, toggle_callback):
+    """
+    Adiciona um botão "Detalhes" e uma área de console (inicialmente oculta).
+    Retorna o botão e o console.
+    """
+    console = ctk.CTkTextbox(parent, height=150, fg_color="#1e1e1e", text_color="#ffffff",
+                              font=("Consolas", 10), corner_radius=10)
+    # Botão para mostrar/esconder console (sem cursor)
+    btn = ctk.CTkButton(parent, text="Detalhes ⌄", fg_color=acc_color,
+                         command=lambda: toggle_callback(tag_prefix))
+    return btn, console

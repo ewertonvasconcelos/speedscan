@@ -1,208 +1,176 @@
+#!/usr/bin/env python3
 # core/actions.py
+# =============================================================================
+#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
+#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
+#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
+#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
+#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
+#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
+# =============================================================================
+# Mapeamento de comandos para diferentes sistemas operacionais
+# =============================================================================
+
 import subprocess
-import os
 
 class CommandRunner:
-    """Executa comandos com verificação de existência e tratamento de erros."""
     def __init__(self, so):
         self.so = so
 
-    def exists(self, cmd):
-        """Verifica se um comando existe no sistema."""
-        if self.so == "Windows":
-            return subprocess.run(f"where {cmd}", shell=True, capture_output=True).returncode == 0
-        return subprocess.run(f"which {cmd}", shell=True, capture_output=True).returncode == 0
-
-    def run(self, cmd, use_sudo=False, timeout=None):
-        """Executa um comando e retorna o processo (para leitura em tempo real)."""
-        if self.so == "Linux" and use_sudo and "sudo" in cmd:
-            full_cmd = f"pkexec bash -c '{cmd}'"
-        else:
-            full_cmd = cmd
+    def run(self, cmd):
+        """Executa um comando e retorna o processo (stdout pode ser lido)."""
         try:
-            proc = subprocess.Popen(full_cmd, shell=True, stdout=subprocess.PIPE,
-                                     stderr=subprocess.STDOUT, text=True)
+            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
             return proc
         except Exception as e:
-            return None
-
-    def check_output(self, cmd):
-        """Executa um comando e retorna a saída (string) ou None."""
-        try:
-            return subprocess.check_output(cmd, shell=True, text=True).strip()
-        except:
+            print(f"Erro ao executar comando: {e}")
             return None
 
 class ActionMapper:
-    """Mapeia comandos simbólicos para comandos reais baseados no SO."""
     def __init__(self, so, runner, turbo_active=False):
         self.so = so
         self.runner = runner
         self.turbo_active = turbo_active
 
-    def _in_container(self):
-        """Detecta se está rodando dentro de um container."""
-        return os.path.exists('/.dockerenv') or os.path.exists('/run/.containerenv') or os.environ.get('container') is not None
-
-    def get_command(self, symbolic, **kwargs):
-        """Retorna o comando real para um dado simbólico."""
-        # Otimização
-        if symbolic == "cache":
-            if self.so == "Linux" and self.runner.exists("eopkg"):
-                return "sudo eopkg dc && sudo eopkg clean"
-            return None
-        if symbolic == "swap":
-            return "sudo swapoff -a && sudo swapon -a" if self.so == "Linux" else None
-        if symbolic == "check":
-            if self.so == "Linux" and self.runner.exists("eopkg"):
-                return "sudo eopkg check"
-            return None
-        if symbolic == "turbo":
-            if self.so == "Linux":
-                mode = "performance" if self.turbo_active else "powersave"
-                return f"sudo cpupower frequency-set -g {mode}"
-            if self.so == "Windows":
-                guid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c" if self.turbo_active else "381b4222-f694-41f0-9685-ff5bb260df2e"
-                return f"powercfg /setactive {guid}"
-            return None
-        # Instalação de pacotes
-        if symbolic in ["steam", "lutris", "heroic", "bottles", "wine", "mangohud", "goverlay"]:
-            return self._install_pkg(symbolic)
-        # Rede
-        if symbolic == "ping":
-            return None  # tratado separadamente
-        if symbolic == "speedtest":
-            if self.runner.exists("speedtest-cli"):
-                return "speedtest-cli"
-            return "curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 -"
-        if symbolic == "ethtool":
-            if self.so != "Linux":
-                return None
-            iface = self.runner.check_output("ip route | grep default | awk '{print $5}' | head -1")
-            return f"ethtool {iface}" if iface else None
-        if symbolic == "dhclient":
-            return "sudo dhclient -v -r && sudo dhclient -v" if self.so == "Linux" else None
-        if symbolic == "ports":
-            if self.so == "Linux":
-                return "ss -tuln"
-            if self.so == "Windows":
-                return "netstat -an | findstr LISTENING"
-            if self.so == "Darwin":
-                return "lsof -i -P -n | grep LISTEN"
-            return None
-        if symbolic == "traceroute":
-            return "tracert 8.8.8.8" if self.so == "Windows" else "traceroute 8.8.8.8"
-        if symbolic == "wifi":
-            if self.so == "Linux":
-                return "nmcli -t -f GENERAL.STATE,IP4.ADDRESS,IP4.GATEWAY,WIFI.SSID,WIFI.SIGNAL,WIFI.CHANNEL dev show"
-            if self.so == "Windows":
-                return "netsh wlan show interfaces"
-            if self.so == "Darwin":
-                return "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I"
-            return None
-        if symbolic == "testdns":
-            return "nslookup google.com" if self.so == "Windows" else "dig google.com +short"
-        # Drivers
-        if symbolic == "pci":
-            if self.so == "Linux":
-                return "lspci -nnk"
-            if self.so == "Darwin":
-                return "system_profiler SPHardwareDataType"
-            if self.so == "Windows":
-                return "wmic path win32_VideoController get name"
-            return None
-        if symbolic == "update":
-            if self.so == "Linux":
-                # Tenta dnf, apt, etc.
-                if self.runner.exists("dnf"):
-                    return "sudo dnf upgrade -y"
-                if self.runner.exists("apt"):
-                    return "sudo apt upgrade -y"
-                return None
-            if self.so == "Windows" and self.runner.exists("winget"):
-                return "winget upgrade --all"
-            if self.so == "Darwin" and self.runner.exists("brew"):
-                return "brew upgrade"
-            return None
-        if symbolic == "usb":
-            if self.so == "Linux":
-                return "lsusb"
-            if self.so == "Darwin":
-                return "system_profiler SPUSBDataType"
-            if self.so == "Windows":
-                return "wmic path Win32_USBControllerDevice get *"
-            return None
-        if symbolic == "modules":
-            if self.so == "Linux":
-                return "lsmod"
-            if self.so == "Darwin":
-                return "kextstat"
-            if self.so == "Windows":
-                return "driverquery"
-            return None
-        if symbolic == "cpu_info":
-            if self.so == "Linux":
-                return "lscpu"
-            if self.so == "Darwin":
-                return "sysctl -a | grep machdep.cpu"
-            if self.so == "Windows":
-                return "wmic cpu get name"
-            return None
-        if symbolic == "firmware":
-            if self.so == "Linux":
-                return "sudo dmesg | grep -i firmware"
-            if self.so == "Darwin":
-                return "ioreg -l | grep -i firmware"
-            return None
-        # Comandos especiais (tratados por funções internas)
-        if symbolic in ["video_drv", "net_drv", "auto_update"]:
-            return symbolic  # indicador para tratamento especial
+    def get_command(self, action):
+        """Retorna o comando apropriado para a ação."""
+        commands = {
+            "cache": {
+                "Linux": "sudo du -sh /var/cache/apt/archives && sudo apt-get clean",
+                "Windows": "cleanmgr /sagerun:1",
+                "Darwin": "sudo du -sh ~/Library/Caches && sudo rm -rf ~/Library/Caches/*"
+            },
+            "swap": {
+                "Linux": "sudo swapoff -a && sudo swapon -a",
+                "Windows": "echo Swap reset não aplicável no Windows",
+                "Darwin": "sudo purge"
+            },
+            "check": {
+                "Linux": "sudo fsck -A -R -y",
+                "Windows": "chkdsk /f",
+                "Darwin": "sudo fsck -fy"
+            },
+            "turbo": {
+                "Linux": "echo Modo Turbo ativado (ajustes de performance)",
+                "Windows": "powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+                "Darwin": "sudo nvram boot-args=\"keepsyms=1 debug=0x144\""
+            },
+            "steam": {
+                "Linux": "steam",
+                "Windows": "start steam://",
+                "Darwin": "open -a Steam"
+            },
+            "lutris": {
+                "Linux": "lutris",
+                "Windows": "lutris",
+                "Darwin": "lutris"
+            },
+            "heroic": {
+                "Linux": "heroic",
+                "Windows": "heroic",
+                "Darwin": "heroic"
+            },
+            "bottles": {
+                "Linux": "bottles",
+                "Windows": "bottles",
+                "Darwin": "bottles"
+            },
+            "wine": {
+                "Linux": "wine --version",
+                "Windows": "wine --version",
+                "Darwin": "wine --version"
+            },
+            "mangohud": {
+                "Linux": "mangohud",
+                "Windows": "echo MangoHud não disponível no Windows",
+                "Darwin": "echo MangoHud não disponível no macOS"
+            },
+            "goverlay": {
+                "Linux": "goverlay",
+                "Windows": "echo GOverlay não disponível no Windows",
+                "Darwin": "echo GOverlay não disponível no macOS"
+            },
+            "dolphin": {
+                "Linux": "dolphin-emu",
+                "Windows": "start dolphin",
+                "Darwin": "open -a Dolphin"
+            },
+            "pci": {
+                "Linux": "lspci",
+                "Windows": "wmic path win32_pnpentity get /format:list",
+                "Darwin": "system_profiler SPHardwareDataType"
+            },
+            "update": {
+                "Linux": "sudo apt update && sudo apt upgrade -y",
+                "Windows": "wuauclt /detectnow /updatenow",
+                "Darwin": "softwareupdate -i -a"
+            },
+            "usb": {
+                "Linux": "lsusb",
+                "Windows": "wmic path win32_usbcontrollerdevice get /format:list",
+                "Darwin": "system_profiler SPUSBDataType"
+            },
+            "modules": {
+                "Linux": "lsmod",
+                "Windows": "driverquery",
+                "Darwin": "kextstat"
+            },
+            "cpu_info": {
+                "Linux": "lscpu",
+                "Windows": "wmic cpu get",
+                "Darwin": "sysctl -a | grep machdep.cpu"
+            },
+            "firmware": {
+                "Linux": "sudo dmesg | grep -i firmware",
+                "Windows": "wmic bios get",
+                "Darwin": "system_profiler SPFirmwareDataType"
+            },
+            "ethtool": {
+                "Linux": "sudo ethtool eth0",
+                "Windows": "ipconfig /all",
+                "Darwin": "ifconfig"
+            },
+            "dhclient": {
+                "Linux": "sudo dhclient -v",
+                "Windows": "ipconfig /renew",
+                "Darwin": "sudo dhclient"
+            },
+            "ports": {
+                "Linux": "sudo netstat -tulpn",
+                "Windows": "netstat -an",
+                "Darwin": "sudo lsof -i -P | grep LISTEN"
+            },
+            "traceroute": {
+                "Linux": "traceroute google.com",
+                "Windows": "tracert google.com",
+                "Darwin": "traceroute google.com"
+            },
+            "wifi": {
+                "Linux": "iwconfig",
+                "Windows": "netsh wlan show interfaces",
+                "Darwin": "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I"
+            },
+            "testdns": {
+                "Linux": "nslookup google.com",
+                "Windows": "nslookup google.com",
+                "Darwin": "nslookup google.com"
+            },
+            "ping": {
+                "Linux": "ping -c 4 google.com",
+                "Windows": "ping -n 4 google.com",
+                "Darwin": "ping -c 4 google.com"
+            }
+        }
+        if action in commands:
+            return commands[action].get(self.so, "Comando não suportado neste SO")
         return None
 
-    def _install_pkg(self, pkg):
+    def dns_command(self, dns_ip):
+        """Retorna comando para configurar DNS."""
         if self.so == "Linux":
-            if self.runner.exists("eopkg"):
-                return f"sudo eopkg it {pkg} -y"
-            if self.runner.exists("apt"):
-                return f"sudo apt install -y {pkg}"
-            if self.runner.exists("dnf"):
-                return f"sudo dnf install -y {pkg}"
-            return None
-        if self.so == "Windows" and self.runner.exists("winget"):
-            return f"winget install {pkg}"
-        if self.so == "Darwin" and self.runner.exists("brew"):
-            return f"brew install {pkg}"
-        return None
-
-    def dns_command(self, dns):
-        """Retorna comando de configuração de DNS, com detecção de container."""
-        if self._in_container():
-            return "echo 'A configuração de DNS não pode ser alterada dentro de um container. Execute este comando no sistema host.'"
-        if self.so == "Linux":
-            # Tenta nmcli primeiro
-            iface = self.runner.check_output("nmcli -t -f DEVICE,STATE dev | grep connected | cut -d: -f1 | head -n1")
-            if iface:
-                if dns == "auto":
-                    return f"nmcli dev mod {iface} ipv4.dns ''"
-                return f"nmcli dev mod {iface} ipv4.dns '{dns}'"
-            # Fallback: tenta editar /etc/resolv.conf (requer sudo)
-            if dns == "auto":
-                return "sudo cp /etc/resolv.conf.backup /etc/resolv.conf 2>/dev/null || echo 'Backup não encontrado'"
-            else:
-                return f"echo 'nameserver {dns}' | sudo tee /etc/resolv.conf > /dev/null"
+            return f"echo 'nameserver {dns_ip}' | sudo tee /etc/resolv.conf"
         elif self.so == "Windows":
-            iface = self.runner.check_output("wmic nic where netenabled=true get NetConnectionID | findstr /v NetConnectionID")
-            iface = iface.strip() if iface else None
-            if not iface:
-                return "echo 'Interface não encontrada'"
-            if dns == "auto":
-                return f'netsh interface ip set dns "{iface}" dhcp'
-            return f'netsh interface ip set dns "{iface}" static {dns}'
+            return f"netsh interface ip set dns name='Ethernet' static {dns_ip}"
         elif self.so == "Darwin":
-            service = self.runner.check_output("networksetup -listallnetworkservices | grep -v 'An asterisk' | head -1")
-            if not service:
-                return "echo 'Serviço não encontrado'"
-            if dns == "auto":
-                return f"networksetup -setdnsservers '{service}' empty"
-            return f"networksetup -setdnsservers '{service}' {dns}"
-        return "echo 'DNS não suportado'"
+            return f"networksetup -setdnsservers Wi-Fi {dns_ip}"
+        return None

@@ -8,7 +8,8 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# SpeedScan - Versão 0.0.9-beta (TODAS AS CORREÇÕES APLICADAS)
+# SpeedScan - Ferramenta all-in-one de diagnóstico e otimização de sistema
+# Versão: 0.3.0-beta (com gráficos históricos)
 # Desenvolvedor: Ewerton Vasconcelos
 # =============================================================================
 
@@ -37,20 +38,21 @@ from core.browser_cleaner import BrowserCleaner
 from core.speed_test import SpeedTester
 from core.process_manager import ProcessManager
 from core.historical_metrics import MetricsCollector, MetricsDB
-from core.lan_scanner import LANScanner
 
+# Para gráficos
 import matplotlib
 matplotlib.use('TkAgg')
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+# Constantes
 CONFIG_FILE = Path.home() / ".speedscan_conf"
 ICON_PATH = Path.home() / "speedscan" / "assets" / "icon.png"
 LOG_DIR = Path.home() / "speedscan" / "logs"
 AGENT_SCRIPT = Path.home() / "speedscan" / "speedscan-agent.py"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-VERSION = "0.0.9-beta"
+VERSION = "0.3.0-beta"
 
 DEFAULT_CONFIG = {
     "theme": "default",
@@ -117,6 +119,7 @@ class SpeedScan(ctk.CTk):
         self.detail_buttons = {}
         self.logs = {}
 
+        # Monitores
         self.health_monitor = HealthScore()
         self.health_score_var = ctk.StringVar(value="Calculando...")
         self.temp_monitor = TemperatureMonitor()
@@ -126,9 +129,7 @@ class SpeedScan(ctk.CTk):
         self.proc_manager = ProcessManager()
         self.metrics_collector = MetricsCollector(interval=5)
         self.metrics_db = MetricsDB()
-        self.lan_scanner = LANScanner()
         self.metrics_collector.start()
-        self.proc_manager.start_monitoring()
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -144,7 +145,6 @@ class SpeedScan(ctk.CTk):
 
         self._setup_bindings()
         threading.Thread(target=self._monitor_loop, daemon=True).start()
-        self._check_process_queue()
 
     def _load_config(self):
         if CONFIG_FILE.exists():
@@ -218,7 +218,7 @@ class SpeedScan(ctk.CTk):
             ("🌐", "Rede", "rede"),
             ("🛠", "Drivers", "drivers"),
             ("📊", "Processos", "processos"),
-            ("📈", "Histórico", "historico"),
+            ("📈", "Histórico", "historico"),  # NOVA ABA
             ("🤖", "Agente IA", "agente")
         ]
         for icon, text, target in nav_items:
@@ -253,7 +253,7 @@ class SpeedScan(ctk.CTk):
         if target == "sistema":
             self._update_sys_info()
         elif target == "processos":
-            self._refresh_process_list()
+            self._update_process_list()
         elif target == "historico":
             self._update_graphs()
 
@@ -360,37 +360,20 @@ class SpeedScan(ctk.CTk):
             self.sys_labels[key] = lbl
 
         self.update_smart_card()
-        self._update_sys_info()  # já carrega na inicialização
 
     def _update_sys_info(self):
-        """Atualiza os labels com as informações do hardware."""
         try:
             self.sys_labels["hostname"].configure(text=platform.node())
-        except: pass
-        try:
             self.sys_labels["distro"].configure(text=self.hw.get_distro())
-        except: pass
-        try:
             self.sys_labels["kernel"].configure(text=platform.release())
-        except: pass
-        try:
             self.sys_labels["cpu"].configure(text=self.hw.get_cpu())
-        except: pass
-        try:
             self.sys_labels["ram"].configure(text=self.hw.get_ram())
-        except: pass
-        try:
             self.sys_labels["gpu"].configure(text=self.hw.get_gpu())
-        except: pass
-        try:
             self.sys_labels["disks"].configure(text=self.hw.get_disks_detailed())
-        except: pass
-        try:
             self.sys_labels["uptime"].configure(text=self.hw.get_uptime())
-        except: pass
-        try:
             self.sys_labels["battery"].configure(text=self.hw.get_battery())
-        except: pass
+        except Exception as e:
+            print(f"Erro ao atualizar sistema: {e}")
 
         try:
             health_data = self.health_monitor.calculate_health_score()
@@ -427,7 +410,6 @@ class SpeedScan(ctk.CTk):
                 self.smart_summary_label.configure(text_color="green" if color == "green" else self.text_color)
         self.after(3000, self.update_smart_card)
 
-    # ---------- Métodos auxiliares (browser, speed, lan) - mantidos iguais aos anteriores ----------
     def _run_browser_clean(self, log):
         log.delete("1.0", "end")
         log.insert("end", "Iniciando limpeza de navegadores...\n")
@@ -453,38 +435,12 @@ class SpeedScan(ctk.CTk):
         log.delete("1.0", "end")
         log.insert("end", "Iniciando teste de velocidade...\n")
         log.insert("end", "Isso pode levar alguns segundos.\n\n")
+        
         def update_log(result):
             self.after(0, lambda: log.insert("end", "\n" + self.speed_tester.format_result(result) + "\n"))
             self.after(0, lambda: log.insert("end", "\n✅ Teste concluído.\n"))
+        
         self.speed_tester.run_test(callback=update_log)
-
-    def _run_lan_scan(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "Iniciando scanner de rede...\n")
-        log.insert("end", "Isso pode levar alguns segundos.\n\n")
-        def update_progress(current, total, ip, is_alive):
-            if is_alive:
-                self.after(0, lambda: log.insert("end", f"  {ip} - ativo\n"))
-        def scan_thread():
-            devices = self.lan_scanner.scan_network(progress_callback=update_progress)
-            self.after(0, lambda: self._display_scan_results(devices, log))
-        threading.Thread(target=scan_thread, daemon=True).start()
-
-    def _display_scan_results(self, devices, log):
-        log.insert("end", "\n" + "="*50 + "\n")
-        log.insert("end", "RESULTADO DO SCAN:\n")
-        log.insert("end", "="*50 + "\n")
-        for d in devices:
-            if 'error' in d:
-                log.insert("end", f"Erro: {d['error']}\n")
-                continue
-            log.insert("end", f"IP: {d['ip']}\n")
-            log.insert("end", f"MAC: {d['mac']}\n")
-            log.insert("end", f"Hostname: {d['hostname']}\n")
-            log.insert("end", f"Fabricante: {d['vendor']}\n")
-            log.insert("end", "-"*30 + "\n")
-        log.insert("end", f"\nTotal de dispositivos ativos: {len(devices)}\n")
-        log.insert("end", "✅ Scan concluído.\n")
 
     def _fill_otimizacao(self, parent):
         ctk.CTkLabel(parent, text="Otimização", font=("Inter",28,"bold"),
@@ -524,8 +480,7 @@ class SpeedScan(ctk.CTk):
             ("🧭 Portas Abertas", "ports", False),
             ("📶 Traceroute", "traceroute", False),
             ("📶 Informações Wi-Fi", "wifi", False),
-            ("🌍 Testar DNS", "testdns", False),
-            ("🔍 Scanner LAN", "lanscan", False)
+            ("🌍 Testar DNS", "testdns", False)
         ]
         ping_labels = ui.create_card_grid(parent, items, "net", self.acc_color, self.bg_color, self.run_card_action)
         if ping_labels:
@@ -553,7 +508,7 @@ class SpeedScan(ctk.CTk):
         self.detail_buttons["drv"] = btn
         self.logs["drv"] = log
 
-    # ---------- Aba Processos ----------
+    # ---------- ABA PROCESSOS (CORRIGIDA) ----------
     def _fill_processos(self, parent):
         ctk.CTkLabel(parent, text="Gerenciador de Processos", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
@@ -636,7 +591,7 @@ class SpeedScan(ctk.CTk):
                                       width=70, fg_color=self.acc_color)
         set_nice_btn.pack(side="left", padx=5)
 
-        self._refresh_process_list()
+        self.proc_manager.start_monitoring(lambda procs: self.after(0, lambda: self._update_process_tree(procs)))
 
     def _on_filter_change(self, event=None):
         term = self.filter_entry.get()
@@ -661,6 +616,9 @@ class SpeedScan(ctk.CTk):
         procs = self.proc_manager.get_process_list()
         self._update_process_tree(procs)
 
+    def _update_process_list(self):
+        self.proc_manager.start_monitoring(lambda procs: self.after(0, lambda: self._update_process_tree(procs)))
+
     def _update_process_tree(self, procs):
         for row in self.process_tree.get_children():
             self.process_tree.delete(row)
@@ -673,15 +631,6 @@ class SpeedScan(ctk.CTk):
                 p.get('create_time_str', '')
             )
             self.process_tree.insert('', 'end', values=values, iid=str(p['pid']))
-
-    def _check_process_queue(self):
-        try:
-            while True:
-                procs = self.proc_manager.callback_queue.get_nowait()
-                self._update_process_tree(procs)
-        except:
-            pass
-        self.after(500, self._check_process_queue)
 
     def _kill_selected_process(self):
         selected = self.process_tree.selection()
@@ -730,10 +679,11 @@ class SpeedScan(ctk.CTk):
         pid = int(selected[0])
         self.show_toast(f"Detalhes do PID {pid} em breve.", duration=2000)
 
-    # ---------- Aba Histórico ----------
+    # ---------- NOVA ABA: HISTÓRICO ----------
     def _fill_historico(self, parent):
         ctk.CTkLabel(parent, text="Histórico de Desempenho", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
+
         control_frame = ctk.CTkFrame(parent, fg_color="transparent")
         control_frame.pack(fill="x", pady=(0,10))
 
@@ -789,6 +739,7 @@ class SpeedScan(ctk.CTk):
         period_map = {"1h": 1, "6h": 6, "24h": 24, "7d": 168}
         hours = period_map.get(self.period_var.get(), 1)
         metric = self.metric_var.get()
+
         rows = self.metrics_db.get_last_hours(hours=hours, metrics=['timestamp', metric])
         if not rows:
             self.ax.clear()
@@ -796,8 +747,10 @@ class SpeedScan(ctk.CTk):
                          transform=self.ax.transAxes, color=self.text_color)
             self.canvas.draw()
             return
+
         timestamps = [time.strftime('%H:%M', time.localtime(r[0])) for r in rows]
         values = [r[1] for r in rows]
+
         self.ax.clear()
         self.ax.plot(timestamps, values, marker='o', linestyle='-', color=self.acc_color, markersize=3)
         self.ax.set_title(f"{metric.upper()} (%) - Últimas {hours} horas", color=self.acc_color)
@@ -807,6 +760,7 @@ class SpeedScan(ctk.CTk):
         self.ax.set_facecolor(self.light_bg)
         self.figure.tight_layout()
         self.canvas.draw()
+
         stats = self.metrics_db.get_stats(period_hours=hours)
         if metric == 'cpu':
             self.stats_labels['média'].configure(text=f"{stats['cpu_avg']:.1f}%")
@@ -821,7 +775,7 @@ class SpeedScan(ctk.CTk):
             self.stats_labels['mínimo'].configure(text=f"{stats['disk_min']:.1f}%")
             self.stats_labels['máximo'].configure(text=f"{stats['disk_max']:.1f}%")
 
-    # ---------- Aba Agente IA ----------
+    # ---------- Aba Agente IA (cursors removidos) ----------
     def _fill_agente(self, parent):
         ctk.CTkLabel(parent, text="Agente de IA", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(pady=(0,30))
@@ -887,10 +841,6 @@ class SpeedScan(ctk.CTk):
                 return
             elif cmd == "browsers":
                 self._run_browser_clean(log)
-                self._show_details_button(tag)
-                return
-            elif cmd == "lanscan":
-                self._run_lan_scan(log)
                 self._show_details_button(tag)
                 return
             elif cmd in ["video_drv", "net_drv", "auto_update"]:
@@ -994,10 +944,11 @@ class SpeedScan(ctk.CTk):
         else:
             self.bind_all("<MouseWheel>", self._on_mousewheel)
 
-    # ---------- Configurações (com botões sem cursor) ----------
+    # ---------- Configurações ----------
     def _fill_config(self, parent):
         ctk.CTkLabel(parent, text="Configurações", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,30))
+
         f_user = ctk.CTkFrame(parent, fg_color="transparent")
         f_user.pack(fill="x", pady=10)
         ctk.CTkLabel(f_user, text="Nome de usuário", font=("Inter",14),
@@ -1130,6 +1081,7 @@ class SpeedScan(ctk.CTk):
 
         self.toggle_schedule_options()
         self.update_schedule_visibility(self.schedule_freq_var.get())
+
         self.schedule_options_frame.pack(fill="x", pady=10)
 
         separator2 = ctk.CTkFrame(parent, height=2, fg_color=self.acc_color)
@@ -1219,7 +1171,6 @@ class SpeedScan(ctk.CTk):
         toast.place(relx=0.5, rely=0.5, anchor="center")
         self.after(duration, toast.destroy)
 
-    # ---------- APPLY CONFIG CORRIGIDO ----------
     def apply_config(self):
         self.config["username"] = self.entry_user.get()
         for k,v in LANGUAGES.items():
@@ -1234,8 +1185,6 @@ class SpeedScan(ctk.CTk):
         self.config["open_file_in_tab"] = (self.tab_var.get() == "Na guia")
         self._save_config()
 
-        # Pequeno delay para garantir que o novo processo inicie
-        time.sleep(0.5)
         subprocess.Popen([sys.executable] + sys.argv)
         self.quit()
 
@@ -1273,8 +1222,7 @@ class SpeedScan(ctk.CTk):
             "• Limpeza de Navegadores (Chrome, Firefox, Edge, etc.)\n"
             "• Teste de Velocidade de Internet\n"
             "• Gerenciador de Processos\n"
-            "• Gráficos Históricos de Desempenho\n"
-            "• Scanner de Rede Local\n\n"
+            "• Gráficos Históricos de Desempenho\n\n"
             "© 2026 Ewerton Vasconcelos. Todos os direitos reservados."
         )
         ctk.CTkLabel(card, text=info, font=("Inter",12), justify="left",

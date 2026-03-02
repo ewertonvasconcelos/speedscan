@@ -1,99 +1,143 @@
+#!/usr/bin/env python3
 # core/hardware.py
+# =============================================================================
+#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
+#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
+#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
+#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
+#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
+#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
+# =============================================================================
+# Módulo de coleta de informações de hardware
+# =============================================================================
+
 import platform
 import psutil
 import subprocess
+import re
 import time
-import json
-from datetime import datetime, timedelta
-from functools import lru_cache
-import os
 
 class HardwareInfo:
-    """Coleta informações de hardware de forma unificada com fallbacks."""
     def __init__(self, so, runner):
         self.so = so
         self.runner = runner
 
-    @lru_cache(maxsize=1)
     def get_distro(self):
+        """Retorna a distribuição/versão do SO."""
         if self.so == "Linux":
-            out = self.runner.check_output("cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2")
-            return out.strip('"') if out else "Linux"
-        return platform.system() + " " + platform.release()
+            try:
+                with open("/etc/os-release") as f:
+                    for line in f:
+                        if line.startswith("PRETTY_NAME="):
+                            return line.split("=")[1].strip().strip('"')
+            except:
+                pass
+            return "Linux"
+        elif self.so == "Windows":
+            return platform.win32_ver()[0] or "Windows"
+        elif self.so == "Darwin":
+            return f"macOS {platform.mac_ver()[0]}"
+        return self.so
 
-    @lru_cache(maxsize=1)
     def get_cpu(self):
+        """Retorna modelo da CPU e número de núcleos."""
         try:
             if self.so == "Linux":
-                out = self.runner.check_output("grep -m1 'model name' /proc/cpuinfo | cut -d: -f2")
-                return out or f"{psutil.cpu_count()} núcleos"
+                with open("/proc/cpuinfo") as f:
+                    for line in f:
+                        if "model name" in line:
+                            return line.split(":")[1].strip()
             elif self.so == "Windows":
-                out = self.runner.check_output("wmic cpu get name")
-                return out or f"{psutil.cpu_count()} núcleos"
+                return platform.processor()
             elif self.so == "Darwin":
-                out = self.runner.check_output("sysctl -n machdep.cpu.brand_string")
-                return out or f"{psutil.cpu_count()} núcleos"
+                out = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True)
+                return out.stdout.strip()
         except:
-            return f"{psutil.cpu_count()} núcleos"
+            pass
+        return f"{psutil.cpu_count()} núcleos"
 
     def get_ram(self):
-        mem = psutil.virtual_memory()
-        return f"{mem.used//1048576} MB / {mem.total//1048576} MB ({mem.percent}%)"
+        """Retorna quantidade de RAM total e em uso."""
+        try:
+            mem = psutil.virtual_memory()
+            total = mem.total // (1024**3)
+            usado = mem.used // (1024**3)
+            return f"{usado} GB / {total} GB"
+        except:
+            return "N/A"
 
-    @lru_cache(maxsize=1)
     def get_gpu(self):
+        """Retorna informações da GPU (simplificado)."""
         try:
             if self.so == "Linux":
-                return self.runner.check_output("lspci | grep -i 'vga\\|3d' | cut -d: -f3-") or "Não detectado"
+                out = subprocess.run(["lspci"], capture_output=True, text=True)
+                for line in out.stdout.splitlines():
+                    if "VGA" in line or "3D" in line:
+                        return line.split(":")[2].strip()
             elif self.so == "Windows":
-                return self.runner.check_output("wmic path win32_VideoController get name") or "Não detectado"
+                out = subprocess.run(["wmic", "path", "win32_videocontroller", "get", "name"], capture_output=True, text=True)
+                lines = out.stdout.splitlines()
+                if len(lines) >= 2:
+                    return lines[1].strip()
             elif self.so == "Darwin":
-                return self.runner.check_output("system_profiler SPDisplaysDataType | grep Chipset") or "Não detectado"
+                out = subprocess.run(["system_profiler", "SPDisplaysDataType"], capture_output=True, text=True)
+                for line in out.stdout.splitlines():
+                    if "Chipset Model" in line:
+                        return line.split(":")[1].strip()
         except:
-            return "Não detectado"
+            pass
+        return "Desconhecida"
 
     def get_disks_detailed(self):
-        """Retorna uma lista de discos físicos com tamanho total e espaço usado, sem duplicações."""
+        """
+        Retorna informações de discos físicos (não partições) com uso percentual.
+        Evita duplicatas agrupando por dispositivo.
+        """
         try:
-            # Tenta usar lsblk para obter discos físicos (mais limpo)
-            if self.so == "Linux" and self.runner.exists("lsblk"):
-                output = self.runner.check_output("lsblk -d -o NAME,SIZE,MODEL,TYPE -J 2>/dev/null")
-                if output:
-                    data = json.loads(output)
-                    disks = []
-                    for disk in data.get('blockdevices', []):
-                        if disk.get('type') == 'disk':
-                            name = disk.get('name')
-                            size = disk.get('size', '0B')
-                            model = disk.get('model', '')
-                            # Tenta obter uso do disco (não é trivial, podemos mostrar apenas tamanho)
-                            disks.append(f"{model} ({name}) - {size}")
-                    if disks:
-                        return "\n".join(disks[:3])  # limita a 3 discos
-            # Fallback: usa psutil mas filtra pontos de montagem irrelevantes
-            exclude = ('/snap', '/boot', '/sys', '/proc', '/dev', '/run')
-            seen = set()
-            disks = []
-            for part in psutil.disk_partitions():
-                if part.mountpoint.startswith(exclude):
-                    continue
-                if part.device in seen:
-                    continue
-                seen.add(part.device)
+            partitions = psutil.disk_partitions()
+            devices = {}
+            for p in partitions:
+                device = p.device
+                # Remove números de partição para obter o disco físico (ex: /dev/sda1 -> /dev/sda)
+                physical_disk = re.sub(r'\d+$', '', device)
                 try:
-                    usage = psutil.disk_usage(part.mountpoint)
-                    total_gb = usage.total // 1073741824
-                    used_gb = usage.used // 1073741824
-                    disks.append(f"{part.device} ({total_gb}G, usado {used_gb}G)")
+                    usage = psutil.disk_usage(p.mountpoint)
+                    if physical_disk not in devices:
+                        devices[physical_disk] = usage.percent
                 except:
-                    continue
-            return "\n".join(disks[:3]) if disks else "Nenhum disco detectado"
+                    pass
+            # Formata a saída
+            disk_info = [f"{dev} {percent}%" for dev, percent in devices.items()]
+            return ", ".join(disk_info) if disk_info else "N/A"
         except Exception as e:
-            return f"Erro ao ler discos: {e}"
+            print(f"Erro ao obter discos: {e}")
+            return "N/A"
 
     def get_uptime(self):
-        return str(timedelta(seconds=int(time.time() - psutil.boot_time())))
+        """Retorna o tempo de atividade do sistema."""
+        try:
+            uptime_seconds = time.time() - psutil.boot_time()
+            days = int(uptime_seconds // 86400)
+            hours = int((uptime_seconds % 86400) // 3600)
+            minutes = int((uptime_seconds % 3600) // 60)
+            if days > 0:
+                return f"{days}d {hours}h {minutes}m"
+            elif hours > 0:
+                return f"{hours}h {minutes}m"
+            else:
+                return f"{minutes}m"
+        except:
+            return "N/A"
 
     def get_battery(self):
-        bat = psutil.sensors_battery()
-        return f"{bat.percent:.1f}%" if bat else "AC Power"
+        """Retorna status da bateria, se presente."""
+        try:
+            battery = psutil.sensors_battery()
+            if battery:
+                percent = round(battery.percent, 1)
+                plugged = "Conectado" if battery.power_plugged else "Desconectado"
+                return f"{percent}% ({plugged})"
+            else:
+                return "Sem bateria"
+        except:
+            return "N/A"
