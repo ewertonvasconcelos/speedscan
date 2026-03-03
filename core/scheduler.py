@@ -1,5 +1,16 @@
+#!/usr/bin/env python3
 # core/scheduler.py
+# =============================================================================
+#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
+#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
+#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
+#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
+#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
+#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
+# =============================================================================
 # Agendador de tarefas automáticas
+# Versão 0.1.0-beta
+# =============================================================================
 
 import subprocess
 import os
@@ -12,7 +23,6 @@ class Scheduler:
         self.agent_script = agent_script
 
     def create_schedule(self, config):
-        """Cria uma tarefa agendada no sistema."""
         if not config['enabled']:
             self.remove_schedule()
             return
@@ -22,7 +32,6 @@ class Scheduler:
         freq = config['frequency']
         elevated = config['elevated']
 
-        # Comando a ser executado
         cmd = f"python3 {self.agent_script} --tasks {','.join(tasks)}"
         if elevated:
             cmd = "sudo " + cmd
@@ -37,7 +46,6 @@ class Scheduler:
             self._create_launchd(cmd, freq, hour, config)
 
     def remove_schedule(self):
-        """Remove a tarefa agendada."""
         if self.so == "Linux":
             subprocess.run("crontab -l | grep -v speedscan-agent | crontab -", shell=True)
         elif self.so == "Windows":
@@ -47,17 +55,13 @@ class Scheduler:
             (Path.home() / "Library/LaunchAgents/com.speedscan.agent.plist").unlink(missing_ok=True)
 
     def _create_cron(self, cmd, freq, hour, config):
-        # Implementação simplificada
         cron_line = f"{hour} * * * * {cmd} >> {self.log_dir}/cron.log 2>&1"
-        # Adicionar ao crontab
         subprocess.run(f'(crontab -l 2>/dev/null; echo "{cron_line}") | crontab -', shell=True)
 
     def _create_task_scheduler(self, cmd, freq, hour, config):
-        # Windows: schtasks
         subprocess.run(f'schtasks /create /tn SpeedScanAgent /tr "{cmd}" /sc DAILY /st {hour}', shell=True)
 
     def _create_launchd(self, cmd, freq, hour, config):
-        # macOS: launchd
         plist = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">

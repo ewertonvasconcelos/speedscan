@@ -9,14 +9,13 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Módulo de scanner de rede local
-# Versão 0.0.9-beta
+# Versão 0.1.0-beta
 # =============================================================================
 
 import subprocess
 import re
 import ipaddress
 import threading
-import time
 from typing import List, Dict, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 

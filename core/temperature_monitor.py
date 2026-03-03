@@ -9,19 +9,17 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Módulo de monitoramento de temperaturas (CPU, GPU, discos)
-# Versão 0.0.9-beta
+# Versão 0.1.0-beta
 # =============================================================================
 
 import psutil
 import subprocess
-import re
 
 class TemperatureMonitor:
     def __init__(self):
         self.sensors = {}
 
     def get_cpu_temperatures(self):
-        """Retorna temperaturas da CPU usando psutil (Linux)."""
         temps = {}
         try:
             thermal = psutil.sensors_temperatures()
@@ -33,7 +31,6 @@ class TemperatureMonitor:
                 for entry in thermal['k10temp']:
                     temps["CPU Package"] = round(entry.current, 1)
             else:
-                # Fallback: tenta ler de /sys/class/thermal
                 try:
                     with open("/sys/class/thermal/thermal_zone0/temp") as f:
                         temp = int(f.read().strip()) / 1000.0
@@ -45,7 +42,6 @@ class TemperatureMonitor:
         return temps
 
     def get_gpu_temperatures(self):
-        """Tenta obter temperatura da GPU NVIDIA via nvidia-smi."""
         temps = {}
         try:
             out = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader"], 
@@ -60,7 +56,6 @@ class TemperatureMonitor:
         return temps
 
     def get_disk_temperatures(self):
-        """Tenta obter temperatura de discos via smartctl (requer sudo)."""
         temps = {}
         try:
             out = subprocess.run(["lsblk", "-d", "-o", "NAME"], capture_output=True, text=True)
@@ -82,7 +77,6 @@ class TemperatureMonitor:
         return temps
 
     def get_all_temperatures(self):
-        """Retorna um dicionário com todas as temperaturas encontradas."""
         temps = {}
         temps.update(self.get_cpu_temperatures())
         temps.update(self.get_gpu_temperatures())

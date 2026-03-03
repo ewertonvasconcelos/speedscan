@@ -9,7 +9,7 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Mapeamento de comandos para diferentes sistemas operacionais
-# Versão 0.0.9-beta
+# Versão 0.1.0-beta
 # =============================================================================
 
 import subprocess
@@ -20,7 +20,10 @@ class CommandRunner:
 
     def run(self, cmd):
         try:
-            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            if isinstance(cmd, list):
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            else:
+                proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
             return proc
         except Exception as e:
             print(f"Erro ao executar comando: {e}")
@@ -33,7 +36,6 @@ class ActionMapper:
         self.turbo_active = turbo_active
 
     def get_command(self, action):
-        """Retorna o comando apropriado para a ação."""
         commands = {
             "cache": {
                 "Linux": "sudo du -sh /var/cache/apt/archives && sudo apt-get clean",
@@ -160,7 +162,6 @@ class ActionMapper:
                 "Windows": "ping -n 4 google.com",
                 "Darwin": "ping -c 4 google.com"
             },
-            # NOVOS COMANDOS
             "services": {
                 "Linux": "systemctl list-units --type=service --state=running --no-pager",
                 "Windows": "sc query | findstr /C:\"SERVICE_NAME\" /C:\"STATE\"",
@@ -177,7 +178,6 @@ class ActionMapper:
         return None
 
     def dns_command(self, dns_ip):
-        """Retorna comando para configurar DNS."""
         if self.so == "Linux":
             return f"echo 'nameserver {dns_ip}' | sudo tee /etc/resolv.conf"
         elif self.so == "Windows":

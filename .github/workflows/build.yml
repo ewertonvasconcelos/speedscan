@@ -3,8 +3,8 @@ name: Build SpeedScan Multi-Platform
 on:
   push:
     tags:
-      - 'v*'  # Dispara em tags como v0.5.0-beta
-  workflow_dispatch:  # Permite execução manual
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build-executables:

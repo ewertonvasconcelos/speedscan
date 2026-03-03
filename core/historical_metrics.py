@@ -9,13 +9,12 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Módulo de coleta e armazenamento de métricas históricas (com batch insert)
-# Versão 0.0.9-beta
+# Versão 0.1.0-beta
 # =============================================================================
 
 import sqlite3
 import time
 import threading
-from datetime import datetime, timedelta
 from pathlib import Path
 import psutil
 
@@ -23,15 +22,13 @@ DB_PATH = Path.home() / "speedscan" / "metrics.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 class MetricsDB:
-    """Gerencia banco de dados SQLite para métricas com inserção em lote."""
-    
     def __init__(self, db_path=DB_PATH):
         self.db_path = db_path
         self._init_db()
-        self.batch = []          # acumulador para batch insert
+        self.batch = []
         self.batch_lock = threading.Lock()
-        self.batch_size = 10     # insere a cada 10 pontos
-        self.auto_flush = True   # se True, insere automaticamente ao atingir batch_size
+        self.batch_size = 10
+        self.auto_flush = True
 
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -52,7 +49,6 @@ class MetricsDB:
     
     def insert(self, cpu=None, memory=None, disk_usage=None, 
                disk_io_read=None, disk_io_write=None, net_sent=None, net_recv=None):
-        """Acumula uma métrica para inserção em lote."""
         with self.batch_lock:
             self.batch.append((
                 time.time(), cpu, memory, disk_usage,
@@ -62,7 +58,6 @@ class MetricsDB:
                 self.flush()
 
     def flush(self):
-        """Insere todas as métricas acumuladas no banco de dados."""
         with self.batch_lock:
             if not self.batch:
                 return
@@ -75,7 +70,6 @@ class MetricsDB:
             self.batch.clear()
 
     def get_last_hours(self, hours=1, metrics=None):
-        """Retorna métricas das últimas N horas."""
         if metrics is None:
             metrics = ['timestamp', 'cpu', 'memory', 'disk_usage']
         else:
@@ -89,13 +83,11 @@ class MetricsDB:
         return rows
     
     def prune_old(self, days=7):
-        """Remove métricas mais antigas que 'days' dias."""
         cutoff = time.time() - days * 24 * 3600
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('DELETE FROM metrics WHERE timestamp < ?', (cutoff,))
     
     def get_stats(self, period_hours=1):
-        """Retorna estatísticas (média, min, max) para CPU, memória e disco no período."""
         cutoff = time.time() - period_hours * 3600
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute('''
@@ -113,8 +105,6 @@ class MetricsDB:
         }
 
 class MetricsCollector:
-    """Coleta métricas em intervalos regulares e armazena no banco usando batch."""
-    
     def __init__(self, interval=5):
         self.interval = interval
         self.db = MetricsDB()
@@ -134,7 +124,6 @@ class MetricsCollector:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=1)
-        # Garante que os dados acumulados sejam inseridos antes de parar
         self.db.flush()
     
     def _collect_loop(self):

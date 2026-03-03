@@ -9,7 +9,7 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Módulo de limpeza de navegadores (cache, cookies, histórico)
-# Versão 0.0.9-beta
+# Versão 0.1.0-beta
 # =============================================================================
 
 import os
@@ -52,7 +52,6 @@ class BrowserCleaner:
         }
 
     def format_bytes(self, bytes):
-        """Formata bytes para unidade legível."""
         for unit in ['B', 'KB', 'MB', 'GB']:
             if bytes < 1024.0:
                 return f"{bytes:.1f} {unit}"
@@ -60,7 +59,6 @@ class BrowserCleaner:
         return f"{bytes:.1f} TB"
 
     def get_size(self, path):
-        """Calcula o tamanho de um arquivo ou diretório."""
         try:
             if path.is_file():
                 return path.stat().st_size
@@ -76,7 +74,6 @@ class BrowserCleaner:
         return 0
 
     def clean_browser(self, browser_key):
-        """Limpa cache, cookies e histórico de um navegador específico."""
         browser = self.browsers.get(browser_key)
         if not browser:
             return None
@@ -87,7 +84,6 @@ class BrowserCleaner:
             'history_freed': 0,
             'errors': []
         }
-        # Cache
         cache_path = browser['cache']
         if cache_path.exists():
             size = self.get_size(cache_path)
@@ -99,14 +95,9 @@ class BrowserCleaner:
                 result['cache_freed'] = size
             except Exception as e:
                 result['errors'].append(f"cache: {e}")
-        # Cookies (simplificado - pode ser mais complexo)
-        # Para Chrome/Edge/Brave, o arquivo de cookies é um banco SQLite, remover pode causar problemas.
-        # Por simplicidade, não removemos cookies, apenas cache.
-        # Histórico (também SQLite, não removemos)
         return result
 
     def clean_all_browsers(self):
-        """Limpa todos os navegadores suportados."""
         results = {}
         for key in self.browsers:
             results[key] = self.clean_browser(key)

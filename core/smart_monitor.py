@@ -9,7 +9,7 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Módulo de monitoramento S.M.A.R.T. dos discos
-# Versão 0.0.9-beta
+# Versão 0.1.0-beta
 # =============================================================================
 
 import subprocess
@@ -20,7 +20,6 @@ class SmartMonitor:
         self.disk_status = {}
 
     def get_smart_info(self, disk="/dev/sda"):
-        """Retorna informações SMART de um disco específico."""
         try:
             result = subprocess.run(["sudo", "smartctl", "-H", disk], capture_output=True, text=True, timeout=5)
             return result.stdout
@@ -28,7 +27,6 @@ class SmartMonitor:
             return None
 
     def get_summary_text(self):
-        """Retorna um resumo da saúde dos discos."""
         try:
             out = subprocess.run(["lsblk", "-d", "-o", "NAME"], capture_output=True, text=True)
             disks = out.stdout.splitlines()[1:]
@@ -38,7 +36,6 @@ class SmartMonitor:
                 if disk:
                     smart = self.get_smart_info(f"/dev/{disk}")
                     if smart:
-                        # Extrai o status PASSED/FAILED
                         match = re.search(r"SMART overall-health self-assessment test result: (\w+)", smart)
                         if match:
                             status = match.group(1)
@@ -52,7 +49,6 @@ class SmartMonitor:
             return "Erro ao ler discos"
 
     def get_status_color(self):
-        """Retorna a cor baseada na pior condição dos discos."""
         try:
             out = subprocess.run(["lsblk", "-d", "-o", "NAME"], capture_output=True, text=True)
             disks = out.stdout.splitlines()[1:]

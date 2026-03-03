@@ -8,7 +8,7 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# SpeedScan - Versão 0.0.9-beta (com salvamento de estado da janela)
+# SpeedScan - Versão 0.1.0-beta (correções finais)
 # Desenvolvedor: Ewerton Vasconcelos
 # =============================================================================
 
@@ -53,7 +53,7 @@ LOG_DIR = Path.home() / "speedscan" / "logs"
 AGENT_SCRIPT = Path.home() / "speedscan" / "speedscan-agent.py"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-VERSION = "0.0.9-beta"
+VERSION = "0.1.0-beta"
 
 DEFAULT_CONFIG = {
     "theme": "default",
@@ -106,7 +106,6 @@ AI_SUGGESTIONS = [
 ]
 
 class ActionHandler:
-    """Centraliza a execução de ações (limpeza, testes, scans, etc.)."""
     def __init__(self, app):
         self.app = app
 
@@ -319,10 +318,8 @@ class SpeedScan(ctk.CTk):
         self.update_theme_vars()
         self.title(f"SpeedScan {VERSION}")
 
-        # Restaura o estado da janela
-        self._restore_window_state()
-
         self.configure(fg_color=self.bg_color)
+        self.minsize(900, 600)
 
         self.apply_ui_scale()
         self.turbo_active = False
@@ -356,13 +353,12 @@ class SpeedScan(ctk.CTk):
 
         self._build_sidebar()
 
-        # Container principal para as abas (lazy loading)
         self.container = ctk.CTkFrame(self, fg_color="transparent")
         self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
         self.container.grid_columnconfigure(0, weight=1)
         self.container.grid_rowconfigure(0, weight=1)
 
-        self.frames = {}  # Dicionário de frames carregados
+        self.frames = {}
 
         for btn in self.detail_buttons.values():
             btn.pack_forget()
@@ -374,41 +370,34 @@ class SpeedScan(ctk.CTk):
         threading.Thread(target=self._monitor_loop, daemon=True).start()
         self._check_process_queue()
 
-        # Se não estava maximizado, define o tamanho salvo
-        if not self.config.get("window_state", {}).get("maximized", False):
-            self.after(50, self._set_initial_size)
+        # Restaura o estado da janela após a criação completa
+        self.after(200, self._restore_window_state)
 
-        # Salva o estado ao fechar
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
 
-    def _set_initial_size(self):
-        """Define o tamanho inicial da janela a partir da config."""
-        ws = self.config.get("window_state", {})
-        w = ws.get("width", 1000)
-        h = ws.get("height", 700)
-        x = ws.get("x")
-        y = ws.get("y")
-        if x is not None and y is not None:
-            self.geometry(f"{w}x{h}+{x}+{y}")
-        else:
-            self.geometry(f"{w}x{h}")
-
     def _restore_window_state(self):
-        """Aplica maximizado se estiver salvo."""
-        if self.config.get("window_state", {}).get("maximized", False):
-            self.after(50, self._maximize_window)
+        ws = self.config.get("window_state", DEFAULT_CONFIG["window_state"])
+        if ws.get("maximized", False):
+            self._maximize_window()
+        else:
+            w = ws.get("width", 1000)
+            h = ws.get("height", 700)
+            x = ws.get("x")
+            y = ws.get("y")
+            if x is not None and y is not None:
+                self.geometry(f"{w}x{h}+{x}+{y}")
+            else:
+                self.geometry(f"{w}x{h}")
+        self.update_idletasks()
 
     def _save_window_state(self):
-        """Salva o estado atual da janela na config."""
         ws = {}
         try:
-            # Verifica se está maximizado (funciona no Windows/Linux)
             if self.state() == 'zoomed' or self.attributes('-zoomed'):
                 ws['maximized'] = True
-                # Quando maximizado, não salvamos posição/tamanho, apenas o estado
             else:
                 ws['maximized'] = False
-                geom = self.geometry()  # formato "WxH+X+Y"
+                geom = self.geometry()
                 match = re.match(r'(\d+)x(\d+)([+-]\d+)([+-]\d+)', geom)
                 if match:
                     ws['width'] = int(match.group(1))
@@ -416,19 +405,20 @@ class SpeedScan(ctk.CTk):
                     ws['x'] = int(match.group(3))
                     ws['y'] = int(match.group(4))
                 else:
-                    # fallback
                     ws['width'] = self.winfo_width()
                     ws['height'] = self.winfo_height()
                     ws['x'] = self.winfo_x()
                     ws['y'] = self.winfo_y()
-        except:
-            # Em caso de erro, usa valores padrão
-            ws = {'maximized': False, 'width': 1000, 'height': 700, 'x': None, 'y': None}
+        except Exception as e:
+            print(f"Erro ao salvar estado da janela: {e}")
+            ws = DEFAULT_CONFIG["window_state"]
         self.config['window_state'] = ws
         self._save_config()
 
     def _on_closing(self):
         self._save_window_state()
+        self.metrics_collector.stop()
+        self.proc_manager.stop_monitoring()
         self.quit()
         self.destroy()
 
@@ -449,7 +439,6 @@ class SpeedScan(ctk.CTk):
             try:
                 with open(CONFIG_FILE) as f:
                     config = json.load(f)
-                    # Garante que window_state exista
                     if 'window_state' not in config:
                         config['window_state'] = DEFAULT_CONFIG['window_state']
                     return config
@@ -546,23 +535,14 @@ class SpeedScan(ctk.CTk):
         return btn
 
     def show_frame(self, target):
-        # Esconde todas as abas
         for f in self.frames.values():
             f.pack_forget()
-
-        # Se a aba ainda não foi carregada, cria agora
         if target not in self.frames:
             self.frames[target] = self._create_frame(target)
-
-        # Mostra a aba
         self.frames[target].pack(fill="both", expand=True)
         self.current_module = target
-
-        # Atualiza a cor dos botões da sidebar
         for key, btn in self.sidebar_buttons.items():
             btn.configure(fg_color=self.acc_color if key == target else "transparent")
-
-        # Ações específicas ao entrar em algumas abas
         if target == "processos":
             self._refresh_process_list()
         elif target == "historico":
@@ -571,7 +551,7 @@ class SpeedScan(ctk.CTk):
             self._update_ai_suggestions()
 
     def _create_frame(self, target):
-        """Cria o frame para a aba especificada e o preenche."""
+        # Todas as abas usam CTkScrollableFrame para rolagem automática
         frame = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
         getattr(self, f"_fill_{target}")(frame)
         return frame
@@ -580,82 +560,69 @@ class SpeedScan(ctk.CTk):
     def _fill_dashboard(self, parent):
         ctk.CTkLabel(parent, text="Dashboard Rotativo", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
-
         self.dashboard = Dashboard(parent, self, fg_color="transparent")
         self.dashboard.pack(fill="both", expand=True)
 
     # ---------- Widgets ----------
     def widget_hostname(self, parent, widget_id):
-        lbl = ctk.CTkLabel(parent, text=platform.node(), font=("Inter", 18, "bold"),
-                           text_color=self.acc_color)
+        lbl = ctk.CTkLabel(parent, text=platform.node(), font=("Inter", 18, "bold"), text_color=self.acc_color)
         lbl.pack(expand=True)
 
     def widget_distro(self, parent, widget_id):
-        lbl = ctk.CTkLabel(parent, text=self.hw.get_distro(), font=("Inter", 18, "bold"),
-                           text_color=self.acc_color)
+        lbl = ctk.CTkLabel(parent, text=self.hw.get_distro(), font=("Inter", 18, "bold"), text_color=self.acc_color)
         lbl.pack(expand=True)
 
     def widget_kernel(self, parent, widget_id):
-        lbl = ctk.CTkLabel(parent, text=platform.release(), font=("Inter", 18, "bold"),
-                           text_color=self.acc_color)
+        lbl = ctk.CTkLabel(parent, text=platform.release(), font=("Inter", 18, "bold"), text_color=self.acc_color)
         lbl.pack(expand=True)
 
     def widget_uptime(self, parent, widget_id):
-        lbl = ctk.CTkLabel(parent, text=self.hw.get_uptime(), font=("Inter", 18, "bold"),
-                           text_color=self.acc_color)
+        lbl = ctk.CTkLabel(parent, text=self.hw.get_uptime(), font=("Inter", 18, "bold"), text_color=self.acc_color)
         lbl.pack(expand=True)
 
     def widget_cpu(self, parent, widget_id):
         info = self.hw.get_cpu()
         percent = psutil.cpu_percent()
         text = f"{info}\nUso: {percent}%"
-        lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 14), justify="center",
-                           text_color=self.text_color)
+        lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 14), justify="center", text_color=self.text_color)
         lbl.pack(expand=True)
 
     def widget_ram(self, parent, widget_id):
         mem = psutil.virtual_memory()
         info = self.hw.get_ram()
         text = f"{info}\nUso: {mem.percent}%"
-        lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 14), justify="center",
-                           text_color=self.text_color)
+        lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 14), justify="center", text_color=self.text_color)
         lbl.pack(expand=True)
 
     def widget_gpu(self, parent, widget_id):
         info = self.hw.get_gpu()
-        lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 14), justify="center",
-                           wraplength=250, text_color=self.text_color)
+        lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 14), justify="center", wraplength=250, text_color=self.text_color)
         lbl.pack(expand=True)
 
     def widget_disks(self, parent, widget_id):
         info = self.hw.get_disks_detailed()
-        lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 12), justify="center",
-                           wraplength=250, text_color=self.text_color)
+        lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 12), justify="center", wraplength=250, text_color=self.text_color)
         lbl.pack(expand=True)
 
     def widget_battery(self, parent, widget_id):
         info = self.hw.get_battery()
-        lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 14), justify="center",
-                           text_color=self.text_color)
+        lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 14), justify="center", text_color=self.text_color)
         lbl.pack(expand=True)
 
     def widget_temps(self, parent, widget_id):
         temps = self.temp_monitor.get_all_temperatures()
         text = "\n".join([f"{s}: {t}°C" for s, t in temps.items()])
-        lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 12), justify="center",
-                           text_color=self.text_color)
+        lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 12), justify="center", text_color=self.text_color)
         lbl.pack(expand=True)
 
     def widget_health(self, parent, widget_id):
         score = self.health_monitor.calculate_health_score()['score']
-        lbl = ctk.CTkLabel(parent, text=f"Saúde: {score}/100", font=("Inter", 18, "bold"),
-                           text_color=self.acc_color)
+        lbl = ctk.CTkLabel(parent, text=f"Saúde: {score}/100", font=("Inter", 18, "bold"), text_color=self.acc_color)
         lbl.pack(expand=True)
 
     # ---------- Aba Otimização ----------
     def _fill_otimizacao(self, parent):
-        ctk.CTkLabel(parent, text="Otimização", font=("Inter",28,"bold"),
-                     text_color=self.acc_color).pack(anchor="w", pady=(0,20))
+        ctk.CTkLabel(parent, text="Otimização", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="w", pady=(0,20))
         items = [
             ("🧹 Limpeza de Cache", "cache", False),
             ("🔄 Reset de Swap", "swap", False),
@@ -680,8 +647,7 @@ class SpeedScan(ctk.CTk):
 
     # ---------- Aba Rede ----------
     def _fill_rede(self, parent):
-        ctk.CTkLabel(parent, text="Rede", font=("Inter",28,"bold"),
-                     text_color=self.acc_color).pack(anchor="w", pady=(0,20))
+        ctk.CTkLabel(parent, text="Rede", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="w", pady=(0,20))
         items = [
             ("📡 Ping", "ping", False),
             ("☁ Cloudflare DNS", "1.1.1.1", True),
@@ -707,8 +673,7 @@ class SpeedScan(ctk.CTk):
 
     # ---------- Aba Drivers ----------
     def _fill_drivers(self, parent):
-        ctk.CTkLabel(parent, text="Drivers", font=("Inter",28,"bold"),
-                     text_color=self.acc_color).pack(anchor="w", pady=(0,20))
+        ctk.CTkLabel(parent, text="Drivers", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="w", pady=(0,20))
         items = [
             ("🖥 PCI (Vídeo/Rede)", "pci", False),
             ("📦 Atualizar Sistema", "update", False),
@@ -727,8 +692,7 @@ class SpeedScan(ctk.CTk):
 
     # ---------- Aba Processos ----------
     def _fill_processos(self, parent):
-        ctk.CTkLabel(parent, text="Gerenciador de Processos", font=("Inter",28,"bold"),
-                     text_color=self.acc_color).pack(anchor="w", pady=(0,20))
+        ctk.CTkLabel(parent, text="Gerenciador de Processos", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="w", pady=(0,20))
 
         toolbar = ctk.CTkFrame(parent, fg_color="transparent")
         toolbar.pack(fill="x", pady=(0,10))
@@ -746,12 +710,10 @@ class SpeedScan(ctk.CTk):
         sort_menu.pack(side="left", padx=(0,10))
 
         self.reverse_var = ctk.BooleanVar(value=True)
-        reverse_check = ctk.CTkCheckBox(toolbar, text="Decrescente", variable=self.reverse_var,
-                                         command=self._on_sort_change)
+        reverse_check = ctk.CTkCheckBox(toolbar, text="Decrescente", variable=self.reverse_var, command=self._on_sort_change)
         reverse_check.pack(side="left", padx=(0,10))
 
-        refresh_btn = ctk.CTkButton(toolbar, text="🔄 Atualizar", command=self._refresh_process_list,
-                                     width=100, fg_color=self.acc_color)
+        refresh_btn = ctk.CTkButton(toolbar, text="🔄 Atualizar", command=self._refresh_process_list, width=100, fg_color=self.acc_color)
         refresh_btn.pack(side="right", padx=5)
 
         from tkinter import ttk
@@ -774,8 +736,7 @@ class SpeedScan(ctk.CTk):
         widths = {'pid':60, 'name':200, 'cpu_percent':70, 'memory_percent':70,
                   'status':80, 'username':100, 'nice':60, 'create_time_str':80}
         for col in columns:
-            self.process_tree.heading(col, text=headings[col],
-                                      command=lambda c=col: self._sort_by_column(c))
+            self.process_tree.heading(col, text=headings[col], command=lambda c=col: self._sort_by_column(c))
             self.process_tree.column(col, width=widths[col], minwidth=50, anchor='center')
 
         self.process_tree.grid(row=0, column=0, sticky='nsew')
@@ -905,8 +866,7 @@ class SpeedScan(ctk.CTk):
 
     # ---------- Aba Histórico ----------
     def _fill_historico(self, parent):
-        ctk.CTkLabel(parent, text="Histórico de Desempenho", font=("Inter",28,"bold"),
-                     text_color=self.acc_color).pack(anchor="w", pady=(0,20))
+        ctk.CTkLabel(parent, text="Histórico de Desempenho", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="w", pady=(0,20))
         control_frame = ctk.CTkFrame(parent, fg_color="transparent")
         control_frame.pack(fill="x", pady=(0,10))
 
@@ -924,8 +884,7 @@ class SpeedScan(ctk.CTk):
                                         cursor="arrow")
         metric_menu.pack(side="left", padx=(0,10))
 
-        refresh_btn = ctk.CTkButton(control_frame, text="🔄 Atualizar", command=self._update_graphs,
-                                     width=100, fg_color=self.acc_color)
+        refresh_btn = ctk.CTkButton(control_frame, text="🔄 Atualizar", command=self._update_graphs, width=100, fg_color=self.acc_color)
         refresh_btn.pack(side="right", padx=5)
 
         self.graph_frame = ctk.CTkFrame(parent, fg_color=self.bg_color, corner_radius=10)
@@ -998,9 +957,7 @@ class SpeedScan(ctk.CTk):
 
     # ---------- Aba Segurança ----------
     def _fill_seguranca(self, parent):
-        ctk.CTkLabel(parent, text="Segurança do Sistema", font=("Inter",28,"bold"),
-                     text_color=self.acc_color).pack(anchor="w", pady=(0,20))
-
+        ctk.CTkLabel(parent, text="Segurança do Sistema", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="w", pady=(0,20))
         items = [
             ("🔍 Portas Abertas", "ports", False),
             ("🛡️ Firewall", "firewall", False),
@@ -1013,15 +970,13 @@ class SpeedScan(ctk.CTk):
 
     # ---------- Aba Agente IA ----------
     def _fill_agente(self, parent):
-        ctk.CTkLabel(parent, text="Agente de IA", font=("Inter",28,"bold"),
-                     text_color=self.acc_color).pack(pady=(0,20))
+        ctk.CTkLabel(parent, text="Agente de IA", font=("Inter",28,"bold"), text_color=self.acc_color).pack(pady=(0,20))
 
         frame_sugestoes = ctk.CTkFrame(parent, fg_color=self.bg_color, corner_radius=10,
                                         border_width=1, border_color=self.acc_color)
         frame_sugestoes.pack(fill="x", pady=10, padx=10)
 
-        ctk.CTkLabel(frame_sugestoes, text="🤖 Sugestões Inteligentes", font=("Inter",16,"bold"),
-                     text_color=self.acc_color).pack(pady=10)
+        ctk.CTkLabel(frame_sugestoes, text="🤖 Sugestões Inteligentes", font=("Inter",16,"bold"), text_color=self.acc_color).pack(pady=10)
 
         self.ai_sugestoes_text = ctk.CTkTextbox(frame_sugestoes, height=150, fg_color=self.light_bg,
                                                  text_color=self.text_color, font=("Consolas",11), wrap="word")
@@ -1034,8 +989,7 @@ class SpeedScan(ctk.CTk):
         separator = ctk.CTkFrame(parent, height=2, fg_color=self.acc_color)
         separator.pack(fill="x", pady=20)
 
-        ctk.CTkLabel(parent, text="Conecte um modelo de IA externo:", font=("Inter",16),
-                     text_color=self.text_color).pack(pady=10)
+        ctk.CTkLabel(parent, text="Conecte um modelo de IA externo:", font=("Inter",16), text_color=self.text_color).pack(pady=10)
 
         grid = ctk.CTkFrame(parent, fg_color="transparent")
         grid.pack(fill="both", expand=True, pady=10)
@@ -1048,17 +1002,13 @@ class SpeedScan(ctk.CTk):
             card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
             card.grid_propagate(False)
             card.configure(height=150)
-            ctk.CTkLabel(card, text=ia, font=("Inter",14,"bold"),
-                         text_color=self.acc_color).pack(pady=(10,5))
+            ctk.CTkLabel(card, text=ia, font=("Inter",14,"bold"), text_color=self.acc_color).pack(pady=(10,5))
             if ia == "Configurar IA Local":
-                btn = ctk.CTkButton(card, text="Configurar", fg_color=self.acc_color,
-                                     command=self.configure_local_ai)
+                btn = ctk.CTkButton(card, text="Configurar", fg_color=self.acc_color, command=self.configure_local_ai)
             else:
-                btn = ctk.CTkButton(card, text="Conectar", fg_color=self.acc_color,
-                                     command=lambda i=ia: self.connect_ai(i))
+                btn = ctk.CTkButton(card, text="Conectar", fg_color=self.acc_color, command=lambda i=ia: self.connect_ai(i))
             btn.pack(pady=5)
-        self.ai_status = ctk.CTkLabel(parent, text="", font=("Inter",12),
-                                       text_color=self.acc_color)
+        self.ai_status = ctk.CTkLabel(parent, text="", font=("Inter",12), text_color=self.acc_color)
         self.ai_status.pack(pady=20)
         btn, log = ui.add_console(parent, "agente", self.acc_color, self.toggle_console)
         self.detail_buttons["agente"] = btn
@@ -1082,7 +1032,6 @@ class SpeedScan(ctk.CTk):
         log.insert("end", "Configurando IA local...\nInstalando Ollama...\n")
         self.run_card_action("curl -fsSL https://ollama.com/install.sh | sh", "agente", False)
 
-    # ---------- Execução de comandos ----------
     def run_card_action(self, cmd, tag, is_dns):
         log = self.logs.get(tag)
         if not log:
@@ -1226,12 +1175,10 @@ class SpeedScan(ctk.CTk):
 
     # ---------- Configurações ----------
     def _fill_config(self, parent):
-        ctk.CTkLabel(parent, text="Configurações", font=("Inter",28,"bold"),
-                     text_color=self.acc_color).pack(anchor="w", pady=(0,30))
+        ctk.CTkLabel(parent, text="Configurações", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="w", pady=(0,30))
         f_user = ctk.CTkFrame(parent, fg_color="transparent")
         f_user.pack(fill="x", pady=10)
-        ctk.CTkLabel(f_user, text="Nome de usuário", font=("Inter",14),
-                     text_color=self.text_color).pack(anchor="w")
+        ctk.CTkLabel(f_user, text="Nome de usuário", font=("Inter",14), text_color=self.text_color).pack(anchor="w")
         self.entry_user = ctk.CTkEntry(f_user, placeholder_text="Seu nome", width=300)
         self.entry_user.insert(0, self.config.get("username", "ewerton"))
         self.entry_user.pack(anchor="w", pady=5)
@@ -1242,24 +1189,21 @@ class SpeedScan(ctk.CTk):
 
         f_lang = ctk.CTkFrame(parent, fg_color="transparent")
         f_lang.pack(fill="x", pady=10)
-        ctk.CTkLabel(f_lang, text="Idioma de Interface", font=("Inter",14),
-                     text_color=self.text_color).pack(anchor="w")
+        ctk.CTkLabel(f_lang, text="Idioma de Interface", font=("Inter",14), text_color=self.text_color).pack(anchor="w")
         self.lang_var = ctk.StringVar(value=LANGUAGES.get(self.config.get("language","pt_BR"), "Português Brasileiro"))
         ctk.CTkOptionMenu(f_lang, values=list(LANGUAGES.values()), variable=self.lang_var, width=300,
                           cursor="arrow").pack(anchor="w")
 
         f_scale = ctk.CTkFrame(parent, fg_color="transparent")
         f_scale.pack(fill="x", pady=10)
-        ctk.CTkLabel(f_scale, text="Escala da interface *", font=("Inter",14),
-                     text_color=self.text_color).pack(anchor="w")
+        ctk.CTkLabel(f_scale, text="Escala da interface *", font=("Inter",14), text_color=self.text_color).pack(anchor="w")
         self.scale_var = ctk.StringVar(value=SCALES.get(self.config.get("ui_scale","auto"), "Automático"))
         ctk.CTkOptionMenu(f_scale, values=list(SCALES.values()), variable=self.scale_var, width=300,
                           cursor="arrow").pack(anchor="w")
 
         f_theme = ctk.CTkFrame(parent, fg_color="transparent")
         f_theme.pack(fill="x", pady=10)
-        ctk.CTkLabel(f_theme, text="Tema da interface", font=("Inter",14),
-                     text_color=self.text_color).pack(anchor="w")
+        ctk.CTkLabel(f_theme, text="Tema da interface", font=("Inter",14), text_color=self.text_color).pack(anchor="w")
         theme_names = ["Padrão (Roxo)", "Cinza Profissional", "Escuro Total", "Claro Clean"]
         theme_keys = ["default", "grey", "dark", "light"]
         current = theme_keys.index(self.config.get("theme","default"))
@@ -1269,8 +1213,7 @@ class SpeedScan(ctk.CTk):
 
         f_tab = ctk.CTkFrame(parent, fg_color="transparent")
         f_tab.pack(fill="x", pady=10)
-        ctk.CTkLabel(f_tab, text="Abrir arquivo", font=("Inter",14),
-                     text_color=self.text_color).pack(anchor="w")
+        ctk.CTkLabel(f_tab, text="Abrir arquivo", font=("Inter",14), text_color=self.text_color).pack(anchor="w")
         self.tab_var = ctk.StringVar(value="Na guia" if self.config.get("open_file_in_tab") else "Nova janela")
         ctk.CTkOptionMenu(f_tab, values=["Na guia", "Nova janela"], variable=self.tab_var, width=300,
                           cursor="arrow").pack(anchor="w")
@@ -1278,8 +1221,7 @@ class SpeedScan(ctk.CTk):
         separator = ctk.CTkFrame(parent, height=2, fg_color=self.acc_color)
         separator.pack(fill="x", pady=20)
 
-        ctk.CTkLabel(parent, text="Agendamento Automático", font=("Inter",20,"bold"),
-                     text_color=self.acc_color).pack(anchor="w", pady=(0,10))
+        ctk.CTkLabel(parent, text="Agendamento Automático", font=("Inter",20,"bold"), text_color=self.acc_color).pack(anchor="w", pady=(0,10))
 
         self.schedule_enabled_var = ctk.BooleanVar(value=self.config.get("schedule", {}).get("enabled", False))
         schedule_check = ctk.CTkCheckBox(parent, text="Executar tarefas de otimização automaticamente",
@@ -1473,53 +1415,37 @@ class SpeedScan(ctk.CTk):
         subprocess.Popen([str(restart_script), str(os.getpid())], start_new_session=True)
         self.quit()
 
-    # ---------- Aba Sobre ----------
+    # ---------- Aba Sobre (resumida) ----------
     def _fill_sobre(self, parent):
-        ctk.CTkLabel(parent, text="Sobre o SpeedScan", font=("Inter",28,"bold"),
-                     text_color=self.acc_color).pack(anchor="w", pady=(0,20))
+        ctk.CTkLabel(parent, text="Sobre o SpeedScan", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="w", pady=(0,20))
 
         card = ctk.CTkFrame(parent, fg_color=self.light_bg, corner_radius=15,
                              border_width=2, border_color=self.acc_color)
         card.pack(fill="both", expand=True, padx=20, pady=10)
 
-        ctk.CTkLabel(card, text="⚡ SpeedScan", font=("Inter",36,"bold"),
-                     text_color=self.acc_color).pack(pady=(40,10))
-        ctk.CTkLabel(card, text=f"Versão {VERSION}", font=("Inter",14),
-                     text_color="#888888").pack()
+        ctk.CTkLabel(card, text="⚡ SpeedScan", font=("Inter",36,"bold"), text_color=self.acc_color).pack(pady=(40,10))
+        ctk.CTkLabel(card, text=f"Versão {VERSION}", font=("Inter",14), text_color="#888888").pack()
 
         info = (
             "Desenvolvedor: Ewerton Vasconcelos\n"
             "Tecnologias: Python, CustomTkinter, psutil\n"
             "Repositório: github.com/ewertonvasconcelos/speedscan\n\n"
-            "Este software está em fase de desenvolvimento.\n"
-            "Não foi lançado oficialmente.\n\n"
-            "Funcionalidades:\n"
-            "• Dashboard rotativo com todos os widgets do sistema\n"
-            "• Monitoramento de hardware em tempo real\n"
-            "• Otimização de sistema (cache, swap, turbo)\n"
-            "• Instalação de apps gamers (Steam, Lutris, Dolphin)\n"
-            "• Configuração de DNS e rede\n"
-            "• Diagnóstico e atualização de drivers\n"
-            "• Conexão com modelos de IA\n"
-            "• Temas personalizáveis\n"
+            "Este software está em fase de desenvolvimento.\n\n"
+            "Principais funcionalidades:\n"
+            "• Dashboard com widgets personalizáveis\n"
+            "• Monitoramento de CPU, RAM, disco, GPU e temperatura\n"
+            "• Otimização: cache, swap, turbo e limpeza de navegadores\n"
+            "• Rede: ping, DNS, teste de velocidade, scanner LAN, LANCache\n"
+            "• Diagnóstico de drivers e hardware\n"
+            "• Gerenciamento de processos\n"
+            "• Histórico de desempenho com gráficos\n"
+            "• Verificações de segurança (portas, firewall, atualizações)\n"
+            "• IA proativa com sugestões inteligentes\n"
             "• Agendamento automático de tarefas\n"
-            "• Score de Saúde do Sistema (0-100)\n"
-            "• Monitoramento de Temperaturas\n"
-            "• Saúde dos Discos (S.M.A.R.T.)\n"
-            "• Limpeza de Navegadores (Chrome, Firefox, Edge, etc.)\n"
-            "• Teste de Velocidade de Internet\n"
-            "• Gerenciador de Processos\n"
-            "• Gráficos Históricos de Desempenho\n"
-            "• Scanner de Rede Local\n"
-            "• IA Proativa com sugestões inteligentes\n"
-            "• Segurança do Sistema (portas, firewall, atualizações)\n"
-            "• LANCache - Servidor de cache para jogos\n"
-            "• Gerenciamento de Serviços\n"
-            "• Análise de Logs\n\n"
+            "• Temas personalizáveis\n\n"
             "© 2026 Ewerton Vasconcelos. Todos os direitos reservados."
         )
-        label_info = ctk.CTkLabel(card, text=info, font=("Inter",12), justify="left",
-                                   text_color=self.text_color)
+        label_info = ctk.CTkLabel(card, text=info, font=("Inter",12), justify="left", text_color=self.text_color)
         label_info.pack(pady=20, padx=30, fill="both", expand=True)
 
 if __name__ == "__main__":

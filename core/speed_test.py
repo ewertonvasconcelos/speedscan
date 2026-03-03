@@ -9,15 +9,13 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Módulo de teste de velocidade de internet
-# Versão 0.0.9-beta
+# Versão 0.1.0-beta
 # =============================================================================
 
 import subprocess
-import re
 import time
 import threading
 import sys
-import os
 
 try:
     import speedtest
@@ -124,9 +122,3 @@ class SpeedTester:
             dt = datetime.fromtimestamp(result['timestamp'])
             lines.append(f"🕒 {dt.strftime('%d/%m/%Y %H:%M:%S')}")
         return "\n".join(lines)
-
-if __name__ == "__main__":
-    tester = SpeedTester()
-    print("Iniciando teste de velocidade...")
-    tester.run_test(callback=lambda res: print(tester.format_result(res)))
-    time.sleep(60)

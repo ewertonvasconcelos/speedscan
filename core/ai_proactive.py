@@ -9,34 +9,26 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Módulo de IA Proativa - Sugere otimizações baseado em métricas
+# Versão 0.1.0-beta
 # =============================================================================
 
 import psutil
 import time
-from datetime import datetime, timedelta
 
 class AIProactive:
-    """
-    Analisa métricas do sistema (histórico, health score, etc.) e gera sugestões.
-    """
     def __init__(self, metrics_db, health_monitor):
         self.metrics_db = metrics_db
         self.health_monitor = health_monitor
 
     def analyze(self):
-        """
-        Retorna uma lista de dicionários com sugestões.
-        Cada sugestão tem: titulo, descricao, acao (comando), prioridade (alta/média/baixa).
-        """
         sugestoes = []
         
-        # 1. Análise de espaço em disco
         disk_usage = psutil.disk_usage('/')
         if disk_usage.percent > 90:
             sugestoes.append({
                 'titulo': '⚠️ Pouco espaço em disco',
                 'descricao': f'O disco está com {disk_usage.percent:.1f}% de uso. Libere espaço.',
-                'acao': 'browsers',  # Limpeza de navegadores
+                'acao': 'browsers',
                 'prioridade': 'alta'
             })
         elif disk_usage.percent > 75:
@@ -47,7 +39,6 @@ class AIProactive:
                 'prioridade': 'media'
             })
 
-        # 2. Análise de memória RAM
         mem = psutil.virtual_memory()
         if mem.percent > 90:
             sugestoes.append({
@@ -64,7 +55,6 @@ class AIProactive:
                 'prioridade': 'media'
             })
 
-        # 3. Análise de temperatura (se disponível)
         try:
             temps = psutil.sensors_temperatures()
             for sensor, entries in temps.items():
@@ -80,7 +70,6 @@ class AIProactive:
         except:
             pass
 
-        # 4. Análise de bateria
         battery = psutil.sensors_battery()
         if battery and battery.percent < 20 and not battery.power_plugged:
             sugestoes.append({
@@ -90,7 +79,6 @@ class AIProactive:
                 'prioridade': 'alta'
             })
 
-        # 5. Análise de health score
         health = self.health_monitor.calculate_health_score()
         if health['score'] < 50:
             sugestoes.append({
@@ -107,7 +95,6 @@ class AIProactive:
                 'prioridade': 'media'
             })
 
-        # 6. Análise de histórico (últimas 24h)
         stats = self.metrics_db.get_stats(period_hours=24)
         if stats['cpu_avg'] and stats['cpu_avg'] > 80:
             sugestoes.append({
@@ -127,7 +114,6 @@ class AIProactive:
         return sugestoes
 
     def get_summary(self):
-        """Retorna um resumo em texto das sugestões."""
         sugestoes = self.analyze()
         if not sugestoes:
             return "✅ Nenhuma sugestão no momento. Sistema OK!"

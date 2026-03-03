@@ -1,5 +1,5 @@
 name: speedscan
-version: '0.0.9-beta'
+version: '0.1.0-beta'
 summary: Ferramenta de diagnóstico e otimização de sistema
 description: |
   SpeedScan é uma ferramenta all-in-one para monitoramento e otimização de sistema,

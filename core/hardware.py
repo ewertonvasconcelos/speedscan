@@ -9,7 +9,7 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Módulo de coleta de informações de hardware
-# Versão 0.0.9-beta
+# Versão 0.1.0-beta
 # =============================================================================
 
 import platform
@@ -24,7 +24,6 @@ class HardwareInfo:
         self.runner = runner
 
     def get_distro(self):
-        """Retorna a distribuição/versão do SO."""
         if self.so == "Linux":
             try:
                 with open("/etc/os-release") as f:
@@ -41,7 +40,6 @@ class HardwareInfo:
         return self.so
 
     def get_cpu(self):
-        """Retorna modelo da CPU e número de núcleos."""
         try:
             if self.so == "Linux":
                 with open("/proc/cpuinfo") as f:
@@ -58,7 +56,6 @@ class HardwareInfo:
         return f"{psutil.cpu_count()} núcleos"
 
     def get_ram(self):
-        """Retorna quantidade de RAM total e em uso."""
         try:
             mem = psutil.virtual_memory()
             total = mem.total // (1024**3)
@@ -68,7 +65,6 @@ class HardwareInfo:
             return "N/A"
 
     def get_gpu(self):
-        """Retorna informações da GPU (simplificado)."""
         try:
             if self.so == "Linux":
                 out = subprocess.run(["lspci"], capture_output=True, text=True)
@@ -90,16 +86,11 @@ class HardwareInfo:
         return "Desconhecida"
 
     def get_disks_detailed(self):
-        """
-        Retorna informações de discos físicos (não partições) com uso percentual.
-        Evita duplicatas agrupando por dispositivo.
-        """
         try:
             partitions = psutil.disk_partitions()
             devices = {}
             for p in partitions:
                 device = p.device
-                # Remove números de partição para obter o disco físico (ex: /dev/sda1 -> /dev/sda)
                 physical_disk = re.sub(r'\d+$', '', device)
                 try:
                     usage = psutil.disk_usage(p.mountpoint)
@@ -107,7 +98,6 @@ class HardwareInfo:
                         devices[physical_disk] = usage.percent
                 except:
                     pass
-            # Formata a saída
             disk_info = [f"{dev} {percent}%" for dev, percent in devices.items()]
             return ", ".join(disk_info) if disk_info else "N/A"
         except Exception as e:
@@ -115,7 +105,6 @@ class HardwareInfo:
             return "N/A"
 
     def get_uptime(self):
-        """Retorna o tempo de atividade do sistema."""
         try:
             uptime_seconds = time.time() - psutil.boot_time()
             days = int(uptime_seconds // 86400)
@@ -131,7 +120,6 @@ class HardwareInfo:
             return "N/A"
 
     def get_battery(self):
-        """Retorna status da bateria, se presente."""
         try:
             battery = psutil.sensors_battery()
             if battery:
