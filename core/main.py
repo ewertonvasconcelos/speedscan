@@ -8,7 +8,7 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# SpeedScan - Versão 0.3.0-beta (superando o BleachBit)
+# SpeedScan - Versão 0.3.1-beta (correções: rolagem, cursor, janela)
 # Desenvolvedor: Ewerton Vasconcelos
 # =============================================================================
 
@@ -57,7 +57,7 @@ LOG_DIR = Path.home() / "speedscan" / "logs"
 AGENT_SCRIPT = Path.home() / "speedscan" / "speedscan-agent.py"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-VERSION = "0.3.0-beta"
+VERSION = "0.3.1-beta"
 
 DEFAULT_CONFIG = {
     "theme": "default",
@@ -329,13 +329,11 @@ class ActionHandler:
         log.delete("1.0", "end")
         log.insert("end", "🍪 Gerenciador de Cookies\n")
         log.insert("end", "="*40 + "\n")
-        # Exibe resumo de cookies
         summary = self.app.cookie_manager.get_cookie_summary()
         if not summary:
             log.insert("end", "Nenhum cookie encontrado.\n")
             return
         log.insert("end", f"Total de domínios com cookies: {len(summary)}\n")
-        # Aqui poderia abrir uma janela de seleção, mas por enquanto só mostra
         for domain, count in list(summary.items())[:10]:
             log.insert("end", f"{domain}: {count} cookies\n")
         if len(summary) > 10:
@@ -431,6 +429,10 @@ class SpeedScan(ctk.CTk):
             h = ws.get("height", 700)
             x = ws.get("x")
             y = ws.get("y")
+            # Garante que o tamanho não seja menor que o mínimo
+            w = max(w, self.winfo_width())  # winfo_width ainda pode ser 1, então melhor usar minsize
+            h = max(h, self.winfo_height())
+            # Aplica a geometria
             self.update_idletasks()
             if x is not None and y is not None:
                 self.geometry(f"{w}x{h}+{x}+{y}")
@@ -554,18 +556,16 @@ class SpeedScan(ctk.CTk):
         center = ctk.CTkFrame(sidebar, fg_color="transparent")
         center.pack(expand=False, fill="x", pady=(19, 0))
 
-        # Itens de navegação (sempre visíveis)
         nav_items = [
             ("📊", "Dashboard", "dashboard"),
             ("🚀", "Otimização", "otimizacao"),
             ("🌐", "Rede", "rede"),
             ("🛠", "Drivers", "drivers"),
         ]
-        # Itens que dependem do nível de expertise
         level_items = {
-            1: [],  # iniciante: não mostra nada extra
-            2: [("📊", "Processos", "processos")],  # intermediário: só processos
-            3: [  # avançado: todos
+            1: [],
+            2: [("📊", "Processos", "processos")],
+            3: [
                 ("📊", "Processos", "processos"),
                 ("📈", "Histórico", "historico"),
                 ("🔒", "Segurança", "seguranca"),
@@ -577,7 +577,6 @@ class SpeedScan(ctk.CTk):
             btn = self._sidebar_btn(center, icon, text, target)
             self.sidebar_buttons[target] = btn
 
-        # Adiciona itens conforme nível
         level = self.config.get("expert_level", 1)
         if level >= 2:
             spacer = ctk.CTkLabel(center, text="", height=10)
@@ -627,11 +626,8 @@ class SpeedScan(ctk.CTk):
             self._update_ai_suggestions()
 
     def _create_frame(self, target):
-        # Abas com conteúdo pequeno: Dashboard, Configurações, Sobre (sem rolagem)
-        if target in ["dashboard", "config", "sobre"]:
-            frame = ctk.CTkFrame(self.container, fg_color="transparent")
-        else:
-            frame = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        # TODAS as abas agora usam CTkScrollableFrame para rolagem automática
+        frame = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
         getattr(self, f"_fill_{target}")(frame)
         return frame
 
@@ -733,12 +729,9 @@ class SpeedScan(ctk.CTk):
         ]
         level = self.config.get("expert_level", 1)
         if level == 1:
-            # Iniciante: esconde serviços, logs, cookies
             items = [item for item in items if item[1] not in ["services", "logs", "cookies"]]
         elif level == 2:
-            # Intermediário: esconde logs e cookies? Vamos deixar só serviços
             items = [item for item in items if item[1] not in ["logs", "cookies"]]
-        # Avançado (3) vê tudo
         ui.create_card_grid(parent, items, "ot", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
         btn, log = ui.add_console(parent, "ot", self.acc_color, self.toggle_console)
         self.detail_buttons["ot"] = btn
@@ -767,8 +760,8 @@ class SpeedScan(ctk.CTk):
         if level == 1:
             items = [item for item in items if item[1] not in ["ports", "traceroute", "ethtool", "dhclient", "lanscan", "lancache"]]
         elif level == 2:
-            items = [item for item in items if item[1] not in ["lanscan", "lancache"]]  # intermediário vê quase tudo
-        ui.create_card_grid(parent, items, "net", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
+            items = [item for item in items if item[1] not in ["lanscan", "lancache"]]
+        ping_labels = ui.create_card_grid(parent, items, "net", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
         if ping_labels:
             self.ping_label = ping_labels[0]
         btn, log = ui.add_console(parent, "net", self.acc_color, self.toggle_console)
@@ -1080,23 +1073,20 @@ class SpeedScan(ctk.CTk):
         self.detail_buttons["sec"] = btn
         self.logs["sec"] = log
 
-    # ---------- Aba Agente IA (unificada) ----------
+    # ---------- Aba Agente IA ----------
     def _fill_agente(self, parent):
         ctk.CTkLabel(parent, text="Agente de IA", font=("Inter",28,"bold"), text_color=self.acc_color).pack(pady=(0,20))
 
-        # Frame único para chat e sugestões
         main_frame = ctk.CTkFrame(parent, fg_color=self.bg_color, corner_radius=10,
                                    border_width=1, border_color=self.acc_color)
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Abas internas: Sugestões e Chat
         tabview = ctk.CTkTabview(main_frame, fg_color=self.light_bg)
         tabview.pack(fill="both", expand=True, padx=5, pady=5)
 
         tab_sugestoes = tabview.add("Sugestões")
         tab_chat = tabview.add("Chat")
 
-        # Sugestões
         self.ai_sugestoes_text = ctk.CTkTextbox(tab_sugestoes, height=200, fg_color=self.light_bg,
                                                  text_color=self.text_color, font=("Consolas",11), wrap="word")
         self.ai_sugestoes_text.pack(fill="both", expand=True, padx=10, pady=10)
@@ -1104,11 +1094,9 @@ class SpeedScan(ctk.CTk):
                                        command=self._update_ai_suggestions)
         btn_atualizar.pack(pady=10)
 
-        # Chat
         self.chat_frame = ChatFrame(tab_chat, self, fg_color="transparent")
         self.chat_frame.pack(fill="both", expand=True)
 
-        # Configurações (pequeno botão no canto)
         config_btn = ctk.CTkButton(parent, text="⚙️ Configurar IA", fg_color=self.acc_color,
                                    command=self._toggle_ai_config, width=150)
         config_btn.pack(anchor="e", padx=10, pady=5)
@@ -1207,7 +1195,6 @@ class SpeedScan(ctk.CTk):
                 self._show_details_button(tag)
                 return
             elif cmd == "browsers":
-                # No futuro, aqui poderia abrir janela para selecionar cookies a preservar
                 self.action_handler.run_browser_clean(log)
                 self._show_details_button(tag)
                 return
@@ -1582,7 +1569,6 @@ class SpeedScan(ctk.CTk):
         self.config["theme"] = theme_keys[theme_names.index(self.theme_name_var.get())]
         self.config["open_file_in_tab"] = (self.tab_var.get() == "Na guia")
         self.config["expert_level"] = self.level_var.get()
-        # simple_mode é derivado do nível: True apenas se level=1
         self.config["simple_mode"] = (self.level_var.get() == 1)
         self._save_config()
 
