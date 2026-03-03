@@ -61,6 +61,13 @@ DEFAULT_CONFIG = {
     "language": "pt_BR",
     "ui_scale": "auto",
     "open_file_in_tab": False,
+    "window_state": {
+        "maximized": False,
+        "width": 1000,
+        "height": 700,
+        "x": None,
+        "y": None
+    },
     "schedule": {
         "enabled": False,
         "frequency": "weekly",
@@ -70,13 +77,6 @@ DEFAULT_CONFIG = {
         "interval_days": 7,
         "tasks": ["cache", "swap", "check"],
         "elevated": False
-    },
-    "window_state": {   # <-- NOVA SEÇÃO
-        "maximized": False,
-        "width": 1000,
-        "height": 700,
-        "x": None,
-        "y": None
     }
 }
 
@@ -200,7 +200,6 @@ class ActionHandler:
             cmds = self.app.lan_cache.install_docker()
             for cmd in cmds:
                 log.insert("end", f"Executando: {cmd}\n")
-                # Se cmd for string, usa shell=True (segue padrão anterior)
                 proc = self.app.runner.run(cmd)
                 if proc:
                     for line in proc.stdout:
@@ -213,7 +212,6 @@ class ActionHandler:
         cmds = self.app.lan_cache.get_install_commands()
         for cmd in cmds:
             log.insert("end", f"Executando: {cmd}\n")
-            # Converte comandos conhecidos para lista
             if cmd.startswith("mkdir"):
                 parts = cmd.split()
                 proc = self.app.runner.run(parts)
@@ -321,21 +319,9 @@ class SpeedScan(ctk.CTk):
         self.update_theme_vars()
         self.title(f"SpeedScan {VERSION}")
 
-        # Restaura estado da janela
-        win_state = self.config.get("window_state", {})
-        if win_state.get("maximized", False):
-            self.state('zoomed')
-        else:
-            w = win_state.get("width", 1000)
-            h = win_state.get("height", 700)
-            x = win_state.get("x")
-            y = win_state.get("y")
-            if x is not None and y is not None:
-                self.geometry(f"{w}x{h}+{x}+{y}")
-            else:
-                self.geometry(f"{w}x{h}")
+        # Restaura o estado da janela
+        self._restore_window_state()
 
-        self.minsize(900, 600)
         self.configure(fg_color=self.bg_color)
 
         self.apply_ui_scale()
@@ -388,58 +374,85 @@ class SpeedScan(ctk.CTk):
         threading.Thread(target=self._monitor_loop, daemon=True).start()
         self._check_process_queue()
 
-        # Atualiza o estado da janela ao fechar
-        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        # Se não estava maximizado, define o tamanho salvo
+        if not self.config.get("window_state", {}).get("maximized", False):
+            self.after(50, self._set_initial_size)
 
-    def on_closing(self):
-        """Salva o estado da janela antes de fechar."""
-        self.save_window_state()
+        # Salva o estado ao fechar
+        self.protocol("WM_DELETE_WINDOW", self._on_closing)
+
+    def _set_initial_size(self):
+        """Define o tamanho inicial da janela a partir da config."""
+        ws = self.config.get("window_state", {})
+        w = ws.get("width", 1000)
+        h = ws.get("height", 700)
+        x = ws.get("x")
+        y = ws.get("y")
+        if x is not None and y is not None:
+            self.geometry(f"{w}x{h}+{x}+{y}")
+        else:
+            self.geometry(f"{w}x{h}")
+
+    def _restore_window_state(self):
+        """Aplica maximizado se estiver salvo."""
+        if self.config.get("window_state", {}).get("maximized", False):
+            self.after(50, self._maximize_window)
+
+    def _save_window_state(self):
+        """Salva o estado atual da janela na config."""
+        ws = {}
+        try:
+            # Verifica se está maximizado (funciona no Windows/Linux)
+            if self.state() == 'zoomed' or self.attributes('-zoomed'):
+                ws['maximized'] = True
+                # Quando maximizado, não salvamos posição/tamanho, apenas o estado
+            else:
+                ws['maximized'] = False
+                geom = self.geometry()  # formato "WxH+X+Y"
+                match = re.match(r'(\d+)x(\d+)([+-]\d+)([+-]\d+)', geom)
+                if match:
+                    ws['width'] = int(match.group(1))
+                    ws['height'] = int(match.group(2))
+                    ws['x'] = int(match.group(3))
+                    ws['y'] = int(match.group(4))
+                else:
+                    # fallback
+                    ws['width'] = self.winfo_width()
+                    ws['height'] = self.winfo_height()
+                    ws['x'] = self.winfo_x()
+                    ws['y'] = self.winfo_y()
+        except:
+            # Em caso de erro, usa valores padrão
+            ws = {'maximized': False, 'width': 1000, 'height': 700, 'x': None, 'y': None}
+        self.config['window_state'] = ws
+        self._save_config()
+
+    def _on_closing(self):
+        self._save_window_state()
         self.quit()
         self.destroy()
 
-    def save_window_state(self):
-        """Salva tamanho, posição e estado maximizado."""
-        # Obtém geometria atual
-        geom = self.geometry()  # formato "widthxheight+x+y"
-        match = re.match(r'(\d+)x(\d+)([+-]\d+)([+-]\d+)', geom)
-        if match:
-            width = int(match.group(1))
-            height = int(match.group(2))
-            x = int(match.group(3))
-            y = int(match.group(4))
-        else:
-            width, height, x, y = 1000, 700, None, None
-
-        # Verifica se está maximizado (depende do sistema)
-        maximized = False
+    def _maximize_window(self):
         try:
-            # Tkinter: 'zoomed' no Linux/Windows, 'zoomed' no macOS? 
-            # Usaremos attributes('-zoomed') no Linux/Windows e 'zoomed' no macOS
-            if self.SO == "Darwin":
-                maximized = (self.state() == 'zoomed')
-            else:
-                maximized = self.attributes('-zoomed')
+            self.attributes('-zoomed', True)
         except:
-            pass
-
-        self.config["window_state"] = {
-            "maximized": maximized,
-            "width": width,
-            "height": height,
-            "x": x,
-            "y": y
-        }
-        self._save_config()
+            try:
+                self.state('zoomed')
+            except:
+                w = self.winfo_screenwidth()
+                h = self.winfo_screenheight()
+                self.geometry(f"{w}x{h}+0+0")
+                self.update()
 
     def _load_config(self):
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE) as f:
-                    loaded = json.load(f)
-                    # Mescla com DEFAULT_CONFIG para garantir chaves novas
-                    merged = DEFAULT_CONFIG.copy()
-                    merged.update(loaded)
-                    return merged
+                    config = json.load(f)
+                    # Garante que window_state exista
+                    if 'window_state' not in config:
+                        config['window_state'] = DEFAULT_CONFIG['window_state']
+                    return config
             except:
                 pass
         return DEFAULT_CONFIG.copy()
@@ -560,7 +573,6 @@ class SpeedScan(ctk.CTk):
     def _create_frame(self, target):
         """Cria o frame para a aba especificada e o preenche."""
         frame = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
-        # Chama o método de preenchimento correspondente
         getattr(self, f"_fill_{target}")(frame)
         return frame
 

@@ -8,7 +8,7 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# Módulo de coleta e armazenamento de métricas históricas (com inserção em lote)
+# Módulo de coleta e armazenamento de métricas históricas (com batch insert)
 # Versão 0.0.9-beta
 # =============================================================================
 
@@ -23,12 +23,16 @@ DB_PATH = Path.home() / "speedscan" / "metrics.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 class MetricsDB:
-    """Gerencia banco de dados SQLite para métricas."""
+    """Gerencia banco de dados SQLite para métricas com inserção em lote."""
     
     def __init__(self, db_path=DB_PATH):
         self.db_path = db_path
         self._init_db()
-    
+        self.batch = []          # acumulador para batch insert
+        self.batch_lock = threading.Lock()
+        self.batch_size = 10     # insere a cada 10 pontos
+        self.auto_flush = True   # se True, insere automaticamente ao atingir batch_size
+
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('''
@@ -46,21 +50,32 @@ class MetricsDB:
             ''')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON metrics(timestamp)')
     
-    def insert_many(self, rows):
-        """
-        Insere múltiplas linhas de uma vez.
-        rows: lista de tuplas no formato (timestamp, cpu, memory, disk_usage, disk_io_read, disk_io_write, net_sent, net_recv)
-        """
-        if not rows:
-            return
-        with sqlite3.connect(self.db_path) as conn:
-            conn.executemany('''
-                INSERT INTO metrics 
-                (timestamp, cpu, memory, disk_usage, disk_io_read, disk_io_write, net_sent, net_recv)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', rows)
-    
+    def insert(self, cpu=None, memory=None, disk_usage=None, 
+               disk_io_read=None, disk_io_write=None, net_sent=None, net_recv=None):
+        """Acumula uma métrica para inserção em lote."""
+        with self.batch_lock:
+            self.batch.append((
+                time.time(), cpu, memory, disk_usage,
+                disk_io_read, disk_io_write, net_sent, net_recv
+            ))
+            if self.auto_flush and len(self.batch) >= self.batch_size:
+                self.flush()
+
+    def flush(self):
+        """Insere todas as métricas acumuladas no banco de dados."""
+        with self.batch_lock:
+            if not self.batch:
+                return
+            with sqlite3.connect(self.db_path) as conn:
+                conn.executemany('''
+                    INSERT INTO metrics 
+                    (timestamp, cpu, memory, disk_usage, disk_io_read, disk_io_write, net_sent, net_recv)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', self.batch)
+            self.batch.clear()
+
     def get_last_hours(self, hours=1, metrics=None):
+        """Retorna métricas das últimas N horas."""
         if metrics is None:
             metrics = ['timestamp', 'cpu', 'memory', 'disk_usage']
         else:
@@ -74,11 +89,13 @@ class MetricsDB:
         return rows
     
     def prune_old(self, days=7):
+        """Remove métricas mais antigas que 'days' dias."""
         cutoff = time.time() - days * 24 * 3600
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('DELETE FROM metrics WHERE timestamp < ?', (cutoff,))
     
     def get_stats(self, period_hours=1):
+        """Retorna estatísticas (média, min, max) para CPU, memória e disco no período."""
         cutoff = time.time() - period_hours * 3600
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute('''
@@ -96,18 +113,16 @@ class MetricsDB:
         }
 
 class MetricsCollector:
-    """Coleta métricas em intervalos regulares e armazena em lote no banco."""
+    """Coleta métricas em intervalos regulares e armazena no banco usando batch."""
     
-    def __init__(self, interval=5, batch_size=10):
+    def __init__(self, interval=5):
         self.interval = interval
-        self.batch_size = batch_size  # Número de amostras antes de inserir
         self.db = MetricsDB()
         self._stop_event = threading.Event()
         self._thread = None
         self._last_disk_io = psutil.disk_io_counters()
         self._last_net_io = psutil.net_io_counters()
         self._last_time = time.time()
-        self._buffer = []  # Buffer para acumular amostras
     
     def start(self):
         self._stop_event.clear()
@@ -117,12 +132,10 @@ class MetricsCollector:
     
     def stop(self):
         self._stop_event.set()
-        # Insere o que restou no buffer antes de parar
-        if self._buffer:
-            self.db.insert_many(self._buffer)
-            self._buffer = []
         if self._thread:
             self._thread.join(timeout=1)
+        # Garante que os dados acumulados sejam inseridos antes de parar
+        self.db.flush()
     
     def _collect_loop(self):
         while not self._stop_event.is_set():
@@ -154,19 +167,16 @@ class MetricsCollector:
             self._last_net_io = net_io
             self._last_time = now
             
-            # Adiciona ao buffer
-            self._buffer.append((
-                now, cpu, mem, disk,
-                read_bps, write_bps,
-                sent_bps, recv_bps
-            ))
+            self.db.insert(
+                cpu=cpu,
+                memory=mem,
+                disk_usage=disk,
+                disk_io_read=read_bps,
+                disk_io_write=write_bps,
+                net_sent=sent_bps,
+                net_recv=recv_bps
+            )
             
-            # Se o buffer atingiu o tamanho do lote, insere e limpa
-            if len(self._buffer) >= self.batch_size:
-                self.db.insert_many(self._buffer)
-                self._buffer = []
-            
-            # A cada hora, faz a limpeza de dados antigos
             if int(now) % 3600 < self.interval:
                 self.db.prune_old(days=7)
         except Exception as e:
