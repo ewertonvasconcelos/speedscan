@@ -8,7 +8,7 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# SpeedScan - Versão 0.0.9-beta (Com novos cards de serviços e logs)
+# SpeedScan - Versão 0.0.9-beta (com salvamento de estado da janela)
 # Desenvolvedor: Ewerton Vasconcelos
 # =============================================================================
 
@@ -70,6 +70,13 @@ DEFAULT_CONFIG = {
         "interval_days": 7,
         "tasks": ["cache", "swap", "check"],
         "elevated": False
+    },
+    "window_state": {   # <-- NOVA SEÇÃO
+        "maximized": False,
+        "width": 1000,
+        "height": 700,
+        "x": None,
+        "y": None
     }
 }
 
@@ -98,6 +105,212 @@ AI_SUGGESTIONS = [
     "Llama 3 (Meta)", "Mistral AI", "Cohere", "Local (Ollama)", "Configurar IA Local"
 ]
 
+class ActionHandler:
+    """Centraliza a execução de ações (limpeza, testes, scans, etc.)."""
+    def __init__(self, app):
+        self.app = app
+
+    def run_browser_clean(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "Iniciando limpeza de navegadores...\n")
+        results = self.app.browser_cleaner.clean_all_browsers()
+        total_freed = 0
+        for browser, data in results.items():
+            if data['cache_freed'] or data['cookies_freed'] or data['history_freed']:
+                log.insert("end", f"\n{data['name']}:\n")
+                if data['cache_freed']:
+                    log.insert("end", f"  Cache: {self.app.browser_cleaner.format_bytes(data['cache_freed'])}\n")
+                    total_freed += data['cache_freed']
+                if data['cookies_freed']:
+                    log.insert("end", f"  Cookies: {self.app.browser_cleaner.format_bytes(data['cookies_freed'])}\n")
+                    total_freed += data['cookies_freed']
+                if data['history_freed']:
+                    log.insert("end", f"  Histórico: {self.app.browser_cleaner.format_bytes(data['history_freed'])}\n")
+                    total_freed += data['history_freed']
+                if data['errors']:
+                    log.insert("end", f"  Erros: {', '.join(data['errors'])}\n")
+        log.insert("end", f"\n✅ Total liberado: {self.app.browser_cleaner.format_bytes(total_freed)}\n")
+
+    def run_speed_test(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "Iniciando teste de velocidade...\n")
+        log.insert("end", "Isso pode levar alguns segundos.\n\n")
+        def update_log(result):
+            self.app.after(0, lambda: log.insert("end", "\n" + self.app.speed_tester.format_result(result) + "\n"))
+            self.app.after(0, lambda: log.insert("end", "\n✅ Teste concluído.\n"))
+        self.app.speed_tester.run_test(callback=update_log)
+
+    def run_lan_scan(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "Iniciando scanner de rede...\n")
+        log.insert("end", "Isso pode levar alguns segundos.\n\n")
+        def update_progress(current, total, ip, is_alive):
+            if is_alive:
+                self.app.after(0, lambda: log.insert("end", f"  {ip} - ativo\n"))
+        def scan_thread():
+            devices = self.app.lan_scanner.scan_network(progress_callback=update_progress)
+            self.app.after(0, lambda: self._display_scan_results(devices, log))
+        threading.Thread(target=scan_thread, daemon=True).start()
+
+    def _display_scan_results(self, devices, log):
+        log.insert("end", "\n" + "="*50 + "\n")
+        log.insert("end", "RESULTADO DO SCAN:\n")
+        log.insert("end", "="*50 + "\n")
+        for d in devices:
+            if 'error' in d:
+                log.insert("end", f"Erro: {d['error']}\n")
+                continue
+            log.insert("end", f"IP: {d['ip']}\n")
+            log.insert("end", f"MAC: {d['mac']}\n")
+            log.insert("end", f"Hostname: {d['hostname']}\n")
+            log.insert("end", f"Fabricante: {d['vendor']}\n")
+            log.insert("end", "-"*30 + "\n")
+        log.insert("end", f"\nTotal de dispositivos ativos: {len(devices)}\n")
+        log.insert("end", "✅ Scan concluído.\n")
+
+    def run_port_scan(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "Escaneando portas abertas...\n")
+        ports = self.app.security_scanner.scan_open_ports()
+        if not ports:
+            log.insert("end", "Nenhuma porta aberta encontrada.\n")
+        else:
+            log.insert("end", "\n".join(ports))
+        log.insert("end", "\n✅ Scan concluído.\n")
+
+    def run_firewall_check(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "Verificando status do firewall...\n")
+        status = self.app.security_scanner.check_firewall_status()
+        log.insert("end", status)
+        log.insert("end", "\n✅ Verificação concluída.\n")
+
+    def run_security_updates(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "Verificando atualizações de segurança...\n")
+        updates = self.app.security_scanner.check_security_updates()
+        log.insert("end", "\n".join(updates))
+        log.insert("end", "\n✅ Verificação concluída.\n")
+
+    def run_lan_cache_setup(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🔄 Verificando Docker...\n")
+        if not self.app.lan_cache.is_docker_installed():
+            log.insert("end", "Docker não encontrado. Tentando instalar...\n")
+            cmds = self.app.lan_cache.install_docker()
+            for cmd in cmds:
+                log.insert("end", f"Executando: {cmd}\n")
+                # Se cmd for string, usa shell=True (segue padrão anterior)
+                proc = self.app.runner.run(cmd)
+                if proc:
+                    for line in proc.stdout:
+                        self.app.after(0, lambda l=line: log.insert("end", l))
+                    proc.wait()
+        else:
+            log.insert("end", "✅ Docker já instalado.\n")
+
+        log.insert("end", "\n📦 Baixando e iniciando LANCache...\n")
+        cmds = self.app.lan_cache.get_install_commands()
+        for cmd in cmds:
+            log.insert("end", f"Executando: {cmd}\n")
+            # Converte comandos conhecidos para lista
+            if cmd.startswith("mkdir"):
+                parts = cmd.split()
+                proc = self.app.runner.run(parts)
+            elif cmd.startswith("wget"):
+                parts = cmd.split()
+                proc = self.app.runner.run(parts)
+            elif "docker-compose" in cmd:
+                proc = self.app.runner.run(cmd)
+            else:
+                proc = self.app.runner.run(cmd)
+            if proc:
+                for line in proc.stdout:
+                    self.app.after(0, lambda l=line: log.insert("end", l))
+                proc.wait()
+
+        log.insert("end", "\n🔍 Status do LANCache:\n")
+        status = self.app.lan_cache.get_status()
+        log.insert("end", status + "\n")
+
+        log.insert("end", "\n✅ Configuração concluída.\n")
+        log.insert("end", "Agora você pode acessar http://lancache:80 para ver a interface web.\n")
+        log.insert("end", "Para usar o cache, configure o DNS da sua rede para o IP deste servidor.\n")
+
+    def run_services_manager(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🔍 Analisando serviços em execução...\n\n")
+        if self.app.SO == "Linux":
+            log.insert("end", "Serviços ativos (systemctl):\n")
+            log.insert("end", "="*40 + "\n")
+            proc = self.app.runner.run(["systemctl", "list-units", "--type=service", "--state=running", "--no-pager"])
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        elif self.app.SO == "Windows":
+            log.insert("end", "Serviços do Windows (via sc query):\n")
+            log.insert("end", "="*40 + "\n")
+            proc = self.app.runner.run("sc query | findstr /C:\"SERVICE_NAME\" /C:\"STATE\"")
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        elif self.app.SO == "Darwin":
+            log.insert("end", "Serviços macOS (launchctl):\n")
+            log.insert("end", "="*40 + "\n")
+            proc = self.app.runner.run(["launchctl", "list"])
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        else:
+            log.insert("end", "Sistema não suportado para gerenciamento de serviços.\n")
+        log.insert("end", "\n✅ Análise concluída.\n")
+
+    def run_log_analysis(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "📋 Analisando logs do sistema (últimos erros)...\n\n")
+        if self.app.SO == "Linux":
+            log.insert("end", "Erros recentes (journalctl):\n")
+            log.insert("end", "="*40 + "\n")
+            proc = self.app.runner.run("journalctl -p 3 -b --no-pager | head -20")
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        elif self.app.SO == "Windows":
+            log.insert("end", "Erros no Log de Eventos (PowerShell):\n")
+            log.insert("end", "="*40 + "\n")
+            cmd = 'powershell -Command "Get-EventLog -LogName System -EntryType Error -Newest 20 | Format-Table -AutoSize"'
+            proc = self.app.runner.run(cmd)
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        elif self.app.SO == "Darwin":
+            log.insert("end", "Erros recentes (log show):\n")
+            log.insert("end", "="*40 + "\n")
+            proc = self.app.runner.run('log show --predicate \'eventMessage contains "error"\' --last 1h | head -20')
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        else:
+            log.insert("end", "Sistema não suportado para análise de logs.\n")
+        log.insert("end", "\n✅ Análise concluída.\n")
+
+    def special_command(self, cmd, log):
+        if cmd == "video_drv":
+            log.insert("end", "Detectando GPU...\n")
+            log.insert("end", "Funcionalidade em desenvolvimento.\n")
+        elif cmd == "net_drv":
+            log.insert("end", "Detectando placa de rede...\n")
+            log.insert("end", "Funcionalidade em desenvolvimento.\n")
+        elif cmd == "auto_update":
+            log.insert("end", "Configurando atualizações automáticas...\n")
+            log.insert("end", "Funcionalidade em desenvolvimento.\n")
+
 class SpeedScan(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -108,7 +321,20 @@ class SpeedScan(ctk.CTk):
         self.update_theme_vars()
         self.title(f"SpeedScan {VERSION}")
 
-        self.geometry("1000x700")
+        # Restaura estado da janela
+        win_state = self.config.get("window_state", {})
+        if win_state.get("maximized", False):
+            self.state('zoomed')
+        else:
+            w = win_state.get("width", 1000)
+            h = win_state.get("height", 700)
+            x = win_state.get("x")
+            y = win_state.get("y")
+            if x is not None and y is not None:
+                self.geometry(f"{w}x{h}+{x}+{y}")
+            else:
+                self.geometry(f"{w}x{h}")
+
         self.minsize(900, 600)
         self.configure(fg_color=self.bg_color)
 
@@ -137,11 +363,20 @@ class SpeedScan(ctk.CTk):
         self.metrics_collector.start()
         self.proc_manager.start_monitoring()
 
+        self.action_handler = ActionHandler(self)
+
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
         self._build_sidebar()
-        self.frames = self._build_frames()
+
+        # Container principal para as abas (lazy loading)
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_rowconfigure(0, weight=1)
+
+        self.frames = {}  # Dicionário de frames carregados
 
         for btn in self.detail_buttons.values():
             btn.pack_forget()
@@ -153,32 +388,65 @@ class SpeedScan(ctk.CTk):
         threading.Thread(target=self._monitor_loop, daemon=True).start()
         self._check_process_queue()
 
-        self.after(50, self._maximize_window)
+        # Atualiza o estado da janela ao fechar
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-    def _maximize_window(self):
+    def on_closing(self):
+        """Salva o estado da janela antes de fechar."""
+        self.save_window_state()
+        self.quit()
+        self.destroy()
+
+    def save_window_state(self):
+        """Salva tamanho, posição e estado maximizado."""
+        # Obtém geometria atual
+        geom = self.geometry()  # formato "widthxheight+x+y"
+        match = re.match(r'(\d+)x(\d+)([+-]\d+)([+-]\d+)', geom)
+        if match:
+            width = int(match.group(1))
+            height = int(match.group(2))
+            x = int(match.group(3))
+            y = int(match.group(4))
+        else:
+            width, height, x, y = 1000, 700, None, None
+
+        # Verifica se está maximizado (depende do sistema)
+        maximized = False
         try:
-            self.attributes('-zoomed', True)
+            # Tkinter: 'zoomed' no Linux/Windows, 'zoomed' no macOS? 
+            # Usaremos attributes('-zoomed') no Linux/Windows e 'zoomed' no macOS
+            if self.SO == "Darwin":
+                maximized = (self.state() == 'zoomed')
+            else:
+                maximized = self.attributes('-zoomed')
         except:
-            try:
-                self.state('zoomed')
-            except:
-                w = self.winfo_screenwidth()
-                h = self.winfo_screenheight()
-                self.geometry(f"{w}x{h}+0+0")
-                self.update()
+            pass
+
+        self.config["window_state"] = {
+            "maximized": maximized,
+            "width": width,
+            "height": height,
+            "x": x,
+            "y": y
+        }
+        self._save_config()
 
     def _load_config(self):
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE) as f:
-                    return json.load(f)
+                    loaded = json.load(f)
+                    # Mescla com DEFAULT_CONFIG para garantir chaves novas
+                    merged = DEFAULT_CONFIG.copy()
+                    merged.update(loaded)
+                    return merged
             except:
                 pass
         return DEFAULT_CONFIG.copy()
 
     def _save_config(self):
         with open(CONFIG_FILE, "w") as f:
-            json.dump(self.config, f)
+            json.dump(self.config, f, indent=2)
 
     def update_theme_vars(self):
         t = THEMES.get(self.config["theme"], THEMES["default"])
@@ -265,43 +533,36 @@ class SpeedScan(ctk.CTk):
         return btn
 
     def show_frame(self, target):
+        # Esconde todas as abas
         for f in self.frames.values():
             f.pack_forget()
+
+        # Se a aba ainda não foi carregada, cria agora
+        if target not in self.frames:
+            self.frames[target] = self._create_frame(target)
+
+        # Mostra a aba
         self.frames[target].pack(fill="both", expand=True)
         self.current_module = target
+
+        # Atualiza a cor dos botões da sidebar
         for key, btn in self.sidebar_buttons.items():
             btn.configure(fg_color=self.acc_color if key == target else "transparent")
-        if target == "dashboard":
-            pass
-        elif target == "processos":
+
+        # Ações específicas ao entrar em algumas abas
+        if target == "processos":
             self._refresh_process_list()
         elif target == "historico":
             self._update_graphs()
         elif target == "agente":
             self._update_ai_suggestions()
 
-    def _build_frames(self):
-        container = ctk.CTkFrame(self, fg_color="transparent")
-        container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
-        container.grid_columnconfigure(0, weight=1)
-        container.grid_rowconfigure(0, weight=1)
-
-        frames = {}
-        scrollable_names = ["dashboard", "otimizacao", "rede", "drivers", "processos", "historico", "seguranca", "agente", "config", "sobre"]
-        for name in scrollable_names:
-            frames[name] = ctk.CTkScrollableFrame(container, fg_color="transparent")
-
-        self._fill_dashboard(frames["dashboard"])
-        self._fill_otimizacao(frames["otimizacao"])
-        self._fill_rede(frames["rede"])
-        self._fill_drivers(frames["drivers"])
-        self._fill_processos(frames["processos"])
-        self._fill_historico(frames["historico"])
-        self._fill_seguranca(frames["seguranca"])
-        self._fill_agente(frames["agente"])
-        self._fill_config(frames["config"])
-        self._fill_sobre(frames["sobre"])
-        return frames
+    def _create_frame(self, target):
+        """Cria o frame para a aba especificada e o preenche."""
+        frame = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        # Chama o método de preenchimento correspondente
+        getattr(self, f"_fill_{target}")(frame)
+        return frame
 
     # ---------- Dashboard ----------
     def _fill_dashboard(self, parent):
@@ -379,188 +640,7 @@ class SpeedScan(ctk.CTk):
                            text_color=self.acc_color)
         lbl.pack(expand=True)
 
-    # ---------- Métodos auxiliares (browser, speed, lan, security, lancache) ----------
-    def _run_browser_clean(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "Iniciando limpeza de navegadores...\n")
-        results = self.browser_cleaner.clean_all_browsers()
-        total_freed = 0
-        for browser, data in results.items():
-            if data['cache_freed'] or data['cookies_freed'] or data['history_freed']:
-                log.insert("end", f"\n{data['name']}:\n")
-                if data['cache_freed']:
-                    log.insert("end", f"  Cache: {self.browser_cleaner.format_bytes(data['cache_freed'])}\n")
-                    total_freed += data['cache_freed']
-                if data['cookies_freed']:
-                    log.insert("end", f"  Cookies: {self.browser_cleaner.format_bytes(data['cookies_freed'])}\n")
-                    total_freed += data['cookies_freed']
-                if data['history_freed']:
-                    log.insert("end", f"  Histórico: {self.browser_cleaner.format_bytes(data['history_freed'])}\n")
-                    total_freed += data['history_freed']
-                if data['errors']:
-                    log.insert("end", f"  Erros: {', '.join(data['errors'])}\n")
-        log.insert("end", f"\n✅ Total liberado: {self.browser_cleaner.format_bytes(total_freed)}\n")
-
-    def _run_speed_test(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "Iniciando teste de velocidade...\n")
-        log.insert("end", "Isso pode levar alguns segundos.\n\n")
-        def update_log(result):
-            self.after(0, lambda: log.insert("end", "\n" + self.speed_tester.format_result(result) + "\n"))
-            self.after(0, lambda: log.insert("end", "\n✅ Teste concluído.\n"))
-        self.speed_tester.run_test(callback=update_log)
-
-    def _run_lan_scan(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "Iniciando scanner de rede...\n")
-        log.insert("end", "Isso pode levar alguns segundos.\n\n")
-        def update_progress(current, total, ip, is_alive):
-            if is_alive:
-                self.after(0, lambda: log.insert("end", f"  {ip} - ativo\n"))
-        def scan_thread():
-            devices = self.lan_scanner.scan_network(progress_callback=update_progress)
-            self.after(0, lambda: self._display_scan_results(devices, log))
-        threading.Thread(target=scan_thread, daemon=True).start()
-
-    def _display_scan_results(self, devices, log):
-        log.insert("end", "\n" + "="*50 + "\n")
-        log.insert("end", "RESULTADO DO SCAN:\n")
-        log.insert("end", "="*50 + "\n")
-        for d in devices:
-            if 'error' in d:
-                log.insert("end", f"Erro: {d['error']}\n")
-                continue
-            log.insert("end", f"IP: {d['ip']}\n")
-            log.insert("end", f"MAC: {d['mac']}\n")
-            log.insert("end", f"Hostname: {d['hostname']}\n")
-            log.insert("end", f"Fabricante: {d['vendor']}\n")
-            log.insert("end", "-"*30 + "\n")
-        log.insert("end", f"\nTotal de dispositivos ativos: {len(devices)}\n")
-        log.insert("end", "✅ Scan concluído.\n")
-
-    def _run_port_scan(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "Escaneando portas abertas...\n")
-        ports = self.security_scanner.scan_open_ports()
-        if not ports:
-            log.insert("end", "Nenhuma porta aberta encontrada.\n")
-        else:
-            log.insert("end", "\n".join(ports))
-        log.insert("end", "\n✅ Scan concluído.\n")
-
-    def _run_firewall_check(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "Verificando status do firewall...\n")
-        status = self.security_scanner.check_firewall_status()
-        log.insert("end", status)
-        log.insert("end", "\n✅ Verificação concluída.\n")
-
-    def _run_security_updates(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "Verificando atualizações de segurança...\n")
-        updates = self.security_scanner.check_security_updates()
-        log.insert("end", "\n".join(updates))
-        log.insert("end", "\n✅ Verificação concluída.\n")
-
-    def _run_lan_cache_setup(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "🔄 Verificando Docker...\n")
-        if not self.lan_cache.is_docker_installed():
-            log.insert("end", "Docker não encontrado. Tentando instalar...\n")
-            cmds = self.lan_cache.install_docker()
-            for cmd in cmds:
-                log.insert("end", f"Executando: {cmd}\n")
-                proc = self.runner.run(cmd)
-                if proc:
-                    for line in proc.stdout:
-                        self.after(0, lambda l=line: log.insert("end", l))
-                    proc.wait()
-        else:
-            log.insert("end", "✅ Docker já instalado.\n")
-
-        log.insert("end", "\n📦 Baixando e iniciando LANCache...\n")
-        cmds = self.lan_cache.get_install_commands()
-        for cmd in cmds:
-            log.insert("end", f"Executando: {cmd}\n")
-            proc = self.runner.run(cmd)
-            if proc:
-                for line in proc.stdout:
-                    self.after(0, lambda l=line: log.insert("end", l))
-                proc.wait()
-
-        log.insert("end", "\n🔍 Status do LANCache:\n")
-        status = self.lan_cache.get_status()
-        log.insert("end", status + "\n")
-
-        log.insert("end", "\n✅ Configuração concluída.\n")
-        log.insert("end", "Agora você pode acessar http://lancache:80 para ver a interface web.\n")
-        log.insert("end", "Para usar o cache, configure o DNS da sua rede para o IP deste servidor.\n")
-
-    # ---------- Novos métodos: Serviços e Logs ----------
-    def _run_services_manager(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "🔍 Analisando serviços em execução...\n\n")
-        if self.SO == "Linux":
-            log.insert("end", "Serviços ativos (systemctl):\n")
-            log.insert("end", "="*40 + "\n")
-            proc = self.runner.run("systemctl list-units --type=service --state=running --no-pager")
-            if proc:
-                for line in proc.stdout:
-                    log.insert("end", line)
-                proc.wait()
-        elif self.SO == "Windows":
-            log.insert("end", "Serviços do Windows (via sc query):\n")
-            log.insert("end", "="*40 + "\n")
-            proc = self.runner.run("sc query | findstr /C:\"SERVICE_NAME\" /C:\"STATE\"")
-            if proc:
-                for line in proc.stdout:
-                    log.insert("end", line)
-                proc.wait()
-        elif self.SO == "Darwin":
-            log.insert("end", "Serviços macOS (launchctl):\n")
-            log.insert("end", "="*40 + "\n")
-            proc = self.runner.run("launchctl list")
-            if proc:
-                for line in proc.stdout:
-                    log.insert("end", line)
-                proc.wait()
-        else:
-            log.insert("end", "Sistema não suportado para gerenciamento de serviços.\n")
-        log.insert("end", "\n✅ Análise concluída.\n")
-
-    def _run_log_analysis(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "📋 Analisando logs do sistema (últimos erros)...\n\n")
-        if self.SO == "Linux":
-            log.insert("end", "Erros recentes (journalctl):\n")
-            log.insert("end", "="*40 + "\n")
-            proc = self.runner.run("journalctl -p 3 -b --no-pager | head -20")
-            if proc:
-                for line in proc.stdout:
-                    log.insert("end", line)
-                proc.wait()
-        elif self.SO == "Windows":
-            log.insert("end", "Erros no Log de Eventos (PowerShell):\n")
-            log.insert("end", "="*40 + "\n")
-            cmd = 'powershell -Command "Get-EventLog -LogName System -EntryType Error -Newest 20 | Format-Table -AutoSize"'
-            proc = self.runner.run(cmd)
-            if proc:
-                for line in proc.stdout:
-                    log.insert("end", line)
-                proc.wait()
-        elif self.SO == "Darwin":
-            log.insert("end", "Erros recentes (log show):\n")
-            log.insert("end", "="*40 + "\n")
-            proc = self.runner.run('log show --predicate \'eventMessage contains "error"\' --last 1h | head -20')
-            if proc:
-                for line in proc.stdout:
-                    log.insert("end", line)
-                proc.wait()
-        else:
-            log.insert("end", "Sistema não suportado para análise de logs.\n")
-        log.insert("end", "\n✅ Análise concluída.\n")
-
-    # ---------- Aba Otimização (com 15 cards) ----------
+    # ---------- Aba Otimização ----------
     def _fill_otimizacao(self, parent):
         ctk.CTkLabel(parent, text="Otimização", font=("Inter",28,"bold"),
                      text_color=self.acc_color).pack(anchor="w", pady=(0,20))
@@ -649,7 +729,8 @@ class SpeedScan(ctk.CTk):
         ctk.CTkLabel(toolbar, text="Ordenar por:", font=("Inter",12)).pack(side="left", padx=(10,5))
         self.sort_var = ctk.StringVar(value="cpu_percent")
         sort_menu = ctk.CTkOptionMenu(toolbar, values=["cpu_percent", "memory_percent", "name", "pid"],
-                                       variable=self.sort_var, command=self._on_sort_change, width=120)
+                                       variable=self.sort_var, command=self._on_sort_change, width=120,
+                                       cursor="arrow")
         sort_menu.pack(side="left", padx=(0,10))
 
         self.reverse_var = ctk.BooleanVar(value=True)
@@ -820,13 +901,15 @@ class SpeedScan(ctk.CTk):
         ctk.CTkLabel(control_frame, text="Período:", font=("Inter",12)).pack(side="left", padx=(0,5))
         self.period_var = ctk.StringVar(value="1h")
         period_menu = ctk.CTkOptionMenu(control_frame, values=["1h", "6h", "24h", "7d"],
-                                        variable=self.period_var, command=self._on_period_change, width=100)
+                                        variable=self.period_var, command=self._on_period_change, width=100,
+                                        cursor="arrow")
         period_menu.pack(side="left", padx=(0,10))
 
         ctk.CTkLabel(control_frame, text="Métrica:", font=("Inter",12)).pack(side="left", padx=(10,5))
         self.metric_var = ctk.StringVar(value="cpu")
         metric_menu = ctk.CTkOptionMenu(control_frame, values=["cpu", "memory", "disk"],
-                                        variable=self.metric_var, command=self._on_metric_change, width=100)
+                                        variable=self.metric_var, command=self._on_metric_change, width=100,
+                                        cursor="arrow")
         metric_menu.pack(side="left", padx=(0,10))
 
         refresh_btn = ctk.CTkButton(control_frame, text="🔄 Atualizar", command=self._update_graphs,
@@ -1004,43 +1087,43 @@ class SpeedScan(ctk.CTk):
             real_cmd = mapper.dns_command(cmd)
         else:
             if cmd == "speedtest":
-                self._run_speed_test(log)
+                self.action_handler.run_speed_test(log)
                 self._show_details_button(tag)
                 return
             elif cmd == "browsers":
-                self._run_browser_clean(log)
+                self.action_handler.run_browser_clean(log)
                 self._show_details_button(tag)
                 return
             elif cmd == "lanscan":
-                self._run_lan_scan(log)
+                self.action_handler.run_lan_scan(log)
                 self._show_details_button(tag)
                 return
             elif cmd == "ports":
-                self._run_port_scan(log)
+                self.action_handler.run_port_scan(log)
                 self._show_details_button(tag)
                 return
             elif cmd == "firewall":
-                self._run_firewall_check(log)
+                self.action_handler.run_firewall_check(log)
                 self._show_details_button(tag)
                 return
             elif cmd == "sec_updates":
-                self._run_security_updates(log)
+                self.action_handler.run_security_updates(log)
                 self._show_details_button(tag)
                 return
             elif cmd == "lancache":
-                self._run_lan_cache_setup(log)
+                self.action_handler.run_lan_cache_setup(log)
                 self._show_details_button(tag)
                 return
             elif cmd == "services":
-                self._run_services_manager(log)
+                self.action_handler.run_services_manager(log)
                 self._show_details_button(tag)
                 return
             elif cmd == "logs":
-                self._run_log_analysis(log)
+                self.action_handler.run_log_analysis(log)
                 self._show_details_button(tag)
                 return
             elif cmd in ["video_drv", "net_drv", "auto_update"]:
-                self._special_command(cmd, log)
+                self.action_handler.special_command(cmd, log)
                 self._show_details_button(tag)
                 return
             mapper = ActionMapper(self.SO, self.runner, self.turbo_active)
@@ -1058,17 +1141,6 @@ class SpeedScan(ctk.CTk):
         else:
             self.after(0, lambda: log.insert("end", "Erro ao executar comando.\n"))
         self.after(0, lambda: self._show_details_button(tag))
-
-    def _special_command(self, cmd, log):
-        if cmd == "video_drv":
-            log.insert("end", "Detectando GPU...\n")
-            log.insert("end", "Funcionalidade em desenvolvimento.\n")
-        elif cmd == "net_drv":
-            log.insert("end", "Detectando placa de rede...\n")
-            log.insert("end", "Funcionalidade em desenvolvimento.\n")
-        elif cmd == "auto_update":
-            log.insert("end", "Configurando atualizações automáticas...\n")
-            log.insert("end", "Funcionalidade em desenvolvimento.\n")
 
     def _show_details_button(self, tag):
         btn = self.detail_buttons.get(tag)
@@ -1161,14 +1233,16 @@ class SpeedScan(ctk.CTk):
         ctk.CTkLabel(f_lang, text="Idioma de Interface", font=("Inter",14),
                      text_color=self.text_color).pack(anchor="w")
         self.lang_var = ctk.StringVar(value=LANGUAGES.get(self.config.get("language","pt_BR"), "Português Brasileiro"))
-        ctk.CTkOptionMenu(f_lang, values=list(LANGUAGES.values()), variable=self.lang_var, width=300).pack(anchor="w")
+        ctk.CTkOptionMenu(f_lang, values=list(LANGUAGES.values()), variable=self.lang_var, width=300,
+                          cursor="arrow").pack(anchor="w")
 
         f_scale = ctk.CTkFrame(parent, fg_color="transparent")
         f_scale.pack(fill="x", pady=10)
         ctk.CTkLabel(f_scale, text="Escala da interface *", font=("Inter",14),
                      text_color=self.text_color).pack(anchor="w")
         self.scale_var = ctk.StringVar(value=SCALES.get(self.config.get("ui_scale","auto"), "Automático"))
-        ctk.CTkOptionMenu(f_scale, values=list(SCALES.values()), variable=self.scale_var, width=300).pack(anchor="w")
+        ctk.CTkOptionMenu(f_scale, values=list(SCALES.values()), variable=self.scale_var, width=300,
+                          cursor="arrow").pack(anchor="w")
 
         f_theme = ctk.CTkFrame(parent, fg_color="transparent")
         f_theme.pack(fill="x", pady=10)
@@ -1178,14 +1252,16 @@ class SpeedScan(ctk.CTk):
         theme_keys = ["default", "grey", "dark", "light"]
         current = theme_keys.index(self.config.get("theme","default"))
         self.theme_name_var = ctk.StringVar(value=theme_names[current])
-        ctk.CTkOptionMenu(f_theme, values=theme_names, variable=self.theme_name_var, width=300).pack(anchor="w")
+        ctk.CTkOptionMenu(f_theme, values=theme_names, variable=self.theme_name_var, width=300,
+                          cursor="arrow").pack(anchor="w")
 
         f_tab = ctk.CTkFrame(parent, fg_color="transparent")
         f_tab.pack(fill="x", pady=10)
         ctk.CTkLabel(f_tab, text="Abrir arquivo", font=("Inter",14),
                      text_color=self.text_color).pack(anchor="w")
         self.tab_var = ctk.StringVar(value="Na guia" if self.config.get("open_file_in_tab") else "Nova janela")
-        ctk.CTkOptionMenu(f_tab, values=["Na guia", "Nova janela"], variable=self.tab_var, width=300).pack(anchor="w")
+        ctk.CTkOptionMenu(f_tab, values=["Na guia", "Nova janela"], variable=self.tab_var, width=300,
+                          cursor="arrow").pack(anchor="w")
 
         separator = ctk.CTkFrame(parent, height=2, fg_color=self.acc_color)
         separator.pack(fill="x", pady=20)
@@ -1207,7 +1283,8 @@ class SpeedScan(ctk.CTk):
         self.schedule_freq_var = ctk.StringVar(value=self.config.get("schedule", {}).get("frequency", "weekly"))
         freq_menu = ctk.CTkOptionMenu(freq_frame, values=["daily", "weekly", "monthly", "custom"],
                                        variable=self.schedule_freq_var,
-                                       command=self.update_schedule_visibility, width=150)
+                                       command=self.update_schedule_visibility, width=150,
+                                       cursor="arrow")
         freq_menu.pack(side="left", padx=5)
 
         time_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
@@ -1223,7 +1300,8 @@ class SpeedScan(ctk.CTk):
         self.schedule_weekday_var = ctk.StringVar(value=self.config.get("schedule", {}).get("day_of_week", "monday"))
         weekday_menu = ctk.CTkOptionMenu(self.weekday_frame,
                                           values=["monday","tuesday","wednesday","thursday","friday","saturday","sunday"],
-                                          variable=self.schedule_weekday_var, width=150)
+                                          variable=self.schedule_weekday_var, width=150,
+                                          cursor="arrow")
         weekday_menu.pack(side="left", padx=5)
 
         self.monthday_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
@@ -1365,7 +1443,6 @@ class SpeedScan(ctk.CTk):
         toast.place(relx=0.5, rely=0.5, anchor="center")
         self.after(duration, toast.destroy)
 
-    # ---------- APPLY CONFIG COM OPÇÃO C ----------
     def apply_config(self):
         self.config["username"] = self.entry_user.get()
         for k,v in LANGUAGES.items():
