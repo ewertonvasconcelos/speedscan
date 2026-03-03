@@ -9,16 +9,20 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Módulo de IA Proativa - Sugere otimizações baseado em métricas
-# Versão 0.1.0-beta
+# Versão 0.3.0-beta
 # =============================================================================
 
 import psutil
 import time
+from core.cookie_manager import CookieManager
+from core.trash_manager import TrashManager
 
 class AIProactive:
     def __init__(self, metrics_db, health_monitor):
         self.metrics_db = metrics_db
         self.health_monitor = health_monitor
+        self.cookie_mgr = CookieManager()
+        self.trash_mgr = TrashManager()
 
     def analyze(self):
         sugestoes = []
@@ -108,6 +112,26 @@ class AIProactive:
                 'titulo': '📈 Memória consistentemente alta',
                 'descricao': f'Média de memória nas últimas 24h: {stats["mem_avg"]:.1f}%.',
                 'acao': None,
+                'prioridade': 'media'
+            })
+
+        # Sugestões de cookies
+        cookie_sites = self.cookie_mgr.get_cookie_summary()
+        if cookie_sites and len(cookie_sites) > 50:
+            sugestoes.append({
+                'titulo': '🍪 Muitos cookies armazenados',
+                'descricao': f'Você tem cookies de {len(cookie_sites)} sites. Gerenciar cookies pode liberar espaço.',
+                'acao': 'cookies',
+                'prioridade': 'baixa'
+            })
+
+        # Sugestões da lixeira
+        trash_size = self.trash_mgr.get_trash_size()
+        if trash_size > 100 * 1024 * 1024:  # > 100 MB
+            sugestoes.append({
+                'titulo': '🗑️ Lixeira do SpeedScan cheia',
+                'descricao': f'A lixeira contém {trash_size / (1024*1024):.1f} MB. Deseja esvaziar?',
+                'acao': 'empty_trash',
                 'prioridade': 'media'
             })
 

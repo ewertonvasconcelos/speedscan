@@ -9,17 +9,38 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Mapeamento de comandos para diferentes sistemas operacionais
-# Versão 0.1.0-beta
+# Versão 0.3.0-beta
 # =============================================================================
 
 import subprocess
+import os
+import tkinter as tk
+from tkinter import simpledialog
 
 class CommandRunner:
     def __init__(self, so):
         self.so = so
 
-    def run(self, cmd):
+    def run(self, cmd, use_sudo=False, parent=None):
         try:
+            if use_sudo and self.so == "Linux":
+                if isinstance(cmd, list):
+                    cmd = ["pkexec"] + cmd
+                else:
+                    cmd = f"pkexec {cmd}"
+            elif use_sudo and self.so == "Windows":
+                if isinstance(cmd, list):
+                    cmd = ["runas", "/user:Administrator"] + cmd
+                else:
+                    cmd = f"runas /user:Administrator {cmd}"
+            elif use_sudo and self.so == "Darwin":
+                if isinstance(cmd, list):
+                    cmd_str = " ".join(cmd)
+                else:
+                    cmd_str = cmd
+                script = f'do shell script "{cmd_str}" with administrator privileges'
+                cmd = ["osascript", "-e", script]
+
             if isinstance(cmd, list):
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
             else:

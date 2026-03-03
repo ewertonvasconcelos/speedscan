@@ -9,7 +9,7 @@
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
 # Módulo de coleta e armazenamento de métricas históricas (com batch insert)
-# Versão 0.1.0-beta
+# Versão 0.3.0-beta (corrigido: stop não bloqueia mais)
 # =============================================================================
 
 import sqlite3
@@ -61,13 +61,17 @@ class MetricsDB:
         with self.batch_lock:
             if not self.batch:
                 return
-            with sqlite3.connect(self.db_path) as conn:
-                conn.executemany('''
-                    INSERT INTO metrics 
-                    (timestamp, cpu, memory, disk_usage, disk_io_read, disk_io_write, net_sent, net_recv)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', self.batch)
-            self.batch.clear()
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.executemany('''
+                        INSERT INTO metrics 
+                        (timestamp, cpu, memory, disk_usage, disk_io_read, disk_io_write, net_sent, net_recv)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', self.batch)
+            except Exception as e:
+                print(f"Erro ao inserir lote: {e}")
+            finally:
+                self.batch.clear()
 
     def get_last_hours(self, hours=1, metrics=None):
         if metrics is None:
@@ -122,9 +126,8 @@ class MetricsCollector:
     
     def stop(self):
         self._stop_event.set()
-        if self._thread:
-            self._thread.join(timeout=1)
-        self.db.flush()
+        # Não faz join, apenas sinaliza. A thread é daemon, então não bloqueia o fechamento.
+        self.db.flush()  # garante que os dados pendentes sejam salvos
     
     def _collect_loop(self):
         while not self._stop_event.is_set():

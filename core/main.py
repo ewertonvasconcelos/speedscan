@@ -8,7 +8,7 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# SpeedScan - Versão 0.1.0-beta (correções finais)
+# SpeedScan - Versão 0.3.0-beta (superando o BleachBit)
 # Desenvolvedor: Ewerton Vasconcelos
 # =============================================================================
 
@@ -41,6 +41,10 @@ from core.ai_proactive import AIProactive
 from core.security_scanner import SecurityScanner
 from core.dashboard import Dashboard
 from core.lan_cache import LANCacheManager
+from core.chat import ChatFrame
+from core.first_run import FirstRunWizard
+from core.cookie_manager import CookieManager
+from core.trash_manager import TrashManager
 
 import matplotlib
 matplotlib.use('TkAgg')
@@ -53,7 +57,7 @@ LOG_DIR = Path.home() / "speedscan" / "logs"
 AGENT_SCRIPT = Path.home() / "speedscan" / "speedscan-agent.py"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-VERSION = "0.1.0-beta"
+VERSION = "0.3.0-beta"
 
 DEFAULT_CONFIG = {
     "theme": "default",
@@ -61,6 +65,8 @@ DEFAULT_CONFIG = {
     "language": "pt_BR",
     "ui_scale": "auto",
     "open_file_in_tab": False,
+    "simple_mode": True,
+    "expert_level": 1,  # 1: iniciante, 2: intermediário, 3: avançado
     "window_state": {
         "maximized": False,
         "width": 1000,
@@ -77,6 +83,12 @@ DEFAULT_CONFIG = {
         "interval_days": 7,
         "tasks": ["cache", "swap", "check"],
         "elevated": False
+    },
+    "ai": {
+        "provider": "ollama",
+        "model": "llama3.2",
+        "api_key": "",
+        "endpoint": "http://localhost:11434"
     }
 }
 
@@ -101,18 +113,18 @@ SCALES = {
 }
 
 AI_SUGGESTIONS = [
-    "DeepSeek", "OpenAI GPT-4", "Google Gemini", "Claude (Anthropic)",
-    "Llama 3 (Meta)", "Mistral AI", "Cohere", "Local (Ollama)", "Configurar IA Local"
+    "Ollama (local)", "OpenAI GPT", "Google Gemini", "Claude (Anthropic)",
+    "Llama 3 (Meta)", "Mistral AI", "Cohere", "DeepSeek", "Configurar IA Local"
 ]
 
 class ActionHandler:
     def __init__(self, app):
         self.app = app
 
-    def run_browser_clean(self, log):
+    def run_browser_clean(self, log, preserve_cookies=False, cookie_keep_list=None):
         log.delete("1.0", "end")
         log.insert("end", "Iniciando limpeza de navegadores...\n")
-        results = self.app.browser_cleaner.clean_all_browsers()
+        results = self.app.browser_cleaner.clean_all_browsers(preserve_cookies, cookie_keep_list)
         total_freed = 0
         for browser, data in results.items():
             if data['cache_freed'] or data['cookies_freed'] or data['history_freed']:
@@ -199,7 +211,7 @@ class ActionHandler:
             cmds = self.app.lan_cache.install_docker()
             for cmd in cmds:
                 log.insert("end", f"Executando: {cmd}\n")
-                proc = self.app.runner.run(cmd)
+                proc = self.app.runner.run(cmd, use_sudo=True, parent=self.app)
                 if proc:
                     for line in proc.stdout:
                         self.app.after(0, lambda l=line: log.insert("end", l))
@@ -213,14 +225,14 @@ class ActionHandler:
             log.insert("end", f"Executando: {cmd}\n")
             if cmd.startswith("mkdir"):
                 parts = cmd.split()
-                proc = self.app.runner.run(parts)
+                proc = self.app.runner.run(parts, use_sudo=False)
             elif cmd.startswith("wget"):
                 parts = cmd.split()
-                proc = self.app.runner.run(parts)
+                proc = self.app.runner.run(parts, use_sudo=False)
             elif "docker-compose" in cmd:
-                proc = self.app.runner.run(cmd)
+                proc = self.app.runner.run(cmd, use_sudo=True, parent=self.app)
             else:
-                proc = self.app.runner.run(cmd)
+                proc = self.app.runner.run(cmd, use_sudo=True, parent=self.app)
             if proc:
                 for line in proc.stdout:
                     self.app.after(0, lambda l=line: log.insert("end", l))
@@ -240,7 +252,7 @@ class ActionHandler:
         if self.app.SO == "Linux":
             log.insert("end", "Serviços ativos (systemctl):\n")
             log.insert("end", "="*40 + "\n")
-            proc = self.app.runner.run(["systemctl", "list-units", "--type=service", "--state=running", "--no-pager"])
+            proc = self.app.runner.run(["systemctl", "list-units", "--type=service", "--state=running", "--no-pager"], use_sudo=False)
             if proc:
                 for line in proc.stdout:
                     log.insert("end", line)
@@ -248,7 +260,7 @@ class ActionHandler:
         elif self.app.SO == "Windows":
             log.insert("end", "Serviços do Windows (via sc query):\n")
             log.insert("end", "="*40 + "\n")
-            proc = self.app.runner.run("sc query | findstr /C:\"SERVICE_NAME\" /C:\"STATE\"")
+            proc = self.app.runner.run("sc query | findstr /C:\"SERVICE_NAME\" /C:\"STATE\"", use_sudo=False)
             if proc:
                 for line in proc.stdout:
                     log.insert("end", line)
@@ -256,7 +268,7 @@ class ActionHandler:
         elif self.app.SO == "Darwin":
             log.insert("end", "Serviços macOS (launchctl):\n")
             log.insert("end", "="*40 + "\n")
-            proc = self.app.runner.run(["launchctl", "list"])
+            proc = self.app.runner.run(["launchctl", "list"], use_sudo=False)
             if proc:
                 for line in proc.stdout:
                     log.insert("end", line)
@@ -271,7 +283,7 @@ class ActionHandler:
         if self.app.SO == "Linux":
             log.insert("end", "Erros recentes (journalctl):\n")
             log.insert("end", "="*40 + "\n")
-            proc = self.app.runner.run("journalctl -p 3 -b --no-pager | head -20")
+            proc = self.app.runner.run("journalctl -p 3 -b --no-pager | head -20", use_sudo=False)
             if proc:
                 for line in proc.stdout:
                     log.insert("end", line)
@@ -280,7 +292,7 @@ class ActionHandler:
             log.insert("end", "Erros no Log de Eventos (PowerShell):\n")
             log.insert("end", "="*40 + "\n")
             cmd = 'powershell -Command "Get-EventLog -LogName System -EntryType Error -Newest 20 | Format-Table -AutoSize"'
-            proc = self.app.runner.run(cmd)
+            proc = self.app.runner.run(cmd, use_sudo=False)
             if proc:
                 for line in proc.stdout:
                     log.insert("end", line)
@@ -288,7 +300,7 @@ class ActionHandler:
         elif self.app.SO == "Darwin":
             log.insert("end", "Erros recentes (log show):\n")
             log.insert("end", "="*40 + "\n")
-            proc = self.app.runner.run('log show --predicate \'eventMessage contains "error"\' --last 1h | head -20')
+            proc = self.app.runner.run('log show --predicate \'eventMessage contains "error"\' --last 1h | head -20', use_sudo=False)
             if proc:
                 for line in proc.stdout:
                     log.insert("end", line)
@@ -307,6 +319,27 @@ class ActionHandler:
         elif cmd == "auto_update":
             log.insert("end", "Configurando atualizações automáticas...\n")
             log.insert("end", "Funcionalidade em desenvolvimento.\n")
+        elif cmd == "cookies":
+            self.run_cookie_manager(log)
+        elif cmd == "empty_trash":
+            self.app.trash_manager.empty_trash()
+            log.insert("end", "🗑️ Lixeira esvaziada.\n")
+
+    def run_cookie_manager(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🍪 Gerenciador de Cookies\n")
+        log.insert("end", "="*40 + "\n")
+        # Exibe resumo de cookies
+        summary = self.app.cookie_manager.get_cookie_summary()
+        if not summary:
+            log.insert("end", "Nenhum cookie encontrado.\n")
+            return
+        log.insert("end", f"Total de domínios com cookies: {len(summary)}\n")
+        # Aqui poderia abrir uma janela de seleção, mas por enquanto só mostra
+        for domain, count in list(summary.items())[:10]:
+            log.insert("end", f"{domain}: {count} cookies\n")
+        if len(summary) > 10:
+            log.insert("end", f"... e mais {len(summary)-10} domínios.\n")
 
 class SpeedScan(ctk.CTk):
     def __init__(self):
@@ -343,6 +376,8 @@ class SpeedScan(ctk.CTk):
         self.ai_proactive = AIProactive(self.metrics_db, self.health_monitor)
         self.security_scanner = SecurityScanner(self.SO)
         self.lan_cache = LANCacheManager(self.SO)
+        self.cookie_manager = CookieManager()
+        self.trash_manager = TrashManager()
         self.metrics_collector.start()
         self.proc_manager.start_monitoring()
 
@@ -371,9 +406,21 @@ class SpeedScan(ctk.CTk):
         self._check_process_queue()
 
         # Restaura o estado da janela após a criação completa
-        self.after(200, self._restore_window_state)
+        self.after(100, self._restore_window_state)
 
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
+
+        # Se for a primeira execução, mostra o assistente
+        self.after(500, self._check_first_run)
+
+    def _check_first_run(self):
+        if self.config == DEFAULT_CONFIG:
+            wizard = FirstRunWizard(self, self.config)
+            self.wait_window(wizard)
+            self.config = self._load_config()
+            self.update_theme_vars()
+            self._save_config()
+            self.show_toast("Configurações iniciais salvas! Algumas alterações podem exigir reinicialização.")
 
     def _restore_window_state(self):
         ws = self.config.get("window_state", DEFAULT_CONFIG["window_state"])
@@ -384,6 +431,7 @@ class SpeedScan(ctk.CTk):
             h = ws.get("height", 700)
             x = ws.get("x")
             y = ws.get("y")
+            self.update_idletasks()
             if x is not None and y is not None:
                 self.geometry(f"{w}x{h}+{x}+{y}")
             else:
@@ -441,6 +489,12 @@ class SpeedScan(ctk.CTk):
                     config = json.load(f)
                     if 'window_state' not in config:
                         config['window_state'] = DEFAULT_CONFIG['window_state']
+                    if 'simple_mode' not in config:
+                        config['simple_mode'] = DEFAULT_CONFIG['simple_mode']
+                    if 'expert_level' not in config:
+                        config['expert_level'] = DEFAULT_CONFIG['expert_level']
+                    if 'ai' not in config:
+                        config['ai'] = DEFAULT_CONFIG['ai']
                     return config
             except:
                 pass
@@ -500,19 +554,37 @@ class SpeedScan(ctk.CTk):
         center = ctk.CTkFrame(sidebar, fg_color="transparent")
         center.pack(expand=False, fill="x", pady=(19, 0))
 
+        # Itens de navegação (sempre visíveis)
         nav_items = [
             ("📊", "Dashboard", "dashboard"),
             ("🚀", "Otimização", "otimizacao"),
             ("🌐", "Rede", "rede"),
             ("🛠", "Drivers", "drivers"),
-            ("📊", "Processos", "processos"),
-            ("📈", "Histórico", "historico"),
-            ("🔒", "Segurança", "seguranca"),
-            ("🤖", "Agente IA", "agente")
         ]
+        # Itens que dependem do nível de expertise
+        level_items = {
+            1: [],  # iniciante: não mostra nada extra
+            2: [("📊", "Processos", "processos")],  # intermediário: só processos
+            3: [  # avançado: todos
+                ("📊", "Processos", "processos"),
+                ("📈", "Histórico", "historico"),
+                ("🔒", "Segurança", "seguranca"),
+                ("🤖", "Agente IA", "agente"),
+            ]
+        }
+
         for icon, text, target in nav_items:
             btn = self._sidebar_btn(center, icon, text, target)
             self.sidebar_buttons[target] = btn
+
+        # Adiciona itens conforme nível
+        level = self.config.get("expert_level", 1)
+        if level >= 2:
+            spacer = ctk.CTkLabel(center, text="", height=10)
+            spacer.pack(expand=False)
+            for icon, text, target in level_items.get(level, []):
+                btn = self._sidebar_btn(center, icon, text, target)
+                self.sidebar_buttons[target] = btn
 
         spacer = ctk.CTkLabel(center, text="", height=20)
         spacer.pack(expand=False)
@@ -532,6 +604,10 @@ class SpeedScan(ctk.CTk):
                              text_color=self.text_color,
                              command=lambda: self.show_frame(target))
         btn.pack(fill="x")
+        if target == "processos":
+            ui.add_tooltip(btn, "Gerencie processos em execução")
+        elif target == "seguranca":
+            ui.add_tooltip(btn, "Verificações de segurança")
         return btn
 
     def show_frame(self, target):
@@ -551,8 +627,11 @@ class SpeedScan(ctk.CTk):
             self._update_ai_suggestions()
 
     def _create_frame(self, target):
-        # Todas as abas usam CTkScrollableFrame para rolagem automática
-        frame = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        # Abas com conteúdo pequeno: Dashboard, Configurações, Sobre (sem rolagem)
+        if target in ["dashboard", "config", "sobre"]:
+            frame = ctk.CTkFrame(self.container, fg_color="transparent")
+        else:
+            frame = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
         getattr(self, f"_fill_{target}")(frame)
         return frame
 
@@ -567,18 +646,22 @@ class SpeedScan(ctk.CTk):
     def widget_hostname(self, parent, widget_id):
         lbl = ctk.CTkLabel(parent, text=platform.node(), font=("Inter", 18, "bold"), text_color=self.acc_color)
         lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Nome do computador na rede")
 
     def widget_distro(self, parent, widget_id):
         lbl = ctk.CTkLabel(parent, text=self.hw.get_distro(), font=("Inter", 18, "bold"), text_color=self.acc_color)
         lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Sistema operacional e versão")
 
     def widget_kernel(self, parent, widget_id):
         lbl = ctk.CTkLabel(parent, text=platform.release(), font=("Inter", 18, "bold"), text_color=self.acc_color)
         lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Versão do kernel")
 
     def widget_uptime(self, parent, widget_id):
         lbl = ctk.CTkLabel(parent, text=self.hw.get_uptime(), font=("Inter", 18, "bold"), text_color=self.acc_color)
         lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Tempo desde a última inicialização")
 
     def widget_cpu(self, parent, widget_id):
         info = self.hw.get_cpu()
@@ -586,6 +669,7 @@ class SpeedScan(ctk.CTk):
         text = f"{info}\nUso: {percent}%"
         lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 14), justify="center", text_color=self.text_color)
         lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Processador: modelo e uso atual")
 
     def widget_ram(self, parent, widget_id):
         mem = psutil.virtual_memory()
@@ -593,32 +677,38 @@ class SpeedScan(ctk.CTk):
         text = f"{info}\nUso: {mem.percent}%"
         lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 14), justify="center", text_color=self.text_color)
         lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Memória RAM: usada/total e percentual")
 
     def widget_gpu(self, parent, widget_id):
         info = self.hw.get_gpu()
         lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 14), justify="center", wraplength=250, text_color=self.text_color)
         lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Placa de vídeo detectada")
 
     def widget_disks(self, parent, widget_id):
         info = self.hw.get_disks_detailed()
         lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 12), justify="center", wraplength=250, text_color=self.text_color)
         lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Discos e partições com uso percentual")
 
     def widget_battery(self, parent, widget_id):
         info = self.hw.get_battery()
         lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 14), justify="center", text_color=self.text_color)
         lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Status da bateria")
 
     def widget_temps(self, parent, widget_id):
         temps = self.temp_monitor.get_all_temperatures()
         text = "\n".join([f"{s}: {t}°C" for s, t in temps.items()])
         lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 12), justify="center", text_color=self.text_color)
         lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Temperaturas de CPU, GPU e discos")
 
     def widget_health(self, parent, widget_id):
         score = self.health_monitor.calculate_health_score()['score']
         lbl = ctk.CTkLabel(parent, text=f"Saúde: {score}/100", font=("Inter", 18, "bold"), text_color=self.acc_color)
         lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Pontuação geral de saúde do sistema (0-100)")
 
     # ---------- Aba Otimização ----------
     def _fill_otimizacao(self, parent):
@@ -638,8 +728,17 @@ class SpeedScan(ctk.CTk):
             ("🎮 Emulador Dolphin", "dolphin", False),
             ("🧹 Limpeza de Navegadores", "browsers", False),
             ("⚙️ Gerenciar Serviços", "services", False),
-            ("📊 Análise de Logs", "logs", False)
+            ("📊 Análise de Logs", "logs", False),
+            ("🍪 Gerenciar Cookies", "cookies", False),
         ]
+        level = self.config.get("expert_level", 1)
+        if level == 1:
+            # Iniciante: esconde serviços, logs, cookies
+            items = [item for item in items if item[1] not in ["services", "logs", "cookies"]]
+        elif level == 2:
+            # Intermediário: esconde logs e cookies? Vamos deixar só serviços
+            items = [item for item in items if item[1] not in ["logs", "cookies"]]
+        # Avançado (3) vê tudo
         ui.create_card_grid(parent, items, "ot", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
         btn, log = ui.add_console(parent, "ot", self.acc_color, self.toggle_console)
         self.detail_buttons["ot"] = btn
@@ -664,7 +763,12 @@ class SpeedScan(ctk.CTk):
             ("🔍 Scanner LAN", "lanscan", False),
             ("🚀 LANCache", "lancache", False)
         ]
-        ping_labels = ui.create_card_grid(parent, items, "net", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
+        level = self.config.get("expert_level", 1)
+        if level == 1:
+            items = [item for item in items if item[1] not in ["ports", "traceroute", "ethtool", "dhclient", "lanscan", "lancache"]]
+        elif level == 2:
+            items = [item for item in items if item[1] not in ["lanscan", "lancache"]]  # intermediário vê quase tudo
+        ui.create_card_grid(parent, items, "net", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
         if ping_labels:
             self.ping_label = ping_labels[0]
         btn, log = ui.add_console(parent, "net", self.acc_color, self.toggle_console)
@@ -685,6 +789,11 @@ class SpeedScan(ctk.CTk):
             ("🌐 Drivers de Rede", "net_drv", False),
             ("🔄 Atualizações Automáticas", "auto_update", False)
         ]
+        level = self.config.get("expert_level", 1)
+        if level == 1:
+            items = [item for item in items if item[1] not in ["modules", "cpu_info", "firmware", "video_drv", "net_drv", "auto_update"]]
+        elif level == 2:
+            items = [item for item in items if item[1] not in ["video_drv", "net_drv", "auto_update"]]
         ui.create_card_grid(parent, items, "drv", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
         btn, log = ui.add_console(parent, "drv", self.acc_color, self.toggle_console)
         self.detail_buttons["drv"] = btn
@@ -706,7 +815,7 @@ class SpeedScan(ctk.CTk):
         self.sort_var = ctk.StringVar(value="cpu_percent")
         sort_menu = ctk.CTkOptionMenu(toolbar, values=["cpu_percent", "memory_percent", "name", "pid"],
                                        variable=self.sort_var, command=self._on_sort_change, width=120,
-                                       cursor="arrow")
+                                       cursor="left_ptr")
         sort_menu.pack(side="left", padx=(0,10))
 
         self.reverse_var = ctk.BooleanVar(value=True)
@@ -874,14 +983,14 @@ class SpeedScan(ctk.CTk):
         self.period_var = ctk.StringVar(value="1h")
         period_menu = ctk.CTkOptionMenu(control_frame, values=["1h", "6h", "24h", "7d"],
                                         variable=self.period_var, command=self._on_period_change, width=100,
-                                        cursor="arrow")
+                                        cursor="left_ptr")
         period_menu.pack(side="left", padx=(0,10))
 
         ctk.CTkLabel(control_frame, text="Métrica:", font=("Inter",12)).pack(side="left", padx=(10,5))
         self.metric_var = ctk.StringVar(value="cpu")
         metric_menu = ctk.CTkOptionMenu(control_frame, values=["cpu", "memory", "disk"],
                                         variable=self.metric_var, command=self._on_metric_change, width=100,
-                                        cursor="arrow")
+                                        cursor="left_ptr")
         metric_menu.pack(side="left", padx=(0,10))
 
         refresh_btn = ctk.CTkButton(control_frame, text="🔄 Atualizar", command=self._update_graphs, width=100, fg_color=self.acc_color)
@@ -963,75 +1072,121 @@ class SpeedScan(ctk.CTk):
             ("🛡️ Firewall", "firewall", False),
             ("🔎 Atualizações de Segurança", "sec_updates", False)
         ]
+        level = self.config.get("expert_level", 1)
+        if level == 1:
+            items = [item for item in items if item[1] not in ["ports", "sec_updates"]]
         ui.create_card_grid(parent, items, "sec", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
         btn, log = ui.add_console(parent, "sec", self.acc_color, self.toggle_console)
         self.detail_buttons["sec"] = btn
         self.logs["sec"] = log
 
-    # ---------- Aba Agente IA ----------
+    # ---------- Aba Agente IA (unificada) ----------
     def _fill_agente(self, parent):
         ctk.CTkLabel(parent, text="Agente de IA", font=("Inter",28,"bold"), text_color=self.acc_color).pack(pady=(0,20))
 
-        frame_sugestoes = ctk.CTkFrame(parent, fg_color=self.bg_color, corner_radius=10,
-                                        border_width=1, border_color=self.acc_color)
-        frame_sugestoes.pack(fill="x", pady=10, padx=10)
+        # Frame único para chat e sugestões
+        main_frame = ctk.CTkFrame(parent, fg_color=self.bg_color, corner_radius=10,
+                                   border_width=1, border_color=self.acc_color)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        ctk.CTkLabel(frame_sugestoes, text="🤖 Sugestões Inteligentes", font=("Inter",16,"bold"), text_color=self.acc_color).pack(pady=10)
+        # Abas internas: Sugestões e Chat
+        tabview = ctk.CTkTabview(main_frame, fg_color=self.light_bg)
+        tabview.pack(fill="both", expand=True, padx=5, pady=5)
 
-        self.ai_sugestoes_text = ctk.CTkTextbox(frame_sugestoes, height=150, fg_color=self.light_bg,
+        tab_sugestoes = tabview.add("Sugestões")
+        tab_chat = tabview.add("Chat")
+
+        # Sugestões
+        self.ai_sugestoes_text = ctk.CTkTextbox(tab_sugestoes, height=200, fg_color=self.light_bg,
                                                  text_color=self.text_color, font=("Consolas",11), wrap="word")
         self.ai_sugestoes_text.pack(fill="both", expand=True, padx=10, pady=10)
-
-        btn_atualizar = ctk.CTkButton(frame_sugestoes, text="🔄 Analisar Agora", fg_color=self.acc_color,
+        btn_atualizar = ctk.CTkButton(tab_sugestoes, text="🔄 Analisar Agora", fg_color=self.acc_color,
                                        command=self._update_ai_suggestions)
         btn_atualizar.pack(pady=10)
 
-        separator = ctk.CTkFrame(parent, height=2, fg_color=self.acc_color)
-        separator.pack(fill="x", pady=20)
+        # Chat
+        self.chat_frame = ChatFrame(tab_chat, self, fg_color="transparent")
+        self.chat_frame.pack(fill="both", expand=True)
 
-        ctk.CTkLabel(parent, text="Conecte um modelo de IA externo:", font=("Inter",16), text_color=self.text_color).pack(pady=10)
+        # Configurações (pequeno botão no canto)
+        config_btn = ctk.CTkButton(parent, text="⚙️ Configurar IA", fg_color=self.acc_color,
+                                   command=self._toggle_ai_config, width=150)
+        config_btn.pack(anchor="e", padx=10, pady=5)
 
-        grid = ctk.CTkFrame(parent, fg_color="transparent")
-        grid.pack(fill="both", expand=True, pady=10)
-        for i in range(3):
-            grid.columnconfigure(i, weight=1)
-        for idx, ia in enumerate(AI_SUGGESTIONS):
-            row, col = divmod(idx, 3)
-            card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10,
-                                 border_width=1, border_color=self.acc_color)
-            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
-            card.grid_propagate(False)
-            card.configure(height=150)
-            ctk.CTkLabel(card, text=ia, font=("Inter",14,"bold"), text_color=self.acc_color).pack(pady=(10,5))
-            if ia == "Configurar IA Local":
-                btn = ctk.CTkButton(card, text="Configurar", fg_color=self.acc_color, command=self.configure_local_ai)
-            else:
-                btn = ctk.CTkButton(card, text="Conectar", fg_color=self.acc_color, command=lambda i=ia: self.connect_ai(i))
-            btn.pack(pady=5)
-        self.ai_status = ctk.CTkLabel(parent, text="", font=("Inter",12), text_color=self.acc_color)
-        self.ai_status.pack(pady=20)
-        btn, log = ui.add_console(parent, "agente", self.acc_color, self.toggle_console)
-        self.detail_buttons["agente"] = btn
-        self.logs["agente"] = log
+        self.ai_config_panel = ctk.CTkFrame(parent, fg_color=self.light_bg, corner_radius=10)
+        self.ai_config_visible = False
 
         self._update_ai_suggestions()
+
+    def _toggle_ai_config(self):
+        if self.ai_config_visible:
+            self.ai_config_panel.pack_forget()
+            self.ai_config_visible = False
+        else:
+            self._build_ai_config_panel()
+            self.ai_config_panel.pack(fill="x", padx=10, pady=5, after=self.chat_frame.master.master)
+            self.ai_config_visible = True
+
+    def _build_ai_config_panel(self):
+        for widget in self.ai_config_panel.winfo_children():
+            widget.destroy()
+
+        provider_frame = ctk.CTkFrame(self.ai_config_panel, fg_color="transparent")
+        provider_frame.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(provider_frame, text="Provedor:", font=("Inter",12), text_color=self.text_color).pack(side="left", padx=5)
+        self.ai_provider_var = ctk.StringVar(value=self.config.get("ai", {}).get("provider", "ollama"))
+        provider_menu = ctk.CTkOptionMenu(provider_frame, values=["ollama", "openai", "deepseek"],
+                                          variable=self.ai_provider_var, width=150, cursor="left_ptr")
+        provider_menu.pack(side="left", padx=5)
+
+        model_frame = ctk.CTkFrame(self.ai_config_panel, fg_color="transparent")
+        model_frame.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(model_frame, text="Modelo:", font=("Inter",12), text_color=self.text_color).pack(side="left", padx=5)
+        self.ai_model_var = ctk.StringVar(value=self.config.get("ai", {}).get("model", "llama3.2"))
+        model_entry = ctk.CTkEntry(model_frame, textvariable=self.ai_model_var, width=200)
+        model_entry.pack(side="left", padx=5)
+
+        endpoint_frame = ctk.CTkFrame(self.ai_config_panel, fg_color="transparent")
+        endpoint_frame.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(endpoint_frame, text="Endpoint:", font=("Inter",12), text_color=self.text_color).pack(side="left", padx=5)
+        self.ai_endpoint_var = ctk.StringVar(value=self.config.get("ai", {}).get("endpoint", "http://localhost:11434"))
+        endpoint_entry = ctk.CTkEntry(endpoint_frame, textvariable=self.ai_endpoint_var, width=250)
+        endpoint_entry.pack(side="left", padx=5)
+
+        key_frame = ctk.CTkFrame(self.ai_config_panel, fg_color="transparent")
+        key_frame.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(key_frame, text="API Key:", font=("Inter",12), text_color=self.text_color).pack(side="left", padx=5)
+        self.ai_key_var = ctk.StringVar(value=self.config.get("ai", {}).get("api_key", ""))
+        key_entry = ctk.CTkEntry(key_frame, textvariable=self.ai_key_var, width=250, show="*")
+        key_entry.pack(side="left", padx=5)
+
+        save_btn = ctk.CTkButton(self.ai_config_panel, text="Salvar", fg_color=self.acc_color,
+                                  command=self._save_ai_config)
+        save_btn.pack(pady=10)
+
+    def _save_ai_config(self):
+        self.config["ai"] = {
+            "provider": self.ai_provider_var.get(),
+            "model": self.ai_model_var.get(),
+            "endpoint": self.ai_endpoint_var.get(),
+            "api_key": self.ai_key_var.get()
+        }
+        self._save_config()
+        self.show_toast("Configurações de IA salvas!")
+        self.ai_config_panel.pack_forget()
+        self.ai_config_visible = False
+        if hasattr(self, 'chat_frame'):
+            self.chat_frame.current_ai = self.config["ai"]["provider"]
+            self.chat_frame.ai_model = self.config["ai"]["model"]
+            self.chat_frame.endpoint = self.config["ai"]["endpoint"]
+            self.chat_frame.api_key = self.config["ai"]["api_key"]
 
     def _update_ai_suggestions(self):
         sugestoes = self.ai_proactive.get_summary()
         self.ai_sugestoes_text.delete("1.0", "end")
         self.ai_sugestoes_text.insert("1.0", sugestoes)
 
-    def connect_ai(self, ia_name):
-        self.ai_status.configure(text=f"Conectado a {ia_name} (simulação)")
-
-    def configure_local_ai(self):
-        log = self.logs.get("agente")
-        if not log:
-            return
-        log.delete("1.0", "end")
-        log.insert("end", "Configurando IA local...\nInstalando Ollama...\n")
-        self.run_card_action("curl -fsSL https://ollama.com/install.sh | sh", "agente", False)
-
+    # ---------- Execução de comandos ----------
     def run_card_action(self, cmd, tag, is_dns):
         log = self.logs.get(tag)
         if not log:
@@ -1052,6 +1207,7 @@ class SpeedScan(ctk.CTk):
                 self._show_details_button(tag)
                 return
             elif cmd == "browsers":
+                # No futuro, aqui poderia abrir janela para selecionar cookies a preservar
                 self.action_handler.run_browser_clean(log)
                 self._show_details_button(tag)
                 return
@@ -1083,7 +1239,7 @@ class SpeedScan(ctk.CTk):
                 self.action_handler.run_log_analysis(log)
                 self._show_details_button(tag)
                 return
-            elif cmd in ["video_drv", "net_drv", "auto_update"]:
+            elif cmd in ["video_drv", "net_drv", "auto_update", "cookies", "empty_trash"]:
                 self.action_handler.special_command(cmd, log)
                 self._show_details_button(tag)
                 return
@@ -1093,7 +1249,11 @@ class SpeedScan(ctk.CTk):
                 self.after(0, lambda: log.insert("end", f"Comando {cmd} não suportado neste SO.\n"))
                 self.after(0, lambda: self._show_details_button(tag))
                 return
-        proc = self.runner.run(real_cmd)
+        use_sudo = False
+        if real_cmd and real_cmd.startswith("sudo "):
+            use_sudo = True
+            real_cmd = real_cmd[5:]
+        proc = self.runner.run(real_cmd, use_sudo=use_sudo, parent=self)
         if proc:
             for line in proc.stdout:
                 self.after(0, lambda l=line: log.insert("end", l))
@@ -1192,14 +1352,14 @@ class SpeedScan(ctk.CTk):
         ctk.CTkLabel(f_lang, text="Idioma de Interface", font=("Inter",14), text_color=self.text_color).pack(anchor="w")
         self.lang_var = ctk.StringVar(value=LANGUAGES.get(self.config.get("language","pt_BR"), "Português Brasileiro"))
         ctk.CTkOptionMenu(f_lang, values=list(LANGUAGES.values()), variable=self.lang_var, width=300,
-                          cursor="arrow").pack(anchor="w")
+                          cursor="left_ptr").pack(anchor="w")
 
         f_scale = ctk.CTkFrame(parent, fg_color="transparent")
         f_scale.pack(fill="x", pady=10)
         ctk.CTkLabel(f_scale, text="Escala da interface *", font=("Inter",14), text_color=self.text_color).pack(anchor="w")
         self.scale_var = ctk.StringVar(value=SCALES.get(self.config.get("ui_scale","auto"), "Automático"))
         ctk.CTkOptionMenu(f_scale, values=list(SCALES.values()), variable=self.scale_var, width=300,
-                          cursor="arrow").pack(anchor="w")
+                          cursor="left_ptr").pack(anchor="w")
 
         f_theme = ctk.CTkFrame(parent, fg_color="transparent")
         f_theme.pack(fill="x", pady=10)
@@ -1209,14 +1369,26 @@ class SpeedScan(ctk.CTk):
         current = theme_keys.index(self.config.get("theme","default"))
         self.theme_name_var = ctk.StringVar(value=theme_names[current])
         ctk.CTkOptionMenu(f_theme, values=theme_names, variable=self.theme_name_var, width=300,
-                          cursor="arrow").pack(anchor="w")
+                          cursor="left_ptr").pack(anchor="w")
 
         f_tab = ctk.CTkFrame(parent, fg_color="transparent")
         f_tab.pack(fill="x", pady=10)
         ctk.CTkLabel(f_tab, text="Abrir arquivo", font=("Inter",14), text_color=self.text_color).pack(anchor="w")
         self.tab_var = ctk.StringVar(value="Na guia" if self.config.get("open_file_in_tab") else "Nova janela")
         ctk.CTkOptionMenu(f_tab, values=["Na guia", "Nova janela"], variable=self.tab_var, width=300,
-                          cursor="arrow").pack(anchor="w")
+                          cursor="left_ptr").pack(anchor="w")
+
+        # Nível de expertise
+        f_level = ctk.CTkFrame(parent, fg_color="transparent")
+        f_level.pack(fill="x", pady=10)
+        ctk.CTkLabel(f_level, text="Nível de conhecimento", font=("Inter",14), text_color=self.text_color).pack(anchor="w")
+        self.level_var = ctk.IntVar(value=self.config.get("expert_level", 1))
+        iniciante_radio = ctk.CTkRadioButton(f_level, text="Iniciante (apenas funções básicas)", variable=self.level_var, value=1)
+        iniciante_radio.pack(anchor="w", pady=2)
+        intermediario_radio = ctk.CTkRadioButton(f_level, text="Intermediário (funções básicas + algumas avançadas)", variable=self.level_var, value=2)
+        intermediario_radio.pack(anchor="w", pady=2)
+        avancado_radio = ctk.CTkRadioButton(f_level, text="Avançado (todas as funções)", variable=self.level_var, value=3)
+        avancado_radio.pack(anchor="w", pady=2)
 
         separator = ctk.CTkFrame(parent, height=2, fg_color=self.acc_color)
         separator.pack(fill="x", pady=20)
@@ -1238,7 +1410,7 @@ class SpeedScan(ctk.CTk):
         freq_menu = ctk.CTkOptionMenu(freq_frame, values=["daily", "weekly", "monthly", "custom"],
                                        variable=self.schedule_freq_var,
                                        command=self.update_schedule_visibility, width=150,
-                                       cursor="arrow")
+                                       cursor="left_ptr")
         freq_menu.pack(side="left", padx=5)
 
         time_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
@@ -1255,7 +1427,7 @@ class SpeedScan(ctk.CTk):
         weekday_menu = ctk.CTkOptionMenu(self.weekday_frame,
                                           values=["monday","tuesday","wednesday","thursday","friday","saturday","sunday"],
                                           variable=self.schedule_weekday_var, width=150,
-                                          cursor="arrow")
+                                          cursor="left_ptr")
         weekday_menu.pack(side="left", padx=5)
 
         self.monthday_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
@@ -1313,7 +1485,7 @@ class SpeedScan(ctk.CTk):
         separator2 = ctk.CTkFrame(parent, height=2, fg_color=self.acc_color)
         separator2.pack(fill="x", pady=20)
 
-        ctk.CTkLabel(parent, text="* - As alterações serão aplicadas após reiniciar o aplicativo",
+        ctk.CTkLabel(parent, text="* - As alterações de escala e tema serão aplicadas após reiniciar o aplicativo",
                      font=("Inter",10), text_color="#888888").pack(anchor="w", pady=20)
 
         btn_apply = ctk.CTkButton(parent, text="Aplicar", fg_color=self.acc_color, command=self.apply_config,
@@ -1409,13 +1581,16 @@ class SpeedScan(ctk.CTk):
         theme_keys = ["default", "grey", "dark", "light"]
         self.config["theme"] = theme_keys[theme_names.index(self.theme_name_var.get())]
         self.config["open_file_in_tab"] = (self.tab_var.get() == "Na guia")
+        self.config["expert_level"] = self.level_var.get()
+        # simple_mode é derivado do nível: True apenas se level=1
+        self.config["simple_mode"] = (self.level_var.get() == 1)
         self._save_config()
 
         restart_script = Path.home() / "speedscan" / "restart_speedscan.sh"
         subprocess.Popen([str(restart_script), str(os.getpid())], start_new_session=True)
         self.quit()
 
-    # ---------- Aba Sobre (resumida) ----------
+    # ---------- Aba Sobre ----------
     def _fill_sobre(self, parent):
         ctk.CTkLabel(parent, text="Sobre o SpeedScan", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="w", pady=(0,20))
 
@@ -1441,7 +1616,12 @@ class SpeedScan(ctk.CTk):
             "• Histórico de desempenho com gráficos\n"
             "• Verificações de segurança (portas, firewall, atualizações)\n"
             "• IA proativa com sugestões inteligentes\n"
+            "• Chat com IA local (Ollama) e suporte a outras APIs\n"
+            "• Gerenciador de cookies seletivo\n"
+            "• Lixeira interna para arquivos deletados\n"
             "• Agendamento automático de tarefas\n"
+            "• Níveis de expertise (Iniciante, Intermediário, Avançado)\n"
+            "• Tooltips explicativos\n"
             "• Temas personalizáveis\n\n"
             "© 2026 Ewerton Vasconcelos. Todos os direitos reservados."
         )

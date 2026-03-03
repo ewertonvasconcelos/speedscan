@@ -1,9 +1,10 @@
 name: speedscan
-version: '0.1.0-beta'
+version: '0.3.0-beta'
 summary: Ferramenta de diagnóstico e otimização de sistema
 description: |
   SpeedScan é uma ferramenta all-in-one para monitoramento e otimização de sistema,
-  com suporte a IA proativa, scanner de rede, gráficos históricos e muito mais.
+  com suporte a IA proativa, scanner de rede, gráficos históricos, gerenciador de cookies,
+  lixeira interna e muito mais.
   Este é o pacote snap com o executável pré-compilado.
 
 grade: stable

@@ -8,16 +8,37 @@
 #   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
 #   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 # =============================================================================
-# Funções auxiliares para interface do SpeedScan (cursor padrão do sistema)
-# Versão 0.1.0-beta
+# Funções auxiliares para interface do SpeedScan
+# Versão 0.3.0-beta
 # =============================================================================
 
 import customtkinter as ctk
 
+def add_tooltip(widget, text):
+    """Adiciona um tooltip a um widget."""
+    tooltip = None
+    def enter(event):
+        nonlocal tooltip
+        x, y, _, _ = widget.bbox("insert")
+        x += widget.winfo_rootx() + 25
+        y += widget.winfo_rooty() + 25
+        tooltip = ctk.CTkToplevel(widget)
+        tooltip.wm_overrideredirect(True)
+        tooltip.wm_geometry(f"+{x}+{y}")
+        label = ctk.CTkLabel(tooltip, text=text, justify="left",
+                              fg_color="#2b2b2b", text_color="white",
+                              corner_radius=5, padx=5, pady=5)
+        label.pack()
+    def leave(event):
+        nonlocal tooltip
+        if tooltip:
+            tooltip.destroy()
+    widget.bind("<Enter>", enter)
+    widget.bind("<Leave>", leave)
+
 def create_card_grid(parent, items, tag_prefix, acc_color, bg_color, text_color, command_callback):
     """
     Cria uma grade de cards baseada na lista de itens.
-    Sem definição de cursor (usa o padrão do sistema).
     """
     grid_frame = ctk.CTkFrame(parent, fg_color="transparent")
     grid_frame.pack(fill="x", pady=5)
