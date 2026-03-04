@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Gerenciador de lixeira para arquivos deletados pelo SpeedScan
-# Versão 1.0.0
+# Versão 0.3.1-beta
 
 import shutil
 import os

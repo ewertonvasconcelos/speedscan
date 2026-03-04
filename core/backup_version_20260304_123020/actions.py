@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Mapeamento de comandos para diferentes sistemas operacionais
-# Versão 1.0.0
+# Versão 0.4.0-beta
 
 import subprocess
 

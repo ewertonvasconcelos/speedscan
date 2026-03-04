@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Módulo de teste de velocidade de internet
-# Versão 1.0.0
+# Versão 0.3.1-beta
 
 import subprocess
 import time

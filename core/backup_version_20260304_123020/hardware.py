@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Módulo de coleta de informações de hardware
-# Versão 1.0.0
+# Versão 0.3.1-beta
 
 import platform
 import psutil

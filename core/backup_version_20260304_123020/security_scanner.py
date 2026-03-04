@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Módulo de segurança: portas, firewall, atualizações
-# Versão 1.0.0
+# Versão 0.3.1-beta
 
 import subprocess
 import re

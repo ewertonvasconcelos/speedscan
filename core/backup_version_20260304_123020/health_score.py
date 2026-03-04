@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Módulo de cálculo do Health Score (0-100) do sistema
-# Versão 1.0.0
+# Versão 0.3.1-beta
 
 import psutil
 import time

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Gerenciador de cookies para navegadores
-# Versão 1.0.0
+# Versão 0.3.1-beta
 
 import sqlite3
 import json

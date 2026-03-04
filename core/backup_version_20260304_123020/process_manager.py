@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Módulo de gerenciamento de processos (thread-safe com fila)
-# Versão 1.0.0
+# Versão 0.3.1-beta
 
 import psutil
 import time

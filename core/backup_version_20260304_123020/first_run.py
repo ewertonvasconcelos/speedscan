@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Assistente de primeira execução (boas-vindas) com níveis de expertise
-# Versão 1.0.0
+# Versão 0.3.1-beta
 
 import customtkinter as ctk
 

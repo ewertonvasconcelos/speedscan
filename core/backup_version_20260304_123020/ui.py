@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Funções auxiliares para interface do SpeedScan
-# Versão 1.0.0
+# Versão 0.3.1-beta
 
 import customtkinter as ctk
 

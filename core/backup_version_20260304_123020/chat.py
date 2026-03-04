@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Interface de chat para integração com IAs (Ollama, OpenAI, etc.)
-# Versão 1.0.0
+# Versão 0.3.1-beta
 
 import customtkinter as ctk
 import threading

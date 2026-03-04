@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Dashboard com 3 slots fixos e widgets disponíveis em duas linhas (4+4)
-# Versão 1.0.0
+# Versão 0.3.1-beta
 
 import customtkinter as ctk
 import json

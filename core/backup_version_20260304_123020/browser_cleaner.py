@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 # Módulo de limpeza de navegadores (cache, cookies, histórico) com suporte Flatpak/Snap
-# Versão 1.0.0
+# Versão 0.3.1-beta
 
 import os
 import shutil
