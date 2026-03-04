@@ -1,15 +1,6 @@
 #!/usr/bin/env python3
 from logging.handlers import RotatingFileHandler
 
-# Configuração de logging para arquivo
-LOG_DIR = Path.home() / "speedscan" / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-log_file = LOG_DIR / "speedscan.log"
-handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logging.basicConfig(level=logging.ERROR, handlers=[handler])
 import logging
 # SpeedScan - Versão 0.4.0-beta (novos cards, IA corrigida)
 # Desenvolvedor: Ewerton Vasconcelos
@@ -24,6 +15,15 @@ import re
 import time
 import subprocess
 from pathlib import Path
+# Configuração de logging para arquivo
+LOG_DIR = Path.home() / "speedscan" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+log_file = LOG_DIR / "speedscan.log"
+handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logging.basicConfig(level=logging.ERROR, handlers=[handler])
 from PIL import Image, ImageDraw
 import psutil
 
@@ -1541,11 +1541,28 @@ class SpeedScan(ctk.CTk):
             logging.error(f"Erro ao abrir pasta de logs: {e}")
 
     def save_schedule_config(self):
+        # Mapeamento de valores em português para inglês
+        freq_map = {
+            "Diário": "daily",
+            "Semanal": "weekly",
+            "Mensal": "monthly",
+            "Personalizado": "custom"
+        }
+        day_map = {
+            "segunda": "monday",
+            "terça": "tuesday",
+            "quarta": "wednesday",
+            "quinta": "thursday",
+            "sexta": "friday",
+            "sábado": "saturday",
+            "domingo": "sunday"
+        }
+
         schedule = {
             "enabled": self.schedule_enabled_var.get(),
-            "frequency": self.schedule_freq_var.get(),
+            "frequency": freq_map[self.schedule_freq_var.get()],
             "hour": self.schedule_hour_var.get(),
-            "day_of_week": self.schedule_weekday_var.get(),
+            "day_of_week": day_map[self.schedule_weekday_var.get()],
             "day_of_month": self.schedule_monthday_var.get(),
             "interval_days": self.schedule_interval_var.get(),
             "tasks": [key for key, var in self.schedule_tasks.items() if var.get()],
