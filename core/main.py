@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+from logging.handlers import RotatingFileHandler
+
+# Configuração de logging para arquivo
+LOG_DIR = Path.home() / "speedscan" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+log_file = LOG_DIR / "speedscan.log"
+handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logging.basicConfig(level=logging.ERROR, handlers=[handler])
 import logging
 # SpeedScan - Versão 0.4.0-beta (novos cards, IA corrigida)
 # Desenvolvedor: Ewerton Vasconcelos
