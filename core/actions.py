@@ -1,21 +1,9 @@
 #!/usr/bin/env python3
-# core/actions.py
-# =============================================================================
-#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
-#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
-#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
-#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
-#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
-#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
-# =============================================================================
+import logging
 # Mapeamento de comandos para diferentes sistemas operacionais
-# Versão 0.3.0-beta
-# =============================================================================
+# Versão 0.4.0-beta
 
 import subprocess
-import os
-import tkinter as tk
-from tkinter import simpledialog
 
 class CommandRunner:
     def __init__(self, so):
@@ -47,7 +35,7 @@ class CommandRunner:
                 proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
             return proc
         except Exception as e:
-            print(f"Erro ao executar comando: {e}")
+            logging.error(f"Erro ao executar comando: {e}")
             return None
 
 class ActionMapper:
@@ -192,6 +180,22 @@ class ActionMapper:
                 "Linux": "journalctl -p 3 -b --no-pager | head -20",
                 "Windows": "Get-EventLog -LogName System -EntryType Error -Newest 20 | Format-Table -AutoSize",
                 "Darwin": "log show --predicate 'eventMessage contains \"error\"' --last 1h | head -20"
+            },
+            # Novos comandos para versão 0.4.0
+            "trim": {
+                "Linux": "sudo fstrim -v /",
+                "Windows": "echo TRIM não aplicável no Windows (gerenciado automaticamente)",
+                "Darwin": "sudo trimforce enable"  # Nota: requer reinicialização
+            },
+            "fix_broken": {
+                "Linux": "sudo apt --fix-broken install",
+                "Windows": "echo Não aplicável no Windows",
+                "Darwin": "echo Não aplicável no macOS"
+            },
+            "public_ip": {
+                "Linux": "curl -s ifconfig.me",
+                "Windows": "curl -s ifconfig.me",
+                "Darwin": "curl -s ifconfig.me"
             },
         }
         if action in commands:

@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
-# core/cookie_manager.py
-# =============================================================================
-#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
-#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
-#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
-#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
-#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
-#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
-# =============================================================================
+import logging
 # Gerenciador de cookies para navegadores
-# Versão 0.3.0-beta
-# =============================================================================
+# Versão 0.3.1-beta
 
 import sqlite3
 import json
@@ -31,11 +22,9 @@ class CookieManager:
         }
 
     def get_cookies_from_browser(self, browser_key):
-        """Retorna lista de cookies (host, name, value) de um navegador."""
         path = self.cookie_files.get(browser_key)
         if not path:
             return []
-        # Expande wildcards
         if '*' in str(path):
             paths = list(Path(str(path).replace('*', '')).parent.glob('*.default-release'))
             if not paths:
@@ -47,18 +36,16 @@ class CookieManager:
         try:
             conn = sqlite3.connect(str(path))
             cursor = conn.cursor()
-            # Tabela de cookies pode variar; para Chrome é 'cookies'
             cursor.execute("SELECT host_key, name, value FROM cookies")
             rows = cursor.fetchall()
             for row in rows:
                 cookies.append({'host': row[0], 'name': row[1], 'value': row[2]})
             conn.close()
         except Exception as e:
-            print(f"Erro ao ler cookies de {browser_key}: {e}")
+            logging.error(f"Erro ao ler cookies de {browser_key}: {e}")
         return cookies
 
     def get_cookie_summary(self):
-        """Retorna um dicionário com contagem de cookies por domínio."""
         summary = {}
         for browser in self.cookie_files:
             cookies = self.get_cookies_from_browser(browser)
@@ -68,7 +55,6 @@ class CookieManager:
         return summary
 
     def backup_cookies(self, browser_key, backup_path):
-        """Faz backup do arquivo de cookies."""
         src = self.cookie_files.get(browser_key)
         if not src or not src.exists():
             return False
@@ -76,7 +62,6 @@ class CookieManager:
         return True
 
     def restore_cookies(self, backup_path, browser_key):
-        """Restaura cookies a partir de um backup."""
         dest = self.cookie_files.get(browser_key)
         if not dest:
             return False
@@ -84,7 +69,6 @@ class CookieManager:
         return True
 
     def delete_cookies_except(self, browser_key, keep_domains):
-        """Remove todos os cookies exceto os de domínios em keep_domains."""
         path = self.cookie_files.get(browser_key)
         if not path:
             return False
@@ -98,10 +82,8 @@ class CookieManager:
         try:
             conn = sqlite3.connect(str(path))
             cursor = conn.cursor()
-            # Obtém todos os cookies
             cursor.execute("SELECT host_key, name FROM cookies")
             all_cookies = cursor.fetchall()
-            # Constrói lista de parâmetros para DELETE
             for host, name in all_cookies:
                 if host not in keep_domains:
                     cursor.execute("DELETE FROM cookies WHERE host_key=? AND name=?", (host, name))
@@ -109,5 +91,5 @@ class CookieManager:
             conn.close()
             return True
         except Exception as e:
-            print(f"Erro ao deletar cookies: {e}")
+            logging.error(f"Erro ao deletar cookies: {e}")
             return False

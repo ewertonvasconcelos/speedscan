@@ -1,21 +1,11 @@
 #!/usr/bin/env python3
-# core/ui.py
-# =============================================================================
-#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
-#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
-#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
-#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
-#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
-#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
-# =============================================================================
+import logging
 # Funções auxiliares para interface do SpeedScan
-# Versão 0.3.0-beta
-# =============================================================================
+# Versão 0.3.1-beta
 
 import customtkinter as ctk
 
 def add_tooltip(widget, text):
-    """Adiciona um tooltip a um widget."""
     tooltip = None
     def enter(event):
         nonlocal tooltip
@@ -37,9 +27,6 @@ def add_tooltip(widget, text):
     widget.bind("<Leave>", leave)
 
 def create_card_grid(parent, items, tag_prefix, acc_color, bg_color, text_color, command_callback):
-    """
-    Cria uma grade de cards baseada na lista de itens.
-    """
     grid_frame = ctk.CTkFrame(parent, fg_color="transparent")
     grid_frame.pack(fill="x", pady=5)
 
@@ -62,11 +49,13 @@ def create_card_grid(parent, items, tag_prefix, acc_color, bg_color, text_color,
             ping_label.pack(expand=True)
             ping_labels.append(ping_label)
             btn = ctk.CTkButton(card, text="Iniciar", fg_color=acc_color,
-                                 command=lambda c=cmd, t=tag_prefix, d=is_dns: command_callback(c, t, d))
+                                 command=lambda c=cmd, t=tag_prefix, d=is_dns: command_callback(c, t, d),
+                                 cursor="hand2")
             btn.pack(pady=5)
         else:
             btn = ctk.CTkButton(card, text="Executar", fg_color=acc_color,
-                                 command=lambda c=cmd, t=tag_prefix, d=is_dns: command_callback(c, t, d))
+                                 command=lambda c=cmd, t=tag_prefix, d=is_dns: command_callback(c, t, d),
+                                 cursor="hand2")
             btn.pack(expand=True)
 
     for i in range(3):
@@ -78,5 +67,5 @@ def add_console(parent, tag_prefix, acc_color, toggle_callback):
     console = ctk.CTkTextbox(parent, height=150, fg_color="#1e1e1e", text_color="#ffffff",
                               font=("Consolas", 10), corner_radius=10)
     btn = ctk.CTkButton(parent, text="Detalhes ⌄", fg_color=acc_color,
-                         command=lambda: toggle_callback(tag_prefix))
+                         command=lambda: toggle_callback(tag_prefix), cursor="hand2")
     return btn, console

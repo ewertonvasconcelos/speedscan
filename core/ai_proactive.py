@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
-# core/ai_proactive.py
-# =============================================================================
-#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
-#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
-#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
-#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
-#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
-#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
-# =============================================================================
+import logging
 # Módulo de IA Proativa - Sugere otimizações baseado em métricas
-# Versão 0.3.0-beta
-# =============================================================================
+# Versão 0.3.1-beta
 
 import psutil
 import time
@@ -115,7 +106,6 @@ class AIProactive:
                 'prioridade': 'media'
             })
 
-        # Sugestões de cookies
         cookie_sites = self.cookie_mgr.get_cookie_summary()
         if cookie_sites and len(cookie_sites) > 50:
             sugestoes.append({
@@ -125,7 +115,6 @@ class AIProactive:
                 'prioridade': 'baixa'
             })
 
-        # Sugestões da lixeira
         trash_size = self.trash_mgr.get_trash_size()
         if trash_size > 100 * 1024 * 1024:  # > 100 MB
             sugestoes.append({

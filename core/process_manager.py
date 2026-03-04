@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
-# core/process_manager.py
-# =============================================================================
-#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
-#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
-#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
-#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
-#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
-#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
-# =============================================================================
+import logging
 # Módulo de gerenciamento de processos (thread-safe com fila)
-# Versão 0.3.0-beta
-# =============================================================================
+# Versão 0.3.1-beta
 
 import psutil
 import time
@@ -62,7 +53,7 @@ class ProcessManager:
                 proc.kill()
             return True
         except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-            print(f"Erro ao matar processo {pid}: {e}")
+            logging.error(f"Erro ao matar processo {pid}: {e}")
             return False
 
     def set_nice(self, pid: int, nice_value: int) -> bool:
@@ -71,7 +62,7 @@ class ProcessManager:
             proc.nice(nice_value)
             return True
         except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-            print(f"Erro ao alterar nice do processo {pid}: {e}")
+            logging.error(f"Erro ao alterar nice do processo {pid}: {e}")
             return False
 
     def suspend_process(self, pid: int) -> bool:
@@ -80,7 +71,7 @@ class ProcessManager:
             proc.suspend()
             return True
         except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-            print(f"Erro ao suspender processo {pid}: {e}")
+            logging.error(f"Erro ao suspender processo {pid}: {e}")
             return False
 
     def resume_process(self, pid: int) -> bool:
@@ -89,7 +80,7 @@ class ProcessManager:
             proc.resume()
             return True
         except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-            print(f"Erro ao resumir processo {pid}: {e}")
+            logging.error(f"Erro ao resumir processo {pid}: {e}")
             return False
 
     def start_monitoring(self):

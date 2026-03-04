@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
-# core/historical_metrics.py
-# =============================================================================
-#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
-#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
-#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
-#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
-#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
-#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
-# =============================================================================
-# Módulo de coleta e armazenamento de métricas históricas (com batch insert)
-# Versão 0.3.0-beta (corrigido: stop não bloqueia mais)
-# =============================================================================
+import logging
+# Módulo de coleta e armazenamento de métricas históricas (não bloqueante)
+# Versão 0.3.1-beta
 
 import sqlite3
 import time
@@ -25,10 +16,6 @@ class MetricsDB:
     def __init__(self, db_path=DB_PATH):
         self.db_path = db_path
         self._init_db()
-        self.batch = []
-        self.batch_lock = threading.Lock()
-        self.batch_size = 10
-        self.auto_flush = True
 
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -49,29 +36,16 @@ class MetricsDB:
     
     def insert(self, cpu=None, memory=None, disk_usage=None, 
                disk_io_read=None, disk_io_write=None, net_sent=None, net_recv=None):
-        with self.batch_lock:
-            self.batch.append((
-                time.time(), cpu, memory, disk_usage,
-                disk_io_read, disk_io_write, net_sent, net_recv
-            ))
-            if self.auto_flush and len(self.batch) >= self.batch_size:
-                self.flush()
-
-    def flush(self):
-        with self.batch_lock:
-            if not self.batch:
-                return
-            try:
-                with sqlite3.connect(self.db_path) as conn:
-                    conn.executemany('''
-                        INSERT INTO metrics 
-                        (timestamp, cpu, memory, disk_usage, disk_io_read, disk_io_write, net_sent, net_recv)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', self.batch)
-            except Exception as e:
-                print(f"Erro ao inserir lote: {e}")
-            finally:
-                self.batch.clear()
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute('''
+                    INSERT INTO metrics 
+                    (timestamp, cpu, memory, disk_usage, disk_io_read, disk_io_write, net_sent, net_recv)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (time.time(), cpu, memory, disk_usage,
+                      disk_io_read, disk_io_write, net_sent, net_recv))
+        except Exception as e:
+            logging.error(f"Erro ao inserir métrica: {e}")
 
     def get_last_hours(self, hours=1, metrics=None):
         if metrics is None:
@@ -119,20 +93,22 @@ class MetricsCollector:
         self._last_time = time.time()
     
     def start(self):
-        self._stop_event.clear()
         if self._thread is None or not self._thread.is_alive():
             self._thread = threading.Thread(target=self._collect_loop, daemon=True)
             self._thread.start()
     
     def stop(self):
         self._stop_event.set()
-        # Não faz join, apenas sinaliza. A thread é daemon, então não bloqueia o fechamento.
-        self.db.flush()  # garante que os dados pendentes sejam salvos
+        # Não espera a thread terminar, pois é daemon e será morta ao final do programa
     
     def _collect_loop(self):
         while not self._stop_event.is_set():
             self._collect_once()
-            time.sleep(self.interval)
+            # Usa um loop com sleep curto para verificar o stop_event com mais frequência
+            for _ in range(self.interval * 2):
+                if self._stop_event.is_set():
+                    return
+                time.sleep(0.5)
     
     def _collect_once(self):
         try:
@@ -169,7 +145,7 @@ class MetricsCollector:
                 net_recv=recv_bps
             )
             
-            if int(now) % 3600 < self.interval:
+            if int(now) % 3600 < 5:  # aproximadamente a cada hora
                 self.db.prune_old(days=7)
         except Exception as e:
-            print(f"Erro na coleta de métricas: {e}")
+            logging.error(f"Erro na coleta de métricas: {e}")

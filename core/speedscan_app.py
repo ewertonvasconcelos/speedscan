@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import logging
 # SpeedScan - Versão com rolagem corrigida (sobe e desce)
 # Uso: python3 core/speedscan_app.py
 
@@ -15,9 +16,7 @@ import re
 from PIL import Image, ImageDraw
 from datetime import datetime
 
-# ============================================
 # CONFIGURAÇÕES
-# ============================================
 CONFIG_FILE = os.path.expanduser("~/.speedscan_conf")
 ICON_PATH = os.path.expanduser("~/speedscan/icon.png")
 LOG_DIR = os.path.expanduser("~/speedscan/logs")
@@ -83,9 +82,7 @@ AI_SUGGESTIONS = [
     "Configurar IA Local"
 ]
 
-# ============================================
 # CLASSE PRINCIPAL
-# ============================================
 class SpeedScan(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -144,7 +141,7 @@ class SpeedScan(ctk.CTk):
             result.paste(img, (0, 0), mask)
             return ctk.CTkImage(result, size=size)
         except Exception as e:
-            print(f"Erro ao arredondar imagem: {e}")
+            logging.error(f"Erro ao arredondar imagem: {e}")
             return None
 
     def update_theme_vars(self):
@@ -340,7 +337,7 @@ class SpeedScan(ctk.CTk):
             self.sys_labels["uptime"].configure(text=self._get_uptime())
             self.sys_labels["battery"].configure(text=self._get_battery())
         except Exception as e:
-            print(f"Erro ao atualizar informações: {e}")
+            logging.error(f"Erro ao atualizar informações: {e}")
 
     def _get_hostname(self):
         return platform.node()
@@ -1179,7 +1176,7 @@ class SpeedScan(ctk.CTk):
             else:
                 subprocess.run(["xdg-open", LOG_DIR])
         except Exception as e:
-            print(f"Erro ao abrir pasta de logs: {e}")
+            logging.error(f"Erro ao abrir pasta de logs: {e}")
 
     def save_schedule_config(self):
         schedule = {

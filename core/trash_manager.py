@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
-# core/trash_manager.py
-# =============================================================================
-#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
-#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
-#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
-#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
-#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
-#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
-# =============================================================================
+import logging
 # Gerenciador de lixeira para arquivos deletados pelo SpeedScan
-# Versão 0.3.0-beta
-# =============================================================================
+# Versão 0.3.1-beta
 
 import shutil
 import os
@@ -36,10 +27,8 @@ class TrashManager:
             json.dump(metadata, f, indent=2)
 
     def move_to_trash(self, path, original_path):
-        """Move um arquivo/diretório para a lixeira, registrando origem."""
         if not os.path.exists(path):
             return False
-        # Cria um nome único na lixeira
         trash_name = f"{int(time.time())}_{os.path.basename(path)}"
         trash_path = TRASH_DIR / trash_name
         shutil.move(path, trash_path)
@@ -52,7 +41,6 @@ class TrashManager:
         return True
 
     def restore(self, trash_name):
-        """Restaura um item da lixeira para seu local original."""
         metadata = self._load_metadata()
         if trash_name not in metadata:
             return False
@@ -61,7 +49,6 @@ class TrashManager:
         original = Path(info['original'])
         if not trash_path.exists():
             return False
-        # Move de volta
         original.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(trash_path), str(original))
         del metadata[trash_name]
@@ -69,13 +56,11 @@ class TrashManager:
         return True
 
     def empty_trash(self):
-        """Esvazia a lixeira permanentemente."""
         shutil.rmtree(TRASH_DIR)
         TRASH_DIR.mkdir()
         self._save_metadata({})
 
     def list_trash(self):
-        """Lista itens na lixeira com metadados."""
         metadata = self._load_metadata()
         items = []
         for name, info in metadata.items():
@@ -87,7 +72,6 @@ class TrashManager:
         return items
 
     def get_trash_size(self):
-        """Retorna o tamanho total da lixeira em bytes."""
         total = 0
         for root, dirs, files in os.walk(TRASH_DIR):
             for f in files:

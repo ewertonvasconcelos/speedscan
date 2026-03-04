@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
-# core/dashboard.py
-# =============================================================================
-#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
-#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
-#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
-#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
-#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
-#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
-# =============================================================================
+import logging
 # Dashboard com 3 slots fixos e widgets disponíveis em duas linhas (4+4)
-# Versão 0.3.0-beta
-# =============================================================================
+# Versão 0.3.1-beta
 
 import customtkinter as ctk
 import json
@@ -176,14 +167,16 @@ class Dashboard(ctk.CTkFrame):
             btn = ctk.CTkButton(self.row1_frame, text=f"➕ {widget['name']}",
                                  fg_color=self.app.acc_color,
                                  height=40, corner_radius=8,
-                                 command=lambda w=widget: self.add_to_slot(w))
+                                 command=lambda w=widget: self.add_to_slot(w),
+                                 cursor="hand2")
             btn.pack(side="left", padx=8, pady=5)
 
         for widget in second_half:
             btn = ctk.CTkButton(self.row2_frame, text=f"➕ {widget['name']}",
                                  fg_color=self.app.acc_color,
                                  height=40, corner_radius=8,
-                                 command=lambda w=widget: self.add_to_slot(w))
+                                 command=lambda w=widget: self.add_to_slot(w),
+                                 cursor="hand2")
             btn.pack(side="left", padx=8, pady=5)
 
         self.row1_frame.pack_configure(anchor="center")
