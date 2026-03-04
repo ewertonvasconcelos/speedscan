@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
+import logging
+
 
 import logging
 # SpeedScan - Versão 0.4.0-beta (novos cards, IA corrigida)
