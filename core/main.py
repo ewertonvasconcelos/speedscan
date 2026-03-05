@@ -59,6 +59,28 @@ class ActionHandler:
     def __init__(self, app):
         self.app = app
 
+    def _run_scanner_action(self, log, action):
+        """Executa ações de scanner de forma genérica."""
+        log.delete("1.0", "end")
+        log.insert("end", f"Executando {action}...\n")
+        # Mapeamento de ações para métodos do security_scanner
+        scanner_map = {
+            'port_scan': self.app.security_scanner.scan_open_ports,
+            'firewall_check': self.app.security_scanner.check_firewall_status,
+            'security_updates': self.app.security_scanner.check_security_updates,
+            'services_manager': self._run_services_manager_impl,
+            'log_analysis': self._run_log_analysis_impl,
+        }
+        if action in scanner_map:
+            result = scanner_map[action]()
+            if isinstance(result, list):
+                log.insert("end", "\n".join(result))
+            else:
+                log.insert("end", str(result))
+        else:
+            log.insert("end", f"Ação desconhecida: {action}\n")
+        log.insert("end", "\n✅ Ação concluída.\n")
+
     def run_browser_clean(self, log, preserve_cookies=False, cookie_keep_list=None):
         log.delete("1.0", "end")
         log.insert("end", "Iniciando limpeza de navegadores...\n")
@@ -118,29 +140,11 @@ class ActionHandler:
         log.insert("end", "✅ Scan concluído.\n")
 
     def run_port_scan(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "Escaneando portas abertas...\n")
-        ports = self.app.security_scanner.scan_open_ports()
-        if not ports:
-            log.insert("end", "Nenhuma porta aberta encontrada.\n")
-        else:
-            log.insert("end", "\n".join(ports))
-        log.insert("end", "\n✅ Scan concluído.\n")
-
+        self._run_scanner_action(log, 'port_scan')
     def run_firewall_check(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "Verificando status do firewall...\n")
-        status = self.app.security_scanner.check_firewall_status()
-        log.insert("end", status)
-        log.insert("end", "\n✅ Verificação concluída.\n")
-
+        self._run_scanner_action(log, 'firewall_check')
     def run_security_updates(self, log):
-        log.delete("1.0", "end")
-        log.insert("end", "Verificando atualizações de segurança...\n")
-        updates = self.app.security_scanner.check_security_updates()
-        log.insert("end", "\n".join(updates))
-        log.insert("end", "\n✅ Verificação concluída.\n")
-
+        self._run_scanner_action(log, 'security_updates')
     def run_lan_cache_setup(self, log):
         log.delete("1.0", "end")
         log.insert("end", "🔄 Verificando Docker...\n")
