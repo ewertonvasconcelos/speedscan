@@ -1,3 +1,4 @@
+from core import config
 #!/usr/bin/env python3
 import logging
 # Agendador de tarefas automáticas

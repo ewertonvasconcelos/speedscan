@@ -1,3 +1,4 @@
+from core import config
 #!/usr/bin/env python3
 import logging
 # Funções auxiliares para interface do SpeedScan

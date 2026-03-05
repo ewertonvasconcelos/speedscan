@@ -1,3 +1,4 @@
+from core import config
 #!/usr/bin/env python3
 import logging
 # Interface de chat para integração com IAs (Ollama, OpenAI, etc.)

@@ -1,3 +1,4 @@
+from core import config
 #!/usr/bin/env python3
 import logging
 # Assistente de primeira execução (boas-vindas) com níveis de expertise
@@ -68,7 +69,7 @@ class FirstRunWizard(ctk.CTkToplevel):
                       fg_color="gray", width=100, cursor="hand2").pack(side="left", padx=10)
 
     def save_and_close(self):
-        self.config["username"] = self.name_entry.get() or "usuário"
+        self.config["username"] = self.name_entry.get() or "Usuário"
         theme_map = {
             "Padrão (Roxo)": "default",
             "Cinza Profissional": "grey",

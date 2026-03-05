@@ -1,3 +1,4 @@
+from core import config
 #!/usr/bin/env python3
 import logging
 # Módulo de coleta e armazenamento de métricas históricas (não bloqueante)

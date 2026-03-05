@@ -1,3 +1,4 @@
+from core import config
 #!/usr/bin/env python3
 import logging
 # Módulo de segurança: portas, firewall, atualizações

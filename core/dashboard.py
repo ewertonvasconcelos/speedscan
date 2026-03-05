@@ -1,3 +1,4 @@
+from core import config
 #!/usr/bin/env python3
 import logging
 # Dashboard com 3 slots fixos e widgets disponíveis em duas linhas (4+4)

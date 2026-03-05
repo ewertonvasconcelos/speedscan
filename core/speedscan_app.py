@@ -1,3 +1,4 @@
+from core import config
 #!/usr/bin/env python3
 import logging
 # SpeedScan - Versão com rolagem corrigida (sobe e desce)
@@ -17,16 +18,12 @@ from PIL import Image, ImageDraw
 from datetime import datetime
 
 # CONFIGURAÇÕES
-CONFIG_FILE = os.path.expanduser("~/.speedscan_conf")
-ICON_PATH = os.path.expanduser("~/speedscan/icon.png")
-LOG_DIR = os.path.expanduser("~/speedscan/logs")
-AGENT_SCRIPT = os.path.expanduser("~/speedscan/speedscan-agent.py")
-os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(config.LOG_DIR, exist_ok=True)
 
 def get_config():
-    if os.path.exists(CONFIG_FILE):
+    if os.path.exists(config.CONFIG_FILE):
         try:
-            with open(CONFIG_FILE, "r") as f:
+            with open(config.CONFIG_FILE, "r") as f:
                 return json.load(f)
         except:
             pass
@@ -70,7 +67,6 @@ scales = {
     "150": "150%"
 }
 
-AI_SUGGESTIONS = [
     "DeepSeek",
     "OpenAI GPT-4",
     "Google Gemini",
@@ -174,8 +170,8 @@ class SpeedScan(ctk.CTk):
         top_frame.pack(side="top", fill="x", pady=(30, 10))
 
         icon_image = None
-        if os.path.exists(ICON_PATH):
-            icon_image = self.round_image(ICON_PATH, size=(96, 96), radius=20)
+        if os.path.exists(config.ICON_PATH):
+            icon_image = self.round_image(config.ICON_PATH, size=(96, 96), radius=20)
 
         if icon_image:
             btn_speed = ctk.CTkButton(
@@ -935,7 +931,7 @@ class SpeedScan(ctk.CTk):
         for i in range(3):
             grid.columnconfigure(i, weight=1)
 
-        for idx, ia in enumerate(AI_SUGGESTIONS):
+        for idx, ia in enumerate(config.AI_SUGGESTIONS):
             row, col = divmod(idx, 3)
             card = ctk.CTkFrame(grid, fg_color=self.bg_color, corner_radius=10, border_width=1, border_color=self.acc_color)
             card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
@@ -1107,7 +1103,7 @@ class SpeedScan(ctk.CTk):
 
         log_frame = ctk.CTkFrame(self.schedule_options_frame, fg_color="transparent")
         log_frame.pack(fill="x", pady=5)
-        ctk.CTkLabel(log_frame, text=f"Logs salvos em: {LOG_DIR}", font=("Inter", 11), text_color=self.text_color).pack(side="left", padx=5)
+        ctk.CTkLabel(log_frame, text=f"Logs salvos em: {config.LOG_DIR}", font=("Inter", 11), text_color=self.text_color).pack(side="left", padx=5)
         btn_open_logs = ctk.CTkButton(log_frame, text="Abrir pasta", command=self.open_logs_folder, width=100, height=25)
         btn_open_logs.pack(side="left", padx=5)
 
@@ -1170,27 +1166,44 @@ class SpeedScan(ctk.CTk):
     def open_logs_folder(self):
         try:
             if self.SO == "Windows":
-                os.startfile(LOG_DIR)
+                os.startfile(config.LOG_DIR)
             elif self.SO == "Darwin":
-                subprocess.run(["open", LOG_DIR])
+                subprocess.run(["open", config.LOG_DIR])
             else:
-                subprocess.run(["xdg-open", LOG_DIR])
+                subprocess.run(["xdg-open", config.LOG_DIR])
         except Exception as e:
             logging.error(f"Erro ao abrir pasta de logs: {e}")
 
     def save_schedule_config(self):
+        # Mapeamento de valores em português para inglês
+        freq_map = {
+            "Diário": "daily",
+            "Semanal": "weekly",
+            "Mensal": "monthly",
+            "Personalizado": "custom"
+        }
+        day_map = {
+            "segunda": "monday",
+            "terça": "tuesday",
+            "quarta": "wednesday",
+            "quinta": "thursday",
+            "sexta": "friday",
+            "sábado": "saturday",
+            "domingo": "sunday"
+        }
+
         schedule = {
             "enabled": self.schedule_enabled_var.get(),
-            "frequency": self.schedule_freq_var.get(),
+            "frequency": freq_map[self.schedule_freq_var.get()],
             "hour": self.schedule_hour_var.get(),
-            "day_of_week": self.schedule_weekday_var.get(),
+            "day_of_week": day_map[self.schedule_weekday_var.get()],
             "day_of_month": self.schedule_monthday_var.get(),
             "interval_days": self.schedule_interval_var.get(),
             "tasks": [key for key, var in self.schedule_tasks.items() if var.get()],
             "elevated": self.schedule_elevated_var.get()
         }
         self.config["schedule"] = schedule
-        with open(CONFIG_FILE, "w") as f:
+        with open(config.CONFIG_FILE, "w") as f:
             json.dump(self.config, f)
 
         self.create_system_schedule(schedule)
@@ -1212,7 +1225,7 @@ class SpeedScan(ctk.CTk):
             self.remove_system_schedule()
             return
 
-        agent_cmd = f"python3 {AGENT_SCRIPT}"
+        agent_cmd = f"python3 {config.AGENT_SCRIPT}"
 
         if self.SO == "Linux":
             self._schedule_linux(schedule, agent_cmd)
@@ -1240,7 +1253,7 @@ class SpeedScan(ctk.CTk):
         else:
             cron_time = f"{minute} {hour} * * *"
 
-        full_cmd = f"{cmd} >> {LOG_DIR}/schedule.log 2>&1"
+        full_cmd = f"{cmd} >> {config.LOG_DIR}/schedule.log 2>&1"
 
         new_crontab = []
         for line in current.splitlines():
@@ -1335,7 +1348,7 @@ class SpeedScan(ctk.CTk):
 
         self.config["open_file_in_tab"] = (self.tab_var.get() == "Na guia")
 
-        with open(CONFIG_FILE, "w") as f:
+        with open(config.CONFIG_FILE, "w") as f:
             json.dump(self.config, f)
 
         python = sys.executable

@@ -1,3 +1,4 @@
+from core import config
 #!/usr/bin/env python3
 import logging
 # Gerenciador de lixeira para arquivos deletados pelo SpeedScan
