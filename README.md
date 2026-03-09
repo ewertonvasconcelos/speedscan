@@ -1,3 +1,7 @@
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/ewertonvasconcelos/speedscan)
+![GitHub all releases](https://img.shields.io/github/downloads/ewertonvasconcelos/speedscan/total)
+![GitHub](https://img.shields.io/github/license/ewertonvasconcelos/speedscan)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/ewertonvasconcelos/speedscan/build.yml?branch=main)
 # ⚡ SpeedScan
 
 <div align="center">
