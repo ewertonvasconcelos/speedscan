@@ -42,12 +42,13 @@ O SpeedScan nasceu da necessidade de ter uma ferramenta centralizada para diagno
 - **Temas Customizáveis:** Escolha entre temas claro e escuro.
 
 ## 🖼️ Capturas de Tela
-<div align="center">
-  <img src="screenshots/dashboard.png" alt="Dashboard" width="400"/>
-  <img src="screenshots/otimizacao.png" alt="Otimização" width="400"/>
-  <img src="screenshots/agente-ia.png" alt="Agente IA" width="400"/>
-  <p><em>Exemplo do Dashboard, aba de Otimização e Agente IA.</em></p>
-</div>
+<p align="center">
+  <img src="screenshots/dashboard.png" alt="Dashboard" width="30%"/>
+  <img src="screenshots/otimizacao.png" alt="Otimização" width="30%"/>
+  <img src="screenshots/configuracoes.png" alt="Configurações" width="30%"/>
+  <img src="screenshots/agente-ia.png" alt="Agente IA" width="30%"/>
+  <p><em>Exemplo do Dashboard, aba de Otimização,aba do Agente IA e Configurações.</em></p>
+</p>
 
 ## 🛠️ Tecnologias Utilizadas
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
