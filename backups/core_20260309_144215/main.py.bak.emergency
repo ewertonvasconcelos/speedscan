@@ -1,0 +1,604 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+# SpeedScan - VersÃ£o 1.0.0
+# Desenvolvedor: Ewerton Vasconcelos
+
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+import logging
+import os
+import platform
+import threading
+import json
+import sys
+import re
+import time
+import subprocess
+from PIL import Image, ImageDraw
+import psutil
+import customtkinter as ctk
+import matplotlib
+matplotlib.use('TkAgg')
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+# ImportaÃ§Ãµes dos mÃ³dulos internos
+from core import config
+from core.hardware import HardwareInfo
+from core.actions import CommandRunner, ActionMapper, ActionHandler
+from core.scheduler import Scheduler
+from core import ui
+from core.health_score import HealthScore
+from core.temperature_monitor import TemperatureMonitor
+from core.smart_monitor import SmartMonitor
+from core.browser_cleaner import BrowserCleaner
+from core.speed_test import SpeedTester
+from core.process_manager import ProcessManager
+from core.historical_metrics import MetricsCollector, MetricsDB
+from core.lan_scanner import LANScanner
+from core.ai_proactive import RecommendationEngine
+from core.security_scanner import SecurityScanner
+from core.dashboard import Dashboard
+from core.lan_cache import LANCacheManager
+from core.chat import ChatFrame
+from core.first_run import FirstRunWizard
+from core.cookie_manager import CookieManager
+from core.trash_manager import TrashManager
+# MÃ³dulo de limpeza do Windows (apenas se for Windows)
+try:
+    from core.windows_cleaner import WindowsCleaner
+except ImportError:
+    WindowsCleaner = None
+
+# ConfiguraÃ§Ã£o de logging
+config.LOG_DIR.mkdir(parents=True, exist_ok=True)
+log_file = config.LOG_DIR / "speedscan.log"
+handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logging.basicConfig(level=logging.ERROR, handlers=[handler])
+
+# =============================================================================
+# ConfiguraÃ§Ã£o padrÃ£o unificada
+# =============================================================================
+DEFAULT_CONFIG = {
+    "theme": "default",
+    "username": "ewerton",
+    "language": "pt_BR",
+    "ui_scale": "auto",
+    "open_file_in_tab": False,
+    "simple_mode": True,
+    "expert_level": 1,
+    "window_state": {
+        "maximized": False,
+        "width": 1000,
+        "height": 700,
+        "x": None,
+        "y": None
+    },
+    "schedule": {
+        "enabled": False,
+        "frequency": "weekly",
+        "hour": "03:00",
+        "day_of_week": "monday",
+        "day_of_month": 1,
+        "interval_days": 7,
+        "tasks": ["cache", "swap", "check"],
+        "elevated": False
+    },
+    "ai": {
+        "provider": "ollama",
+        "model": "llama3.2",
+        "api_key": "",
+        "endpoint": "http://localhost:11434"
+    }
+}
+
+# =============================================================================
+# DefiniÃ§Ã£o de temas, idiomas, escalas e sugestÃµes de IA
+# =============================================================================
+THEMES = {
+    "default": {"mode": "dark", "bg": "#1e293b", "side": "#0f172a", "acc": "#a855f7", "text": "#ffffff"},
+    "grey":    {"mode": "light", "bg": "#d1d5db", "side": "#374151", "acc": "#4b5563", "text": "#111827"},
+    "dark":    {"mode": "dark",  "bg": "#080808", "side": "#000000", "acc": "#10b981", "text": "#ffffff"},
+    "light":   {"mode": "light", "bg": "#ffffff", "side": "#f8fafc", "acc": "#2563eb", "text": "#0f172a"}
+}
+
+LANGUAGES = {
+    "pt_BR": "PortuguÃªs Brasileiro",
+    "en_US": "English (US)",
+    "es_ES": "EspaÃ±ol"
+}
+
+SCALES = {
+    "auto": "AutomÃ¡tico",
+    "100": "100%",
+    "125": "125%",
+    "150": "150%"
+}
+
+AI_SUGGESTIONS = [
+    "Ollama (local)", "OpenAI GPT", "Google Gemini", "Claude (Anthropic)",
+    "Llama 3 (Meta)", "Mistral AI", "Cohere", "DeepSeek", "Configure Local AI"
+]
+
+# =============================================================================
+# Classe principal SpeedScan
+# =============================================================================
+class SpeedScan(ctk.CTk):
+    """Janela principal do aplicativo."""
+
+    def __init__(self):
+        super().__init__()
+        self.SO = platform.system()
+        self.runner = CommandRunner(self.SO)
+        self.hw = HardwareInfo(self.SO, self.runner)
+        self.config = self._load_config()
+        self.update_theme_vars()
+        self.title(f"SpeedScan {config.VERSION}")
+        self.configure(fg_color=self.bg_color)
+        self.minsize(900, 550)
+        self.apply_ui_scale()
+        self.turbo_active = False
+        self.consoles_visible = {}
+        self.ping_active = False
+        self.current_module = "dashboard"
+        self.sidebar_buttons = {}
+        self.detail_buttons = {}
+        self.logs = {}
+
+        self.health_monitor = HealthScore()
+        self.health_score_var = ctk.StringVar(value="Calculando...")
+        self.temp_monitor = TemperatureMonitor()
+        self.smart_monitor = SmartMonitor()
+        self.browser_cleaner = BrowserCleaner()
+        self.speed_tester = SpeedTester()
+        self.proc_manager = ProcessManager()
+        self.metrics_collector = MetricsCollector(interval=5)
+        self.metrics_db = MetricsDB()
+        self.lan_scanner = LANScanner()
+        self.ai_proactive = AIProactive(self.metrics_db, self.health_monitor)
+        self.security_scanner = SecurityScanner(self.SO)
+        self.lan_cache = LANCacheManager(self.SO)
+        self.cookie_manager = CookieManager()
+        self.trash_manager = TrashManager()
+
+        # MÃ³dulo Windows Cleaner (apenas se for Windows)
+        if self.SO == "Windows" and WindowsCleaner is not None:
+            self.windows_cleaner = WindowsCleaner()
+        else:
+            self.windows_cleaner = None
+
+        self.metrics_collector.start()
+        self.proc_manager.start_monitoring()
+
+        # ActionHandler
+        self.action_handler = ActionHandler(self)
+
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        self._build_sidebar()
+
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_rowconfigure(0, weight=1)
+
+        self.frames = {}
+        for btn in self.detail_buttons.values():
+            btn.pack_forget()
+        self.consoles_visible = {tag: False for tag in self.detail_buttons.keys()}
+
+        self.show_frame("dashboard")
+        self._setup_bindings()
+        threading.Thread(target=self._monitor_loop, daemon=True).start()
+        self._check_process_queue()
+        self.after(200, self._restore_window_state)
+        self.protocol("WM_DELETE_WINDOW", self._on_closing)
+        self.after(500, self._check_first_run)
+
+    # =========================================================================
+    # MÃ©todos de configuraÃ§Ã£o e tema
+    # =========================================================================
+
+    def _load_config(self):
+        if config.CONFIG_FIL.exists():
+            try:
+                with open(config.CONFIG_FIL, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+                # Garantir que todas as chaves existam
+                for key, value in DEFAULT_CONFIG.items():
+                    if key not in cfg:
+                        cfg[key] = value
+                return cfg
+            except Exception as e:
+                logging.error(f"Erro ao carregar config: {e}")
+                return DEFAULT_CONFIG.copy()
+        return DEFAULT_CONFIG.copy()
+
+    def _save_config(self):
+        try:
+            with open(config.CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logging.error(f"Erro ao salvar config: {e}")
+
+    def update_theme_vars(self):
+        t = THEMES.get(self.config["theme"], THEMES["default"])
+        ctk.set_appearance_mode(t["mode"])
+        self.bg_color = t["bg"]
+        self.side_bg = t["side"]
+        self.acc_color = t["acc"]
+        self.text_color = t["text"]
+        self.light_bg = self._lighten_color(self.bg_color, 0.2)
+
+    def _lighten_color(self, hex_color, factor):
+        h = hex_color.lstrip('#')
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        r = min(255, int(r + (255 - r) * factor))
+        g = min(255, int(g + (255 - g) * factor))
+        b = min(255, int(b + (255 - b) * factor))
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def apply_ui_scale(self):
+        scale = self.config.get("ui_scale", "auto")
+        if scale == "auto":
+            ctk.set_widget_scaling(1.0)
+        else:
+            ctk.set_widget_scaling(float(scale) / 100)
+
+    def round_image(self, path, size=(96,96), radius=20):
+        try:
+            img = Image.open(path).convert("RGBA").resize(size, Image.Resampling.LANCZOS)
+            mask = Image.new("L", size, 0)
+            ImageDraw.Draw(mask).rounded_rectangle((0,0) + size, radius=radius, fill=255)
+            result = Image.new("RGBA", size)
+            result.paste(img, (0,0), mask)
+            return ctk.CTkImage(result, size=size)
+        except:
+            return None
+
+    # =========================================================================
+    # Sidebar e navegaÃ§Ã£o
+    # =========================================================================
+    def _build_sidebar(self):
+        sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=self.side_bg)
+        sidebar.grid(row=0, column=0, sticky="nsw")
+        sidebar.grid_propagate(False)
+
+        top = ctk.CTkFrame(sidebar, fg_color="transparent")
+        top.pack(pady=(15, 0))  # EspaÃ§o da logo ate o topo (15px), 0 abaixo
+        icon = self.round_image(str(config.ICON_PATH)) if config.ICON_PATH.exists() else None
+        if icon:
+            lbl_icon = ctk.CTkLabel(top, image=icon, text="", width=96, height=96)
+        else:
+            lbl_icon = ctk.CTkLabel(top, text="âš¡", font=("Inter", 48), width=96, height=96, text_color=self.acc_color)
+        lbl_icon.pack()
+
+        center = ctk.CTkFrame(sidebar, fg_color="transparent")
+        center.pack(expand=False, fill="x", pady=(38, 38))  # EspaÃ§o entre a logo e o primeiro botÃ£o e entre o Ãºltimo e a borda inferior (cada 1 cm) = 38px
+
+        nav_items = [
+            ("ğŸ“Š", "Dashboard", "dashboard"),
+            ("âš¡", "OtimizaÃ§Ã£o", "otimizacao"),
+            ("ğŸ“€", "Rede", "rede"),
+            ("ğŸ–§", "Drivers", "drivers"),
+        ]
+
+        level_items = {
+            1: [],
+            2: ["Processos"],
+            3: ["Processos", "HistÃ³rico", "SeguranÃ§a", "Agente IA", "Limpeza Win"]
+        }
+
+        for icon, text, target in nav_items:
+            btn = self._sidebar_btn(center, icon, text, target)
+            self.sidebar_buttons[target] = btn
+
+        level = self.config.get("expert_level", 1)
+        if level >= 2:
+            icon_map = {
+                "Processos": ("ğŸ“‹", "processos"),
+                "HistÃ³rico": ("ğŸ“ˆ", "historico"),
+                "SeguranÃ§a": ("ğŸ”’", "seguranca"),
+                "Agente IA": ("ğŸ¤–", "agente"),
+                "Limpeza Win": ("ğŸ§¹", "windows_cleaner")
+            }
+            for item in level_items[level]:
+                icon, target = icon_map[item]
+                btn = self._sidebar_btn(center, icon, item, target)
+                self.sidebar_buttons[target] = btn
+
+        # BotÃµes inferiores (configuraÃ§Ãµes e sobre) - sempre visÃ­veis
+        for icon, text, target in [("âš™", "ConfiguraÃ§Ãµes", "config"), ("â„¹", "Sobre", "sobre")]:
+            btn = self._sidebar_btn(center, icon, text, target)
+            self.sidebar_buttons[target] = btn
+
+        # Spacer eliminado (height 0) - nÃ£o Ã© necessÃ¡rio por, pero manter para organizaÃ§Ã£o
+        spacer = ctk.CTkLabel(center, text="", height=0)
+        spacer.pack(expand=False)
+
+    def _sidebar_btn(self, parent, icon, text, target):
+        frame = ctk.CTkFrame(parent, fg_color="transparent")
+        frame.pack(pady=2, fill="x", padx=10)
+        btn = ctk.CTkButton(frame, text=f"{icon}  {text}", anchor="w", height=30,
+                            fg_color="transparent", hover_color=self.acc_color,
+                            font=("Inter", 13), corner_radius=10,
+                            text_color=self.text_color,
+                            command=lambda: self.show_frame(target),
+                            cursor="hand2")
+        btn.pack(fill="x")
+        return btn
+
+    def show_frame(self, target):
+        for f in self.frames.values():
+            f.pack_forget()
+        if target not in self.frames:
+            self.frames[target] = self._create_frame(target)
+        self.frames[target].pack(fill="both", expand=True)
+        self.current_module = target
+        for key, btn in self.sidebar_buttons.items():
+            btn.configure(fg_color=self.acc_color if key == target else "transparent")
+        if target == "processos":
+            self._refresh_process_list()
+        elif target == "historico":
+            self._update_graphs()
+        elif target == "agente":
+            self._update_recommendations()
+
+    def _create_frame(self, target):
+        frame = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        getattr(self, f"_fill_{target}")(frame)
+        return frame
+
+    # =========================================================================
+    # MÃ©todos de preenchimento das abas (versÃ£o completa)
+    # =========================================================================
+    def _fill_dashboard(self, parent):
+        ctk.CTkLabel(parent, text="Dashboard Rotativo", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="center", pady=(0, 20))
+        self.dashboard = Dashboard(parent, self, fg_color="transparent")
+        self.dashboard.pack(fill="both", expand=True)
+
+    def _fill_otimizacao(self, parent):
+        ctk.CTkLabel(parent, text="OtimizaÃ§Ã£o", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="center", pady=(0, 20))
+        items = [
+            ("ğŸ§¹ Limpeza de Cache", "cache", False),
+            ("ğŸ”„ Reset de Swap", "swap", False),
+            ("ğŸ” Verificar Erros", "check", False),
+            ("ğŸ”¥ Modo Turbo", "turbo", False),
+            ("Steam", "steam", False),
+            ("Lutris", "lutris", False),
+            ("Heroic Launcher", "heroic", False),
+            ("Bottles", "bottles", False),
+            ("Wine", "wine", False),
+            ("MangoHud", "mangohud", False),
+            ("Governor", "governor", False),
+            ("ğŸ¬ Emulador Dolphin", "dolphin", False),
+            ("ğŸ§¹ Limpeza de Navegadores", "browsers", False),
+            ("âš™ï¸ Gerenciar ServiÃ§os", "services", False),
+            ("ğŸ“‹ AnÃ¡lise de Logs", "logs", False),
+            ("ğŸª Gerenciar Cookies", "cookies", False),
+            ("ğŸ”§ Otimizar SSD (TRIM)", "trim", False),
+            ("ğŸ”„ Reparar Pacotes Quebrados", "fix_broken", False),
+        ]
+        level = self.config.get("expert_level", 1)
+        if level == 1:
+            items = [item for item in items if item[1] not in ["services", "logs", "cookies", "trim", "fix_broken"]]
+        elif level == 2:
+            items = [item for item in items if item[1] not in ["logs", "cookies"]]
+        ui.create_card_grid(parent, items, "ot", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
+        btn, log = ui.add_console(parent, "ot", self.acc_color, self.toggle_console)
+        self.detail_buttons["ot"] = btn
+        self.logs["ot"] = log
+
+    def _fill_rede(self, parent):
+        ctk.CTkLabel(parent, text="Rede", font=("Inter", 28, "bold"), text_color=self.acc_color).pack(anchor="center", pady=(0, 20))
+        items = [
+            ("ğŸ¡  Ping", "ping", False),
+            ("â˜ Cloudflare DNS", "1.1.1.1", True),
+            ("ğŸ•µ Google DNS", "8.8.8.8", True),
+            ("ğŸ› AdGuard DNS", "94.140.14.14", True),
+            ("ğŸ“€ DNS AutomÃ¡tico", "auto", True),
+            ("ğŸ“Š Testar Velocidade", "speedtest", False),
+            ("ğŸ” DiagnÃ³stico Placa", "ethtool", False),
+            ("ğŸ“€ Renovar IP", "dhclient", False),
+            ("ğŸ–§ Portas Abertas", "ports", False),
+            ("ğŸ•” TraceRoute", "traceroute", False),
+            ("ğŸ•” InformaÃ§Ãµes Wi-Fi", "wifi", False),
+            ("ğŸ“ Testar DNS", "testdns", False),
+            ("ğŸ–§ Scanner LAN", "lanscan", False),
+            ("ğŸš€ LANCache", "lancache", False),
+            ("ğŸ“ Verificar IP PÎ˜›XÛÈ‹œX›X×Ú\‹˜[ÙJKˆBˆ]™[HÙ[‹˜ÛÛ™šYË™Ù]
+™^\Û]™[‹JBˆYˆ]™[OHN‚ˆ][\ÈHÚ][H›Üˆ][H[ˆ][\ÈYˆ][VÌWH›İ[ˆÈœÜÈ‹˜XÙ\›İ]H‹™]ÛÛ‹™ÛY[‹›[œØØ[ˆ‹›[˜ØXÚH—WBˆ[Yˆ]™[OH‚ˆ][\ÈHÚ][H›Üˆ][H[ˆ][\ÈYˆ][VÌWH›İ[ˆÈ›[œØØ[ˆ‹›[˜ØXÚH—WBˆ[™×ÛX™[ÈHZK˜Ü™X]WØØ\™ÙÜšY
+\™[][\Ë›™]‹Ù[‹˜XØ×ØÛÛÜ‹Ù[‹˜™×ØÛÛÜ‹Ù[‹^ØÛÛÜ‹Ù[‹œ[—ØØ\™ØXİ[ÛŠBˆYˆ[™×ÛX™[Î‚ˆÙ[‹œ[™×ÛX™[H[™×ÛX™[ÖÌBˆ‹ÙÈHZK˜YØÛÛœÛÛJ\™[›™]‹Ù[‹˜XØ×ØÛÛÜ‹Ù[‹ÙÙÛWØÛÛœÛÛJBˆÙ[‹™]Z[Ø]ÛœÖÈ›™]—HH‚ˆÙ[‹›ÙÜÖÈ›™]—HHÙÂ‚ˆYˆÙš[Ùš]™\œÊÙ[‹\™[
+N‚ˆİËÕÓX™[
+\™[^H‘š]™\œÈ‹›ÛJ’[\ˆ‹˜›ÛŠK^ØÛÛÜ\Ù[‹˜XØ×ØÛÛÜŠKœXÚÊ[˜ÚÜH˜Ù[\ˆ‹YOJŒ
+JBˆ][\ÈHÂˆ
+¼'å©HÒH
+°ëY[ËÔ™YJH‹œÚH‹˜[ÙJKˆ
+¼'å)È]X[^˜\ˆÚ\İ[XH‹\]H‹˜[ÙJKˆ
+¼'å#TĞˆÛÛ™XİYÜÈ‹\Øˆ‹˜[ÙJKˆ
+¼'éêHpìÙ[ÜÈÙ\›™[‹›[Ù[\È‹˜[ÙJKˆ
+¸¦¦HÔH][YH‹˜ÜWÚ[™›È‹˜[ÙJKˆ
+¸¦¦H\œ›ÜÈHš\›]Ø\™H‹™š\›]Ø\™H‹˜[ÙJKˆ
+¼'å©Hš]™\œÈH°ëY[È‹šY[×Ùˆ‹˜[ÙJKˆ
+¼'äàš]™\œÈH™YH‹›™]Ùˆ‹˜[ÙJKˆ
+¼'äà]X[^˜péğíY\È]]Ûpè]XØ\È‹˜]]×İ\]H‹˜[ÙJKˆBˆ]™[HÙ[‹˜ÛÛ™šYË™Ù]
+™^\Û]™[‹JBˆYˆ]™[OHN‚ˆ][\ÈHÚ][H›Üˆ][H[ˆ][\ÈYˆ][VÌWH›İ[ˆÈ›[Ù[\È‹˜ÜWÚ[™›È‹™š\›]Ø\™H‹šY[×Ùˆ‹›™]Ùˆ‹˜]]×İ\]H—WBˆ[Yˆ]™[OH‚ˆ][\ÈHÚ][H›Üˆ][H[ˆ][\ÈYˆ][VÌWH›İ[ˆÈšY[×Ùˆ‹›™]Ùˆ‹˜]]×İ\]H—WBˆZK˜Ü™X]WØØ\™ÙÜšY
+\™[][\Ë™ˆ‹Ù[‹˜XØ×ØÛÛÜ‹Ù[‹˜™×ØÛÛÜ‹Ù[‹^ØÛÛÜ‹Ù[‹œ[—ØØ\™ØXİ[ÛŠBˆ‹ÙÈHZK˜YØÛÛœÛÛJ\™[™ˆ‹Ù[‹˜XØ×ØÛÛÜ‹Ù[‹ÙÙÛWØÛÛœÛÛJBˆÙ[‹™]Z[Ø]ÛœÖÈ™ˆ—HH‚ˆÙ[‹›ÙÜÖÈ™ˆ—HHÙÂ‚ˆÈKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKBˆÈpê]ÙÜÈ\ÈX˜\È›ØÙ\ÜÛÜË\İ0ìÜšXÛËÙYİ\˜[°éØKYÙ[HPKÛÛ™šYİ\˜péğíY\ËÛØœ™HHİ]˜\ÂˆÈKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKB‚ˆÈX˜H›ØÙ\ÜÛÜÂˆYˆÙš[Ü›ØÙ\ÜÛÜÊÙ[‹\™[
+N‚ˆÈ
+ÛÛpî™ÈÛÛ\]ÈHÙ\™[˜ÚXYÜˆH›ØÙ\ÜÛÜÈH™]][^˜\ˆÈÛÙYÛÈ^\İ[JBˆ\ÜÂ‚ˆÈX˜H\İ0ìÜšXÛÂˆYˆÙš[Ú\İÜšXÛÊÙ[‹\™[
+N‚ˆÈ
+ÛÛpî™ÈÛÛ\]ÈHÜ°èYšXÛÜÈH™]][^˜\ˆÈÛÙYÛÈ^\İ[JBˆ\ÜÂ‚ˆÈX˜HÙYİ\˜[°éØBˆYˆÙš[ÜÙYİ\˜[˜ØJÙ[‹\™[
+N‚ˆÈ
+ÛÛpî™ÈÛÛ\]ÈH™\šYšXØpéğíY\ÈHÙYİ\˜[°éØHH™]][^˜\ˆÈÛÙYÛÈ^\İ[JBˆ\ÜÂ‚ˆÈX˜HYÙ[HPBˆYˆÙš[ØYÙ[JÙ[‹\™[
+N‚ˆÈ
+ÛÛpî™ÈÛÛ\]ÈÈÚ]HİYÙ\İ0íY\ÈH™]][^˜\ˆÈÛÙYÛÈ^\İ[JBˆ\ÜÂ‚ˆÈX˜HÛÛ™šYİ\˜péğíY\ÂˆYˆÙš[ØÛÛ™šYÊÙ[‹\™[
+N‚ˆÈ
+ÛÛpî™ÈÛÛ\]È\ÈÛÛ™šYİ\˜péğíY\ÈH™]][^˜\ˆÈÛÙYÛÈ^\İ[JBˆ\ÜÂ‚ˆÈX˜HÛØœ™BˆYˆÙš[ÜÛØœ™JÙ[‹\™[
+N‚ˆÈ
+ÛÛpî™ÈÛÛ\]ÈHX˜HÛØœ™HH™]][^˜\ˆÈÛÙYÛÈ^\İ[JBˆ\ÜÂ‚ˆÈX˜H[\^˜HÚ[‚ˆYˆÙš[İÚ[™İÜ×ØÛX[™\ŠÙ[‹\™[
+N‚ˆYˆÙ[‹”ÓÈOH•Ú[™İÜÈˆÜˆÙ[‹Ú[™İÜ×ØÛX[™\ˆ\È›Û™N‚ˆİËÕÓX™[
+ˆ\™[ˆ^H¼'éîH\İHpìÙ[È0êH^Û\Ú]›È\˜HÚ[™İÜÈW—‘^Xİ]HÈÜYYØØ[ˆ[H[HÚ\İ[XHÚ[™İÜÈ\˜HXÙ\ÜØ\ˆ\İ\È[˜Ú[Û˜[YY\Ëˆ‹ˆ›ÛJ’[\ˆ‹Œ
+Kˆ^ØÛÛÜ\Ù[‹˜XØ×ØÛÛÜ‹ˆ\İYOH˜Ù[\ˆ‚ˆ
+KœXÚÊ^[™UYJBˆ™]\›‚‚ˆÈÛÛ[X\ˆÛÛHÈÛÙYÛÈ^\İ[H]YH°èH\İ]˜H[˜Ú[Û˜[™ÂˆÈ\˜H]š]\ˆ\XØpéğèÛË›İH\[˜\ÈÛÛØØ\ˆÈÛÛpî™È]YH\İ]˜H[BˆÈİXH™\œğèÛÈÈ\œ]Z]›È[šXYËˆ\]ZH]HX[[š\°êH\[˜\ÈÈ]YH°èÛÈ\İ0èH\XØYË‚ˆ\ÜÈÈÙÈÈÛÛpî™ÈHX˜H]™HÙ\ˆ[\[Y[YÈ\]ZKÙ[H\XØ\‹‚‚ˆÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOBˆÈ^XİpéğèÛÈHÛÛX[™ÜÈH][]0è\š[ÜÂˆÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOB‚ˆYˆ[—ØØ\™ØXİ[ÛŠÙ[‹ÛYYË\×ÙœÊN‚ˆˆˆ‘^Xİ]HHpéğèÛÈH[HØ\™ˆˆˆ‚ˆÙÈHÙ[‹›ÙÜË™Ù]
+YÊBˆYˆ›İÙÎ‚ˆ™]\›‚ˆÙË™[]JŒKŒ‹™[™ŠBˆYˆYÈ[ˆÙ[‹™]Z[Ø]ÛœÎ‚ˆÙ[‹™]Z[Ø]ÛœÖİY×KœXÚ×Ù›Ü™Ù]
+
+BˆÙ[‹˜ÛÛœÛÛ\×İš\ÚX›VİY×HH˜[ÙBˆ™XY[™Ë•™XY
+\™Ù]\Ù[‹—Ù^Xİ]WØÛÛ[X[™\™ÜÏJÛYÙËYË\×ÙœÊKY[[ÛUYJKœİ\
+
+B‚ˆYˆÙ^Xİ]WØÛÛ[X[™
+Ù[‹ÛYÙËYË\×ÙœÊN‚ˆˆˆ‘^Xİ]HÈÛÛX[™Ëˆˆˆ‚ˆÈX\X[Y[È\™]È\˜HÜÈpê]ÙÜÈÈXİ[Û’[™\‚ˆÛYÛX\HÂˆ˜ØXÚHˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—ØØXÚWØÛX[‹ˆœİØ\ˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—ÜİØ\Ü™\Ù]ˆ˜ÚXÚÈˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—Ùœ×ØÚXÚËˆ\˜›ÈˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—İ\˜›×Û[ÙKˆœİX[HˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—ÜİX[WØÛX[‹ˆ›]š\ÈˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—Û]š\×ØÛX[‹ˆš\›ÚXÈˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—Ú\›ÚX×ØÛX[‹ˆ˜›İ\ÈˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—Ø›İ\×ØÛX[‹ˆÚ[™HˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—İÚ[™WØÛX[‹ˆ›X[™ÛÚYˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—ÛX[™ÛÚYØÛÛ™šYËˆ™Ûİ™\››ÜˆˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—ÙÛİ™\››Ü—ØÛÛ™šYËˆ™Û[ˆˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—ÙÛ[—ØÛX[‹ˆ˜œ›İÜÙ\œÈˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—Øœ›İÜÙ\—ØÛX[‹ˆœÙ\šXÙ\ÈˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—ÜÙ\šXÙ\×ÛX[˜YÙ\‹ˆ›ÙÜÈˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—ÛÙ×Ø[˜[\Ú\Ëˆ˜ÛÛÚÚY\ÈˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—ØÛÛÚÚYWÛX[˜YÙ\‹ˆš[HˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—İš[Kˆ™š^Øœ›ÚÙ[ˆˆÙ[‹˜Xİ[Û—Ú[™\‹œ[—Ùš^Øœ›ÚÙ[‹ˆB‚ˆYˆ\×ÙœÎ‚ˆX\\ˆHXİ[Û“X\\ŠÙ[‹”ÓËÙ[‹œ[›™\‹Ù[‹\˜›×ØXİ]™JBˆ™X[ØÛYHX\\‹™œ×ØÛÛ[X[™
+ÛY
+BˆYˆ™X[ØÛY\È›Û™N‚ˆÙ[‹˜Y\Š[X™NˆÙËš[œÙ\
+™[™‹ˆÛÛX[™È”È°èÛÈİ\ÜYÈ™\İHÓË—ˆŠJBˆÙ[‹˜Y\Š[X™NˆÙ[‹—ÜÚİ×Ù]Z[×Ø]ÛŠYÊJBˆ™]\›‚‚ˆYˆÛY[ˆÛYÛX\‚ˆÛYÛX\ØÛYJÙÊBˆÙ[‹˜Y\Š[X™NˆÙ[‹—ÜÚİ×Ù]Z[×Ø]ÛŠYÊJBˆ™]\›‚‚ˆÈÙH°èÛÈ›ÚH\™]Ë\ÙHXİ[ÛˆÙ[°ê\šXØHÈXİ[Û’[™\‚ˆÈ
+\İHğìÙYÛÈÙ\°èH[\[Y[YÈ]\˜[Y[JBˆÙËš[œÙ\
+™[™‹ˆZpäØH°èÛÈ[\[Y[YH\˜HÈÛÛX[™ÈØÛYK—ˆŠBˆÙ[‹˜Y\Š[X™NˆÙ[‹—ÜÚİ×Ù]Z[×Ø]ÛŠYÊJB‚ˆYˆÜÚİ×Ù]Z[×Ø]ÛŠÙ[‹YÊN‚ˆˆHÙ[‹™]Z[Ø]ÛœË™Ù]
+YÊBˆYˆˆ[™›İ‹Ú[™›×Ú\ÛX\Y
+
+N‚ˆ‹˜ÛÛ™šYİ\™J™×ØÛÛÜ\Ù[‹˜XØ×ØÛÛÜ‹^ØÛÛÜHÚ]HŠBˆ‹œXÚÊ[˜ÚÜH™H‹YMJBˆYˆ‚ˆ‹˜ÛÛ™šYİ\™J^H‘][\È8§ìÈŠB‚ˆYˆÙÙÛWØÛÛœÛÛJÙ[‹YÊN‚ˆˆHÙ[‹™]Z[Ø]ÛœË™Ù]
+YÊBˆÙÈHÙ[‹›ÙÜË™Ù]
+YÊBˆYˆ›İˆÜˆ›İÙÎ‚ˆ™]\›‚ˆYˆÙ[‹˜ÛÛœÛÛ\×İš\ÚX›K™Ù]
+YË˜[ÙJN‚ˆÙËœXÚ×Ù›Ü™Ù]
+
+Bˆ‹œXÚ×Ù›Ü™Ù]
+
+BˆÙ[‹˜ÛÛœÛÛ\×İš\ÚX›VİY×HH˜[ÙBˆ[ÙN‚ˆÙËœXÚÊš[H‹YMK™Y›Ü™OXŠBˆ‹˜ÛÛ™šYİ\™J^H‘][\È8§ìÈŠBˆÙ[‹˜ÛÛœÛÛ\×İš\ÚX›VİY×HHYB‚ˆYˆÙÙÛWÜ[™ÊÙ[ŠN‚ˆÈY]ÙÈ^\İ[H\˜H]X[^˜\ˆÈ[™Âˆ\ÜÂ‚ˆÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOBˆÈpê]ÙÜÈ][]0è\š[ÜÈHÙ\™[˜ÚX[Y[ÈH˜[™[BˆÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOB‚ˆYˆÛ[Ûš]Ü—ÛÛÜ
+Ù[ŠN‚ˆÚ[HYN‚ˆ[YKœÛY\
+ÊB‚ˆYˆÛÛ—Û[İ\Ù]ÚY[
+Ù[‹]™[
+N‚ˆÚYÙ]H]™[ÚYÙ]ˆYˆÙ[‹”ÓÈOH“[^‚ˆ[HHLHYˆ]™[›[HOH[ÙHBˆ[ÙN‚ˆ[HHLH
+ˆ
+]™[™[HÈLŒ
+BˆÚ[HÚYÙ]‚ˆYˆ\Ú[œİ[˜ÙJÚYÙ]İËÕÔØÜ›ÛX›Qœ˜[YJN‚ˆYˆÙ[‹”ÓÈOH“[^‚ˆÚYÙ]—Ü\™[ØØ[˜\Ë]šY]×ÜØÜ›Û
+[K[š]ÈŠBˆ[ÙN‚ˆÚYÙ]—Ü\™[ØØ[˜\Ë]šY]×ÜØÜ›Û
+[
+[JK[š]ÈŠBˆ™]\›‚ˆÚYÙ]HÚYÙ]›X\İ\‚‚ˆYˆÜÙ]\Øš[™[™ÜÊÙ[ŠN‚ˆYˆÙ[‹”ÓÈOH“[^‚ˆÙ[‹˜š[™Ø[
+]Û‹Mˆ‹Ù[‹—ÛÛ—Û[İ\Ù]ÚY[
+BˆÙ[‹˜š[™Ø[
+]Û‹MOˆ‹Ù[‹—ÛÛ—Û[İ\Ù]ÚY[
+Bˆ[ÙN‚ˆÙ[‹˜š[™Ø[
+[İ\ÙUÚY[ˆ‹Ù[‹—ÛÛ—Û[İ\Ù]ÚY[
+B‚ˆYˆÚİ×İØ\İ
+Ù[‹Y\ÜØYÙK\˜][ÛLÌ
+N‚ˆØ\İHİËÕÓX™[
+Ù[‹^[Y\ÜØYÙKˆ™×ØÛÛÜ\Ù[‹˜XØ×ØÛÛÜ‹ˆ^ØÛÛÜHÚ]H‹ˆÛÜ›™\—Ü˜Y]\ÏLLˆ›ÛJ’[\ˆ‹LŠKˆYLŒYOLL
+BˆØ\İœXÙJ™[LK™[OLK[˜ÚÜH˜Ù[\ˆŠBˆÙ[‹˜Y\Š\˜][Û‹Ø\İ™\İ›ŞJB‚ˆYˆØÚXÚ×Ùš\œİÜ[ŠÙ[ŠN‚ˆYˆÙ[‹˜ÛÛ™šYÈOHQUSĞÓÓ‘’QÎ‚ˆÚ^˜\™Hš\œİ[•Ú^˜\™
+Ù[‹Ù[‹˜ÛÛ™šYÊBˆÙ[‹ØZ]İÚ[™İÊÚ^˜\™
+BˆÙ[‹˜ÛÛ™šYÈHÙ[‹—ÛØYØÛÛ™šYÊ
+BˆÙ[‹\]Wİ[YWİ˜\œÊ
+BˆÙ[‹—ÜØ]™WØÛÛ™šYÊ
+BˆÙ[‹œÚİ×İØ\İ
+ÛÛ™šYİ\˜péğíY\È[šXÚXZ\ÈØ[˜\ÈH[İ[X\È[\˜péğíY\ÈÙ[H^YÚ\ˆ™Z[šXÚX[^˜péğèÛËˆŠB‚ˆYˆÜ™\İÜ™WİÚ[™İ×Üİ]JÙ[ŠN‚ˆÜÈHÙ[‹˜ÛÛ™šYË™Ù]
+Ú[™İ×Üİ]H‹QUSĞÓÓ‘’QÖÈÚ[™İ×Üİ]H—JBˆYˆÜË™Ù]
+›X^[Z^™Y‹˜[ÙJN‚ˆÙ[‹—ÛX^[Z^™WİÚ[™İÊ
+Bˆ[ÙN‚ˆÈHÜË™Ù]
+ÚY‹L
+BˆHÜË™Ù]
+šZYÚ‹Ì
+BˆHÜË™Ù]
+ŠBˆHHÜË™Ù]
+HŠBˆÈHX^
+ËÙ[‹Ú[™›×İÚY
+
+JBˆHX^
+Ù[‹Ú[™›×ÚZYÚ
+
+JBˆÙ[‹\]WÚY]\ÚÜÊ
+BˆYˆ\È›İ›Û™H[™H\È›İ›Û™N‚ˆÙ[‹™Ù[ÛY]Jˆİß^ÚJŞŞJŞŞ_HŠBˆ[ÙN‚ˆÙ[‹™Ù[ÛY]Jˆİß^ÚHŠBˆÙ[‹\]WÚY]\ÚÜÊ
+B‚ˆYˆÜØ]™WİÚ[™İ×Üİ]JÙ[ŠN‚ˆÜÈHßBˆN‚ˆYˆÙ[‹œİ]J
+HOH	Ş›ÛÛYY	ÈÜˆÙ[‹˜]šX]\Ê	Ë^›ÛÛYY	ÊN‚ˆÜÖÉÛX^[Z^™Y	×HHYBˆ[ÙN‚ˆÜÖÉÛX^[Z^™Y	×HH˜[ÙBˆÙ[ÛHHÙ[‹™Ù[ÛY]J
+BˆX]ÚH™K›X]Ú
+‰Ê
+ÊW
+
+ÊJËJ×W
+ÊJËJ×W
+ÊIËÙ[ÛJBˆYˆX]Ú‚ˆÜÖÉİÚY	×HH[
+X]Ú™Ü›İ\
+JJBˆÜÖÉÚZYÚ	×HH[
+X]Ú™Ü›İ\
+ŠJBˆÜÖÉŞ	×HH[
+X]Ú™Ü›İ\
+ÊJBˆÜÖÉŞI×HH[
+X]Ú™Ü›İ\
+
+JBˆ[ÙN‚ˆÜÖÉİÚY	×HHÙ[‹Ú[™›×İÚY
+
+BˆÜÖÉÚZYÚ	×HHÙ[‹Ú[™›×ÚZYÚ
+
+BˆÜÖÉŞ	×HHÙ[‹Ú[™›×Ş
+
+BˆÜÖÉŞI×HHÙ[‹Ú[™›×ŞJ
+Bˆ^Ù\^Ù\[Ûˆ\ÈN‚ˆÙÙÚ[™Ë™\œ›ÜŠˆ‘\œ›È[ÈØ[˜\ˆ\İYÈH˜[™[NˆÙ_HŠBˆÜÈHQUSĞÓÓ‘’QÖÈÚ[™İ×Üİ]H—BˆÙ[‹˜ÛÛ™šYÖÉİÚ[™İ×Üİ]I×HHÜÂˆÙ[‹—ÜØ]™WØÛÛ™šYÊ
+B‚ˆYˆÛÛ—ØÛÜÚ[™ÊÙ[ŠN‚ˆÙ[‹—ÜØ]™WİÚ[™İ×Üİ]J
+BˆÙ[‹›Y]šXÜ×ØÛÛXİÜ‹œİÜ
+
+BˆÙ[‹œ›Ø×ÛX[˜YÙ\‹œİÜÛ[Ûš]Üš[™Ê
+BˆÙ[‹œ]Z]
+
+BˆÙ[‹™\İ›ŞJ
+B‚ˆYˆÛX^[Z^™WİÚ[™İÊÙ[ŠN‚ˆN‚ˆÙ[‹˜]šX]\Ê	Ë^›ÛÛYY	ËYJBˆ^Ù\‚ˆN‚ˆÙ[‹œİ]J	Ş›ÛÛYY	ÊBˆ^Ù\‚ˆÈHÙ[‹Ú[™›×ÜØÜ™Y[ÚY
+
+BˆHÙ[‹Ú[™›×ÜØÜ™Y[šZYÚ
+
+BˆÙ[‹™Ù[ÛY]Jˆİß^ÚJÌ
+ÌŠBˆÙ[‹\]J
+B‚ˆÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOBˆÈÚYÙ]ÈÈ\Ú›Ø\™
+pê]ÙÜÈÚ[XYÜÈ[È\Ú›Ø\™
+BˆÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOB‚ˆYˆÚYÙ]ÚÜİ˜[YJÙ[‹œ˜[YKYÊN‚ˆ[\ÜÛØÚÙ]ˆÜİ˜[YHHÛØÚÙ]™Ù]Üİ˜[YJ
+BˆX™[HİËÕÓX™[
+œ˜[YK^ZÜİ˜[YK›ÛJ’[\ˆ‹MŠJBˆX™[œXÚÊ^[™UYJB‚ˆYˆÚYÙ]Ù\İ›ÊÙ[‹œ˜[YKYÊN‚ˆ[\Ü]›Ü›Bˆ^HˆÜ]›Ü›KœŞ\İ[J
+_HÜ]›Ü›Kœ™[X\ÙJ
+_H‚ˆX™[HİËÕÓX™[
+œ˜[YK^]^›ÛJ’[\ˆ‹MŠJBˆX™[œXÚÊ^[™UYJB‚ˆYˆÚYÙ]ÚÙ\›™[
+Ù[‹œ˜[YKYÊN‚ˆ[\Ü]›Ü›Bˆ^H]›Ü›K™\œÚ[ÛŠ
+BˆX™[HİËÕÓX™[
+œ˜[YK^]^›ÛJ’[\ˆ‹MŠJBˆX™[œXÚÊ^[™UYJB‚ˆYˆÚYÙ]İ\[YJÙ[‹œ˜[YKYÊN‚ˆ[\Üİ][ˆœ›ÛH]][YH[\Ü]][YBˆ›Ûİİ[YHH]][YK™œ›Û][Y\İ[\
+İ][˜›Ûİİ[YJ
+JBˆ[HH]][YK››İÊ
+HH›Ûİİ[YBˆ^\ÈH[K™^\Âˆİ\œË™[XZ[™\ˆH]›[Ù
+[KœÙXÛÛ™ËÍŒ
+BˆZ[]\ËÙXÛÛ™ÈH]›[Ù
+™[XZ[™\‹Œ
+Bˆ^HˆÙ^\ßYÚİ\œßZÛZ[]\ß[H‚ˆX™[HİËÕÓX™[
+œ˜[YK^]^›ÛJ’[\ˆ‹MŠJBˆX™[œXÚÊ^[™UYJB‚ˆYˆÚYÙ]ØÜJÙ[‹œ˜[YKYÊN‚ˆ[\Üİ][ˆ^HˆÜİ][˜ÜWÜ\˜Ù[
+[\˜[LŒJ_IH‚ˆX™[HİËÕÓX™[
+œ˜[YK^]^›ÛJ’[\ˆ‹MŠJBˆX™[œXÚÊ^[™UYJB‚ˆYˆÚYÙ]Ü˜[JÙ[‹œ˜[YKYÊN‚ˆ[\Üİ][ˆY[HHİ][š\X[ÛY[[ÜJ
+Bˆ^HˆÛY[Kœ\˜Ù[IH
+ÛY[K\ÙYËÈ
+L
+ŠŒÊ_HĞˆÈÛY[Kİ[ËÈ
+L
+ŠŒÊ_HĞŠH‚ˆX™[HİËÕÓX™[
+œ˜[YK^]^›ÛJ’[\ˆ‹MŠJBˆX™[œXÚÊ^[™UYJB‚ˆYˆÚYÙ]ÙÜJÙ[‹œ˜[YKYÊN‚ˆN‚ˆ[\ÜİXœ›ØÙ\ÜÂˆ™\İ[HİXœ›ØÙ\ÜËœ[ŠÉÛÜÚIË	ß	Ë	ÙÜ™\	Ë	ËZIË	İ™ØI×KØ\\™WÛİ]]UYK^UYKÚ[UYJBˆYˆ™\İ[œİİ]‚ˆ^H™\İ[œİİ]œİš\
+
+KœÜ]
+	×‰ÊVÌVÎLBˆ[ÙN‚ˆ^H“‹ĞH‚ˆ^Ù\‚ˆ^H“‹ĞH‚ˆX™[HİËÕÓX™[
+œ˜[YK^]^›ÛJ’[\ˆ‹MŠJBˆX™[œXÚÊ^[™UYJB‚ˆYˆÚYÙ]Ù\ÚÜÊÙ[‹œ˜[YKYÊN‚ˆ[\Üİ][ˆ\ÚÜÈHİ][™\Ú×İ\ØYÙJ	ËÉÊBˆ^HˆÙ\ÚÜËœ\˜Ù[IH
+Ù\ÚÜË\ÙYËÈ
+L
+ŠŒÊ_HĞˆÈÙ\ÚÜËİ[ËÈ
+L
+ŠŒÊ_HĞŠH‚ˆX™[HİËÕÓX™[
+œ˜[YK^]^›ÛJ’[\ˆ‹MŠJBˆX™[œXÚÊ^[™UYJB‚ˆYˆÚYÙ]Ø˜]\JÙ[‹œ˜[YKYÊN‚ˆ[\Üİ][ˆ˜]\HHİ][œÙ[œÛÜœ×Ø˜]\J
+BˆYˆ˜]\N‚ˆ\˜Ù[H˜]\Kœ\˜Ù[ˆYÙÙYHØ\œ™YØ[™ÈˆYˆ˜]\KœİÙ\—ÜYÙÙY[ÙH‘\ØØ\œ™YØ[™È‚ˆ^HˆÜ\˜Ù[IH
+ÜYÙÙYJH‚ˆ[ÙN‚ˆ^H”Ù[H˜]\šXH‚ˆX™[HİËÕÓX™[
+œ˜[YK^]^›ÛJ’[\ˆ‹MŠJBˆX™[œXÚÊ^[™UYJB‚ˆYˆÚYÙ]İ[\ÊÙ[‹œ˜[YKYÊN‚ˆ[\Üİ][ˆ[\ÈHİ][œÙ[œÛÜœ×İ[\\˜]\™\Ê
+BˆYˆ[\Î‚ˆ›Üˆ˜[YK[šY\È[ˆ[\Ëš][\Ê
+N‚ˆYˆ[šY\Î‚ˆ^HˆÙ[šY\ÖÌK˜İ\œ™[p¬È‚ˆœ™XZÂˆ[ÙN‚ˆ^H“‹ĞH‚ˆ[ÙN‚ˆ^H“‹ĞH‚ˆX™[HİËÕÓX™[
+œ˜[YK^]^›ÛJ’[\ˆ‹MŠJBˆX™[œXÚÊ^[™UYJB‚ˆYˆÚYÙ]ÚX[
+Ù[‹œ˜[YKYÊN‚ˆ[\Üİ][ˆÜWÜ\˜Ù[Hİ][˜ÜWÜ\˜Ù[
+[\˜[LŒJBˆY[WÜ\˜Ù[Hİ][š\X[ÛY[[ÜJ
+Kœ\˜Ù[ˆYˆÜWÜ\˜Ù[L[™Y[WÜ\˜Ù[L‚ˆ^H›ÛH‚ˆ[YˆÜWÜ\˜Ù[[™Y[WÜ\˜Ù[‚ˆ^H“ÚÈ‚ˆ[ÙN‚ˆ^H[È\ÛÈ‚ˆX™[HİËÕÓX™[
+œ˜[YK^]^›ÛJ’[\ˆ‹MŠJBˆX™[œXÚÊ^[™UYJB‚ˆÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOBˆÈpê]ÙÜÈH\XØpéğèÛÈHÛÛ™šYİ\˜péğíY\ÈH™Z[šXÚX[^˜péğèÛÂˆÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOBˆYˆ\WØÛÛ™šYÊÙ[ŠN‚ˆˆˆ\XØH\ÈÛÛ™šYİ\˜péğíY\È[\˜Y\ÈH™Z[šXÚXKˆˆˆ‚ˆÈ\İHpê]ÙÈ™XÚ\ØHÙ\ˆ[\[Y[YÈÛÛHÈÛÙYÛÈ^\İ[K‚ˆ\ÜÂ‚ˆYˆÜ™\İ\Ø\
+Ù[ŠN‚ˆ]ÛˆHŞ\Ë™^Xİ]X›BˆØÜš\H]
+×Ùš[W×ÊKœ™\ÛÛ™J
+BˆÙ[‹œ]Z]
+
+BˆİXœ›ØÙ\ÜË”Ü[ŠÜ]Û‹ØÜš\JB‚šYˆ×Û˜[YW×ÈOH—×ÛXZ[—×È‚ˆ\HÜYYØØ[Š
+Bˆ\›XZ[›ÛÜ
+
+B

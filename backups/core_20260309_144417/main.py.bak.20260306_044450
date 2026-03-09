@@ -1,0 +1,568 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+import logging
+
+# Configuração do logging
+LOG_DIR = Path.home() / "speedscan" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+log_file = LOG_DIR / "speedscan.log"
+handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logging.basicConfig(level=logging.ERROR, handlers=[handler])
+
+import customtkinter as ctk
+import os
+import platform
+import threading
+import json
+import sys
+import re
+import time
+import subprocess
+from PIL import Image, ImageDraw
+import psutil
+
+from core import config
+from core.hardware import HardwareInfo
+from core.actions import CommandRunner, ActionMapper
+from core.scheduler import Scheduler
+from core import ui
+from core.health_score import HealthScore
+from core.temperature_monitor import TemperatureMonitor
+from core.smart_monitor import SmartMonitor
+from core.browser_cleaner import BrowserCleaner
+from core.speed_test import SpeedTester
+from core.process_manager import ProcessManager
+from core.historical_metrics import MetricsCollector, MetricsDB
+from core.lan_scanner import LANScanner
+from core.ai_proactive import AIProactive
+from core.security_scanner import SecurityScanner
+from core.dashboard import Dashboard
+from core.lan_cache import LANCacheManager
+from core.chat import ChatFrame
+from core.first_run import FirstRunWizard
+from core.cookie_manager import CookieManager
+from core.trash_manager import TrashManager
+import matplotlib
+matplotlib.use('TkAgg')
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+# =============================================================================
+# ActionHandler (com todos os métodos para os cards)
+# =============================================================================
+class ActionHandler:
+    def __init__(self, app):
+        self.app = app
+
+    # ---------- Utilitário para executar comandos no Linux ----------
+    def _run_linux_command(self, cmd, log, use_sudo=True):
+        proc = self.app.runner.run(cmd, use_sudo=use_sudo, parent=self.app)
+        if proc:
+            for line in proc.stdout:
+                self.app.after(0, lambda l=line: log.insert("end", l))
+            proc.wait()
+            return True
+        return False
+
+    # ---------- Cards da aba Otimização ----------
+    def run_cache_clean(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🧹 Limpando cache de memória...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        success = self._run_linux_command(["sh", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"], log, use_sudo=True)
+        log.insert("end", "✅ Cache limpo com sucesso.\n" if success else "❌ Erro ao limpar cache. Verifique permissões.\n")
+
+    def run_swap_reset(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🔄 Resetando swap...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        self._run_linux_command(["sudo", "swapoff", "-a"], log, use_sudo=True)
+        self._run_linux_command(["sudo", "swapon", "-a"], log, use_sudo=True)
+        log.insert("end", "✅ Swap reinicializado.\n")
+
+    def run_fs_check(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🔍 Verificando erros no sistema de arquivos...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        self._run_linux_command(["dmesg", "-x", "--level=crit", "--format=datesec", "tail", "-20"], log, use_sudo=False)
+        log.insert("end", "✅ Verificação concluída.\n")
+
+    def run_turbo_mode(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "⚡ Ativando modo turbo...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        if self._run_linux_command(["cpupower", "frequency-set", "-g", "performance"], log, use_sudo=True):
+            log.insert("end", "✅ Modo turbo ativado.\n")
+        else:
+            log.insert("end", "❌ cpupower não instalado. Instale com: sudo apt install linux-tools-common\n")
+
+    def run_steam_clean(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🧹 Limpando cache do Steam...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        for p in ["~/.local/share/Steam", "~/.steam/steam/appcache", "~/.steam/root"]:
+            path = os.path.expanduser(p)
+            if os.path.exists(path):
+                self._run_linux_command(["rm", "-rf", f"{path}/*"], log, use_sudo=False)
+        log.insert("end", "✅ Cache do Steam limpo.\n")
+
+    def run_lutris_clean(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🕹️ Lutris - limpando cache...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        path = os.path.expanduser("~/.local/share/lutris")
+        if os.path.exists(path):
+            self._run_linux_command(["rm", "-rf", f"{path}/*"], log, use_sudo=False)
+        log.insert("end", "✅ Cache do Lutris limpo.\n")
+
+    def run_heroic_clean(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🎮 Heroic - limpando cache...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        path = os.path.expanduser("~/.config/heroic/cache")
+        if os.path.exists(path):
+            self._run_linux_command(["rm", "-rf", f"{path}/*"], log, use_sudo=False)
+        log.insert("end", "✅ Cache do Heroic limpo.\n")
+
+    def run_bottles_clean(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🍾 Bottles - limpando cache...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        path = os.path.expanduser("~/.local/share/bottles")
+        if os.path.exists(path):
+            self._run_linux_command(["rm", "-rf", f"{path}/*"], log, use_sudo=False)
+        log.insert("end", "✅ Cache do Bottles limpo.\n")
+
+    def run_wine_clean(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🍷 Wine - limpando cache...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        path = os.path.expanduser("~/.wine")
+        if os.path.exists(path):
+            self._run_linux_command(["rm", "-rf", f"{path}/*"], log, use_sudo=False)
+        log.insert("end", "✅ Cache do Wine limpo.\n")
+
+    def run_mangohud_config(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "⚙️ MangoHud - configurando...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        if self._run_linux_command(["which", "mangohud"], log, use_sudo=False):
+            log.insert("end", "✅ MangoHud já instalado.\n")
+        else:
+            log.insert("end", "❌ MangoHud não encontrado. Instale com: sudo apt install mangohud\n")
+
+    def run_goverlay_config(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🪛 Goverlay - configurando...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        if self._run_linux_command(["which", "goverlay"], log, use_sudo=False):
+            log.insert("end", "✅ Goverlay já instalado.\n")
+        else:
+            log.insert("end", "❌ Goverlay não encontrado. Instale com: sudo apt install goverlay\n")
+
+    def run_dolphin_clean(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🐬 Dolphin - limpando cache...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        path = os.path.expanduser("~/.local/share/dolphin-emulator/cache")
+        if os.path.exists(path):
+            self._run_linux_command(["rm", "-rf", f"{path}/*"], log, use_sudo=False)
+        log.insert("end", "✅ Cache do Dolphin limpo.\n")
+
+    def run_trim(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🔧 Executando TRIM em SSD...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        self._run_linux_command(["sudo", "fstrim", "-av"], log, use_sudo=True)
+        log.insert("end", "✅ TRIM concluído.\n")
+
+    def run_fix_broken(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🔧 Reparando pacotes quebrados...\n")
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Operação apenas implementada para Linux.\n")
+            return
+        self._run_linux_command(["sudo", "dpkg", "--fix-broken"], log, use_sudo=True)
+        log.insert("end", "✅ Reparação concluída.\n")
+
+    # ---------- Outros métodos (browsers, speedtest, etc.) já existentes ----------
+    def run_browser_clean(self, log, preserve_cookies=False, cookie_keep_list=None):
+        log.delete("1.0", "end")
+        log.insert("end", "Iniciando limpeza de navegadores...\n")
+        results = self.app.browser_cleaner.clean_all_browsers(preserve_cookies, cookie_keep_list)
+        total_freed = 0
+        for browser, data in results.items():
+            if data['cache_freed'] or data['cookies_freed'] or data['history_freed']:
+                log.insert("end", f"\n{data['name']}:\n")
+                if data['cache_freed']:
+                    log.insert("end", f"  Cache: {self.app.browser_cleaner.format_bytes(data['cache_freed'])}\n")
+                    total_freed += data['cache_freed']
+                if data['cookies_freed']:
+                    log.insert("end", f"  Cookies: {self.app.browser_cleaner.format_bytes(data['cookies_freed'])}\n")
+                    total_freed += data['cookies_freed']
+                if data['history_freed']:
+                    log.insert("end", f"  Histórico: {self.app.browser_cleaner.format_bytes(data['history_freed'])}\n")
+                    total_freed += data['history_freed']
+                if data['errors']:
+                    log.insert("end", f"  Erros: {', '.join(data['errors'])}\n")
+        log.insert("end", f"\n✅ Total liberado: {self.app.browser_cleaner.format_bytes(total_freed)}\n")
+
+    def run_speed_test(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "Iniciando teste de velocidade...\n")
+        log.insert("end", "Isso pode levar alguns segundos.\n\n")
+        def update_log(result):
+            self.app.after(0, lambda: log.insert("end", "\n" + self.app.speed_tester.format_result(result) + "\n"))
+            self.app.after(0, lambda: log.insert("end", "\n✅ Teste concluído.\n"))
+        self.app.speed_tester.run_test(callback=update_log)
+    def run_lan_scan(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "Iniciando scanner de rede...\n")
+        log.insert("end", "Isso pode levar alguns segundos.\n\n")
+        def update_progress(current, total, ip, is_alive):
+            if is_alive:
+                self.app.after(0, lambda: log.insert("end", f"  {ip} - ativo\n"))
+        def scan_thread():
+            devices = self.app.lan_scanner.scan_network(progress_callback=update_progress)
+            self.app.after(0, lambda: self._display_scan_results(devices, log))
+        threading.Thread(target=scan_thread, daemon=True).start()
+
+    def _display_scan_results(self, devices, log):
+        log.insert("end", "\n" + "="*50 + "\nRESULTADO DO SCAN:\n" + "="*50 + "\n")
+        for d in devices:
+            if 'error' in d:
+                log.insert("end", f"Erro: {d['error']}\n")
+                continue
+            log.insert("end", f"IP: {d['ip']}\nMAC: {d['mac']}\nHostname: {d['hostname']}\nFabricante: {d['vendor']}\n" + "-"*30 + "\n")
+        log.insert("end", f"\nTotal de dispositivos ativos: {len(devices)}\n✅ Scan concluído.\n")
+
+    def run_port_scan(self, log):
+        self._run_scanner_action(log, 'port_scan')
+    def run_firewall_check(self, log):
+        self._run_scanner_action(log, 'firewall_check')
+    def run_security_updates(self, log):
+        self._run_scanner_action(log, 'security_updates')
+    def run_lan_cache_setup(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "📦 Verificando Docker...\n")
+        if not self.app.lan_cache.is_docker_installed():
+            log.insert("end", "Docker não encontrado. Tentando instalar...\n")
+            for cmd in self.app.lan_cache.install_docker():
+                log.insert("end", f"Executando: {cmd}\n")
+                proc = self.app.runner.run(cmd, use_sudo=True, parent=self.app)
+                if proc:
+                    for line in proc.stdout:
+                        self.app.after(0, lambda l=line: log.insert("end", l))
+                    proc.wait()
+        else:
+            log.insert("end", "✅ Docker já instalado.\n")
+        log.insert("end", "\n🧰 Baixando e iniciando LANCache...\n")
+        for cmd in self.app.lan_cache.get_install_commands():
+            log.insert("end", f"Executando: {cmd}\n")
+            if cmd.startswith("mkdir") or cmd.startswith("wget"):
+                proc = self.app.runner.run(cmd.split(), use_sudo=False)
+            else:
+                proc = self.app.runner.run(cmd, use_sudo=True, parent=self.app)
+            if proc:
+                for line in proc.stdout:
+                    self.app.after(0, lambda l=line: log.insert("end", l))
+                proc.wait()
+        log.insert("end", "\n📊 Status do LANCache:\n" + self.app.lan_cache.get_status() + "\n✅ Configuração concluída.\n")
+
+    def run_services_manager(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "📊 Analisando serviços em execução...\n\n")
+        if self.app.SO == "Linux":
+            log.insert("end", "Serviços ativos (systemctl):\n" + "="*40 + "\n")
+            proc = self.app.runner.run(["systemctl", "list-units", "--type=service", "--state=running", "--no-pager"], use_sudo=False)
+        elif self.app.SO == "Windows":
+            log.insert("end", "Serviços do Windows (sc query):\n" + "="*40 + "\n")
+            proc = self.app.runner.run("sc query | findstr /C:\"SERVICE_NAME\" /C:\"STATE\"", use_sudo=False)
+        elif self.app.SO == "Darwin":
+            log.insert("end", "Serviços macOS (launchctl):\n" + "="*40 + "\n")
+            proc = self.app.runner.run(["launchctl", "list"], use_sudo=False)
+        else:
+            log.insert("end", "Sistema não suportado.\n")
+            return
+        if proc:
+            for line in proc.stdout:
+                log.insert("end", line)
+            proc.wait()
+        log.insert("end", "\n✅ Análise concluída.\n")
+
+    def run_log_analysis(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "📝 Analisando logs do sistema...\n\n")
+        if self.app.SO == "Linux":
+            log.insert("end", "Erros recentes (journalctl):\n" + "="*40 + "\n")
+            proc = self.app.runner.run("journalctl -p 3 -b --no-pager | head -20", use_sudo=False)
+        elif self.app.SO == "Windows":
+            log.insert("end", "Erros no Log de Eventos (PowerShell):\n" + "="*40 + "\n")
+            proc = self.app.runner.run('powershell -Command "Get-EventLog -LogName System -EntryType Error -Newest 20 | Format-Table -AutoSize"', use_sudo=False)
+        elif self.app.SO == "Darwin":
+            log.insert("end", "Erros recentes (log show):\n" + "="*40 + "\n")
+            proc = self.app.runner.run('log show --predicate \'eventMessage contains "error"\' --last 1h | head -20', use_sudo=False)
+        else:
+            log.insert("end", "Sistema não suportado.\n")
+            return
+        if proc:
+            for line in proc.stdout:
+                log.insert("end", line)
+            proc.wait()
+        log.insert("end", "\n✅ Análise concluída.\n")
+
+    def special_command(self, cmd, log):
+        cmds = {
+            "video_drv": "Detectando GPU...\nFuncionalidade em desenvolvimento.\n",
+            "net_drv": "Detectando placa de rede...\nFuncionalidade em desenvolvimento.\n",
+            "auto_update": "Configurando atualizações automáticas...\nFuncionalidade em desenvolvimento.\n",
+            "cookies": self.run_cookie_manager,
+            "empty_trash": lambda l: (self.app.trash_manager.empty_trash(), l.insert("end", "🗑️ Lixeira esvaziada.\n"))
+        }
+        if cmd in cmds:
+            if callable(cmds[cmd]):
+                cmds[cmd](log)
+            else:
+                log.insert("end", cmds[cmd])
+        else:
+            log.insert("end", f"Comando {cmd} não reconhecido.\n")
+
+    def run_cookie_manager(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🍪 Gerenciador de Cookies\n" + "="*40 + "\n")
+        summary = self.app.cookie_manager.get_cookie_summary()
+        if not summary:
+            log.insert("end", "Nenhum cookie encontrado.\n")
+            return
+        log.insert("end", f"Total de domínios: {len(summary)}\n")
+        for domain, count in list(summary.items())[:10]:
+            log.insert("end", f"{domain}: {count} cookies\n")
+        if len(summary) > 10:
+            log.insert("end", f"... e mais {len(summary)-10} domínios.\n")
+
+    def _run_scanner_action(self, log, action):
+        log.delete("1.0", "end")
+        log.insert("end", f"Executando {action}...\n")
+        scanner_map = {
+            'port_scan': self.app.security_scanner.scan_open_ports,
+            'firewall_check': self.app.security_scanner.check_firewall_status,
+            'security_updates': self.app.security_scanner.check_security_updates,
+        }
+        if action in scanner_map:
+            result = scanner_map[action]()
+            if isinstance(result, list):
+                log.insert("end", "\n".join(result))
+            else:
+                log.insert("end", str(result))
+        else:
+            log.insert("end", f"Ação desconhecida: {action}\n")
+        log.insert("end", "\n✅ Ação concluída.\n")
+
+# =============================================================================
+# Classe principal SpeedScan (apenas partes essenciais, o resto já existe)
+# =============================================================================
+class SpeedScan(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.SO = platform.system()
+        self.runner = CommandRunner(self.SO)
+        self.hw = HardwareInfo(self.SO, self.runner)
+        self.config = self._load_config()
+        self.update_theme_vars()
+        self.title(f"SpeedScan {config.VERSION}")
+        self.configure(fg_color=self.bg_color)
+        self.minsize(900, 600)
+
+        self.apply_ui_scale()
+        self.turbo_active = False
+        self.consoles_visible = {}
+        self.ping_active = False
+        self.current_module = "dashboard"
+        self.sidebar_buttons = {}
+        self.detail_buttons = {}
+        self.logs = {}
+
+        # Inicializa todos os módulos
+        self.health_monitor = HealthScore()
+        self.temp_monitor = TemperatureMonitor()
+        self.smart_monitor = SmartMonitor()
+        self.browser_cleaner = BrowserCleaner()
+        self.speed_tester = SpeedTester()
+        self.proc_manager = ProcessManager()
+        self.metrics_collector = MetricsCollector(interval=5)
+        self.metrics_db = MetricsDB()
+        self.lan_scanner = LANScanner()
+        self.ai_proactive = AIProactive(self.metrics_db, self.health_monitor)
+        self.security_scanner = SecurityScanner(self.SO)
+        self.lan_cache = LANCacheManager(self.SO)
+        self.cookie_manager = CookieManager()
+        self.trash_manager = TrashManager()
+        self.metrics_collector.start()
+        self.proc_manager.start_monitoring()
+
+        self.action_handler = ActionHandler(self)
+
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        self._build_sidebar()
+
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_rowconfigure(0, weight=1)
+
+        self.frames = {}
+        self.consoles_visible = {}
+        self.show_frame("dashboard")
+        self._setup_bindings()
+        threading.Thread(target=self._monitor_loop, daemon=True).start()
+        self._check_process_queue()
+        self.after(200, self._restore_window_state)
+        self.protocol("WM_DELETE_WINDOW", self._on_closing)
+        self.after(500, self._check_first_run)
+
+    # ---------- Métodos essenciais (os demais já existem) ----------
+    def _load_config(self):
+        if config.CONFIG_FILE.exists():
+            try:
+                with open(config.CONFIG_FILE) as f:
+                    cfg = json.load(f)
+                # Garante chaves padrão
+                for key in ['window_state', 'simple_mode', 'expert_level', 'ai']:
+                    if key not in cfg:
+                        cfg[key] = config.DEFAULT_CONFIG[key]
+                return cfg
+            except Exception as e:
+                logging.error(f"Erro ao carregar config: {e}")
+                return config.DEFAULT_CONFIG.copy()
+        return config.DEFAULT_CONFIG.copy()
+
+    def _save_config(self):
+        try:
+            with open(config.CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logging.error(f"Erro ao salvar config: {e}")
+
+    def _on_closing(self):
+        self._save_window_state()
+        self.metrics_collector.stop()
+        self.proc_manager.stop_monitoring()
+        self.quit()
+        self.destroy()
+
+    # ---------- Método que executa os cards ----------
+    def run_card_action(self, cmd, tag, is_dns):
+        log = self.logs.get(tag)
+        if not log:
+            return
+        log.delete("1.0", "end")
+        if tag in self.detail_buttons:
+            self.detail_buttons[tag].pack_forget()
+        self.consoles_visible[tag] = False
+        threading.Thread(target=self._execute_command, args=(cmd, log, tag, is_dns), daemon=True).start()
+
+    def _execute_command(self, cmd, log, tag, is_dns):
+        # Mapeamento direto para os métodos do ActionHandler (OTIMIZAÇÃO)
+        cmd_map = {
+            "cache": self.action_handler.run_cache_clean,
+            "swap": self.action_handler.run_swap_reset,
+            "check": self.action_handler.run_fs_check,
+            "turbo": self.action_handler.run_turbo_mode,
+            "steam": self.action_handler.run_steam_clean,
+            "lutris": self.action_handler.run_lutris_clean,
+            "heroic": self.action_handler.run_heroic_clean,
+            "bottles": self.action_handler.run_bottles_clean,
+            "wine": self.action_handler.run_wine_clean,
+            "mangohud": self.action_handler.run_mangohud_config,
+            "goverlay": self.action_handler.run_goverlay_config,
+            "dolphin": self.action_handler.run_dolphin_clean,
+            "trim": self.action_handler.run_trim,
+            "fix_broken": self.action_handler.run_fix_broken,
+            "browsers": self.action_handler.run_browser_clean,
+            "speedtest": self.action_handler.run_speed_test,
+            "lanscan": self.action_handler.run_lan_scan,
+            "ports": self.action_handler.run_port_scan,
+            "firewall": self.action_handler.run_firewall_check,
+            "sec_updates": self.action_handler.run_security_updates,
+            "lancache": self.action_handler.run_lan_cache_setup,
+            "services": self.action_handler.run_services_manager,
+            "logs": self.action_handler.run_log_analysis,
+        }
+        if is_dns:
+            mapper = ActionMapper(self.SO, self.runner, self.turbo_active)
+            real_cmd = mapper.dns_command(cmd)
+        else:
+            if cmd in cmd_map:
+                cmd_map[cmd](log)
+                self.after(0, lambda: self._show_details_button(tag))
+                return
+            if cmd in ["video_drv", "net_drv", "auto_update", "cookies", "empty_trash"]:
+                self.action_handler.special_command(cmd, log)
+                self.after(0, lambda: self._show_details_button(tag))
+                return
+            mapper = ActionMapper(self.SO, self.runner, self.turbo_active)
+            real_cmd = mapper.get_command(cmd)
+            if real_cmd is None:
+                log.insert("end", f"Comando {cmd} não suportado neste SO.\n")
+                self.after(0, lambda: self._show_details_button(tag))
+                return
+        use_sudo = real_cmd.startswith("sudo ") if real_cmd else False
+        if use_sudo:
+            real_cmd = real_cmd[5:]
+        proc = self.runner.run(real_cmd, use_sudo=use_sudo, parent=self)
+        if proc:
+            for line in proc.stdout:
+                self.after(0, lambda l=line: log.insert("end", l))
+            proc.wait()
+            log.insert("end", "\n-- COMANDO FINALIZADO --\n")
+        else:
+            log.insert("end", "Erro ao executar comando.\n")
+        self.after(0, lambda: self._show_details_button(tag))
+
+    def _show_details_button(self, tag):
+        btn = self.detail_buttons.get(tag)
+        if btn and not btn.winfo_ismapped():
+            btn.configure(fg_color=self.acc_color, text_color="white")
+            btn.pack(anchor="e", padx=5)
+        if btn:
+            btn.configure(text="Detalhes ⚡")
+
+    # ... (demais métodos como _fill_otimizacao, _fill_rede, etc. permanecem iguais)
+    # (aqui você manteria o código das abas que já estava funcionando)
+
+if __name__ == "__main__":
+    app = SpeedScan()
+    app.mainloop()

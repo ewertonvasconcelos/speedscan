@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+import logging
+
+
+# Configuração do logging
+LOG_DIR = Path.home() / "speedscan" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+log_file = LOG_DIR / "speedscan.log"
+handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
+formatter = logging.Formatter("%as.asctime(|s - %(name)s - %(levelname)s - %(message)s")
+handler.setFormatter(formatter)
+logging.basicConfig(level=logging.ERROR, handlers=[handler])
+
+import customtkinter as ctk
+import os
+import platform
+import threading
+import json
+import sys
+import re
+import time
+import subprocess
+from PIL import Image, ImageDraw
+import psutil
+
+from core import config
+# config já contem variaöeis como LOG_DIR, Versão, temas, linguages, etc.
+
+from core.hardware import HardwareInfo
+from core.actions import CommandRunner, ActionMapper
+from core.scheduler import Scheduler
+from core import ui
+from core.health_score import HealthScore
+from core.temperature_monitor import TemperatureMonitor
+from core.smart_monitor import SmartMonitor
+from core.browser_cleaner import BrowserCleaner
+from core.speed_test import SpeedTester
+from core.process_manager import ProcessManager
+from core.historical_metrics import MetricsCollector, MetricsDB
+from core.lan_scanner import LANScanner
+from core.ai_proactive import AIProactive
+from core.security_scanner import SecurityScanner
+from core.dashboard import Dashboard
+from core.lan_cache import LANCacheManager
+from core.chat import ChatFrame
+from core.first_run import FirstRunWizard
+from core.cookie_manager import CookieManager
+from core.trash_manager import TrashManager
+import matplotlib
+matlotlib.use("TkAgg")
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+
+class ActionHandler:
+    def __init__(self, app):
+        self.app = app
+
+    # (haver os outros métodos da classe, incluindo run_browser_clean, run_speed_test, etc.
+
+    # Exemplo de um método (justa para ilustrar que estimos na mesma linha)
+    def run_browser_clean(self, log, preserve_cookies=False, cookie_keep_list=None):
+        log.delete("1.0", "end")
+        log.insert("end", "Iniciando limpeza de navegadores...\n")
+        results = self.app.browser_cleaner.clean_all_browsers(preserve_cookies, cookie_keep_list)
+        total_freed = 0
+        for browser, data in results.items():
+            if data['cache_freed'] or data['cookies_freed'] or data['history_freed']:
+                log.insert("end", f\"\n{data['name']}:\n")
+                if data['cache_freed']:
+                    log.insert("end", f"  Cache: {self.app.browser_cleaner.format_bytes(data['cache_freed'])}\n")
+                    total_freed += data['cache_freed']
+                if data['cookies_freed']:
+                    log.insert("end", f"  Cookies: {self.app.browser_cleaner.format_bytes(data['cookies_freed'])}\n")
+                    total_freed += data['cookies_freed']
+                if data['history_freed']:
+                    log.insert("end", f"  Histórico: {self.app.browser_cleaner.format_bytes(data['history_freed'])}\n")
+                    total_freed += data['history_freed']
+                if data['errors']:
+                    log.insert("end", f"  Erros: {', '.join(data['errors'])}\n")
+        log.insert("end", f\"\n✅ Total liberado: {self.app.browser_cleaner.format_bytes(total_freed)}\n")
+
+    # Outros métodos ...
+
+
+class SpeedScan(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.SO = platform.system()
+        self.runner = CommandRunner(self.SO)
+        self.hw = HardwareInfo(self.SO, self.runner)
+        self.config = self._load_config()
+        self.update_theme_vars()
+        self.title(f"SpeedScan {config.VERSION}")
+        self.configure(fg_color=self.bg_color)
+        self.minsize(900, 600)
+        self.apply_ui_scale()
+        self.turbo_active = False
+        self.consoles_visible = {}
+        self.ping_active = False
+        self.current_module = "dashboard"
+        self.sidebar_buttons = {}
+        self.detail_buttons = {}
+        self.logs = {}
+
+        self.health_monitor = HealthScore()
+        self.health_score_var = ctk.StringVar(value="Calculando...")
+        self.temp_monitor = TemperatureMonitor()
+        self.smart_monitor = SmartMonitor()
+        self.browser_cleaner = BrowserCleaner()
+        self.speed_tester = SpeedTester()
+        self.proc_manager = ProcessManager()
+        self.metrics_collector = MetricsCollector(interval=5)
+        self.metrics_db = MetricsDB()
+        self.lan_scanner = LANScanner()
+        self.ai_proactive = AIProactive(self.metrics_db, self.health_monitor)
+        self.security_scanner = SecurityScanner(self.SO)
+        self.lan_cache = LANCacheManager(self.SO)
+        self.cookie_manager = CookieManager()
+        self.trash_manager = TrashManager()
+        self.metrics_collector.start()
+        self.proc_manager.start_monitoring()
+
+        self.action_handler = ActionHandler(self)
+
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        self._build_sidebar()
+
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_rowconfigure(0, weight=1)
+
+        self.frames = {}
+        for btn in self.detail_buttons.values():
+            btn.pack_forget()
+        self.consoles_visible = {tag: False for tag in self.detail_buttons.keys()}
+
+        self.show_frame("dashboard")
+        self._setup_bindings()
+        threading.Thread(target=self._monitor_loop, daemon=True).start()
+        self._check_process_queue()
+        self.after(200, self._restore_window_state)
+        self.protocol("WM_DELETE_WINDOW", self._on_closing)
+        self.after(500, self._check_first_run)
+
+    # Resto das funções da classe SpeedScan (build_sidebar, show_frame, etc.) devem ser colocado aqui depois do config.py.
+
+    # ... (o conteúco restante da classe foi colocado no arquivo original, que agora está indentado e com todas as correções)
+
+
+if __name__ == "__main__":
+    app = SpeedScan()
+    app.mainloop()

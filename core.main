@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+import re
+import shutil
+from pathlib import Path
+from datetime import datetime
+
+MAIN_FILE = Path("core/main.py")
+BACKUP_DIR = Path("backups")
+
+def fazer_backup():
+    BACKUP_DIR.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = BACKUP_DIR / f"main.py.{timestamp}.bak"
+    shutil.copy(MAIN_FILE, backup_path)
+    print(f"Backup criado: {backup_path}")
+
+def main():
+    print("Corrigindo botão Aplicar...")
+    if not MAIN_FILE.exists():
+        print("Arquivo não encontrado")
+        return
+    fazer_backup()
+    with open(MAIN_FILE, "r", encoding="utf-8") as f:
+        content = f.read()
+    # Procurar por linha que contenha text="Aplicar"
+    pattern = r'(ctk\.CTkButton\([^,]+,[^,]+,\s*text="Aplicar",[^,]+,\s*command=)[^,)]+'
+    novo = r'\1self.apply_config'
+    novo_conteudo = re.sub(pattern, novo, content)
+    if novo_conteudo == content:
+        print("Nenhuma linha com text='Aplicar' encontrada. Verifique manualmente.")
+    else:
+        with open(MAIN_FILE, "w", encoding="utf-8") as f:
+            f.write(novo_conteudo)
+        print("Botão Aplicar corrigido.")
+    # Também verificar se o método apply_config existe
+    if 'def apply_config' not in content:
+        print("Método apply_config não encontrado. Inserindo...")
+        # Inserir antes de if __name__
+        if 'if __name__' in content:
+            apply_method = '''
+    def apply_config(self):
+        print("apply_config chamado")
+        self._save_config()
+        self.show_toast("Configurações salvas! Reiniciando...", 2000)
+        self.after(2000, self._restart_app)
+'''
+            content = content.replace('if __name__', apply_method + '\n\nif __name__')
+            with open(MAIN_FILE, "w", encoding="utf-8") as f:
+                f.write(content)
+            print("Método apply_config inserido.")
+    else:
+        print("Método apply_config já existe.")
+
+if __name__ == "__main__":
+    main()

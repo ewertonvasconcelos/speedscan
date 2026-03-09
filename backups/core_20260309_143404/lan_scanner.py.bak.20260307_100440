@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Local area network scanner module.
+Version 1.0.0
+"""
+
+import logging
+import subprocess
+import re
+import ipaddress
+import threading
+from typing import List, Dict, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from core import config
+
+
+class LANScanner:
+    """Scans the local area network for active devices using ping and ARP."""
+
+    def __init__(self, interface=None):
+        """Initialize the scanner.
+
+        Args:
+            interface (str optional): Network interface to scan (e.g., 'eth0'). If None, auto-detect.
+        """
+        self.interface = interface
+        self.devices = []
+        self.network = None
+        self.scan_callback = None
+        self._stop_scan = False
+
+    def get_local_network(self) -> Optional[str]:
+        """Determine the local network CIDR (e.g., "192.168.1.0/24").
+
+        Returns:
+            Optional string representing the network, or None.
+        """
+        try:
+            result = subprocess.run(['ip', 'route'], capture_output=True, text=True)
+            for line in result.stdout.splitlines():
+                if 'default via' in line:
+                    parts = line.split()
+                    iface = parts[4] if len(parts) > 4 else None
+                    result2 = subprocess.run(['ip', '-4', 'addr', 'show', iface], capture_output=True, text=True)
+                    for line2 in result2.stdout.splitlines():
+                        if 'inet ' in line2:
+                            match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)(/\d+)', line2)
+                            if match:
+                                ip = match.group(1)
+                                prefix = match.group(2)
+                                network = ipaddress.IPv4Network(f"{ip}{prefix}", strict=False)
+                                return str(network)
+            return None
+        except Exception as e:
+            logging.error(f"Error determining local network: {e}")
+            return None
+
+    def ping_host(self, ip: str) -> bool:
+        """Ping a host to check if it is alive.
+
+        Args:
+            ip (str): IP address to ping.
+
+        Returns:
+            bool: True if host responds, False otherwise.
+        """
+        try:
+            result = subprocess.run(['ping', '-c', '1', '-W', '1', ip],
+                                    capture_output=True, timeout=2)
+            return result.returncode == 0
+        except Exception as e:
+            logging.error(f"Error pinging {ip}: {e}")
+            return False
+
+    def arp_lookup(self, ip: str) -> Optional[Dict]:
+        """Retrieve MAC address for an IP using ARP.
+
+        Args:
+            ip (str): IP address to look up.
+
+        Returns:
+            Optional dictionary with 'ip' and 'mac' keys, or None.
+        """
+        try:
+            result = subprocess.run([], capture_output=True, text=True) # will be overwritten
+            result = subprocess.run(['ip', 'neigh', 'show', ip], capture_output=True, text=True)
+            for line in result.stdout.splitlines():
+                parts = line.split()
+                if len(parts) >= 4 and parts[0] == ip and 'lladdr' in line:
+                    mac = parts[4] if len(parts) > 4 else None
+                    return {'ip': ip, 'mac': mac}
+        except Exception as e:
+            logging.error(f"Error in arp_lookup for {ip}: {e}")
+            pass
+        try:
+            result = subprocess.run(['arp', '-n', ip], capture_output=True, text=True)
+            for line in result.stdout.splitlines():
+                if ip in line:
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        mac = parts[2] if re.match(r'([0-9a-f]{2}:){5}[0-9a-f]{2}', parts[2]) else None
+                        return {'ip': ip, 'mac': mac}
+        except Exception as e:
+            logging.error(f"Error in arp_lookup (fallback) for {ip}: {e}")
+            pass
+        return None
+
+    def get_hostname(self, ip: str) -> Optional[str]:
+        """Perform a DNS lookup to find the hostname for an IP.
+
+        Args:
+            ip (str): IP address.
+
+        Returns:
+            Optional string containing the hostname, or None.
+        """
+        try:
+            result = subprocess.run(['nslookup', ip], capture_output=True, text=True, timeout=2)
+            match = re.search(r'name = (.+\)\.', result.stdout)
+            if match:
+                return match.group(1)
+            return None
+        except Exception as e:
+            logging.error(f"Error in nslookup for {ip}: {e}")
+            return None
+
+    def get_vendor(self, mac: str) -> str:
+        """Attempt to determine the vendor from a MAC address (O

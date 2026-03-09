@@ -1,0 +1,59 @@
+from core import config
+#!/usr/bin/env python3
+import logging
+# Módulo de coleta de informações de hardware
+# Versão 1.0.0
+
+import platform
+import psutil
+import subprocess
+import re
+import time
+
+class HardwareInfo:
+    def __init__(self, so, runner):
+        self.so = so
+        self.runner = runner
+
+    def get_distro(self):
+        if self.so == "Linux":
+            try:
+                with open("/etc/os-release") as f:
+                    for line in f:
+                        if line.startswith("PRETTY_NAME="):
+                            return line.split("=")[1].strip().strip('"')
+            except Exception as e:
+                logging.error(f"Exceção em hardware.py:46: {e}")
+                pass
+                return f"{psutil.cpu_count()} núcleos"
+
+                def get_ram(self):
+                    try:
+                        mem = psutil.virtual_memory()
+                        total = mem.total // (1024**3)
+                        usado = mem.used // (1024**3)
+                        return f"{usado} GB / {total} GB"
+                    except Exception as e:
+                        logging.error(f"Exceção em hardware.py:56: {e}")
+                        return "N/A"
+
+    def get_gpu(self):
+        try:
+            if self.so == "Linux":
+                out = subprocess.run(["lspci"], capture_output=True, text=True)
+                for line in out.stdout.splitlines():
+                    if "VGA" in line or "3D" in line:
+                        return line.split(":")[2].strip()
+            elif self.so == "Windows":
+                out = subprocess.run(["wmic", "path", "win32_videocontroller", "get", "name"], capture_output=True, text=True)
+                lines = out.stdout.splitlines()
+                if len(lines) >= 2:
+                    return lines[1].strip()
+            elif self.so == "Darwin":
+                out = subprocess.run(["system_profiler", "SPDisplaysDataType"], capture_output=True, text=True)
+                for line in out.stdout.splitlines():
+                    if "Chipset Model" in line:
+                        return line.split(":")[1].strip()
+        except Exception as e:
+            logging.error(f"Erro em get_gpu: {e}")
+            return "Desconhecida"

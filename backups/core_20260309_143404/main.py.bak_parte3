@@ -1,0 +1,253 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+# SpeedScan - Versão 0.4.0-beta (cards, IA, processos, histórico, gráficos)
+# Desenvolvedor: Ewerton Vasconcelos
+
+from core.trash_manager import TrashManager
+from core.cookie_manager import CookieManager
+from core.first_run import FirstRunWizard
+from core.chat import ChatFrame
+from core.lan_cache import LANCacheManager
+from core.dashboard import Dashboard
+from core.security_scanner import SecurityScanner
+from core.ai_proactive import AIProactive
+from core.lan_scanner import LANScanner
+from core.historical_metrics import MetricsCollector, MetricsDB
+from core.process_manager import ProcessManager
+from core.speed_test import SpeedTester
+from core.browser_cleaner import BrowserCleaner
+from core.smart_monitor import SmartMonitor
+from core.temperature_monitor import TemperatureMonitor
+from core.health_score import HealthScore
+from core import ui
+from core.scheduler import Scheduler
+from core.actions import CommandRunner, ActionMapper, ActionHandler
+from core.hardware import HardwareInfo
+from core import config
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+import logging
+import os
+import platform
+import threading
+import json
+import sys
+import re
+import time
+import subprocess
+from PIL import Image, ImageDraw
+import psutil
+import customtkinter as ctk
+import matplotlib
+matplotlib.use('TkAgg')
+
+# Importações dos módulos internos
+
+# Configuração de logging
+config.LOG_DIR.mkdir(parents=True, exist_ok=True)
+log_file = config.LOG_DIR / "speedscan.log"
+handler = RotatingFileHandler(
+    log_file,
+    maxBytes=5 * 1024 * 1024,
+    backupCount=3)
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logging.basicConfig(level=logging.ERROR, handlers=[handler])
+
+# =============================================================================
+# Configuração padrão unificada
+# =============================================================================
+DEFAULT_CONFIG = {
+    "theme": "default",
+    "username": "ewerton",
+    "language": "pt_BR",
+    "ui_scale": "auto",
+    "open_file_in_tab": False,
+    "simple_mode": True,
+    "expert_level": 1,
+    "window_state": {
+        "maximized": False,
+        "width": 1000,
+        "height": 700,
+        "x": None,
+        "y": None
+    },
+    "schedule": {
+        "enabled": False,
+        "frequency": "weekly",
+        "hour": "03:00",
+        "day_of_week": "monday",
+        "day_of_month": 1,
+        "interval_days": 7,
+        "tasks": ["cache", "swap", "check"],
+        "elevated": False
+    },
+    "ai": {
+        "provider": "ollama",
+        "model": "llama3.2",
+        "api_key": "",
+        "endpoint": "http://localhost:11434"
+    }
+}
+
+# =============================================================================
+# Definição de temas, idiomas, escalas e sugestões de IA
+# =============================================================================
+THEMES = {
+    "default": {"mode": "dark", "bg": "#1e293b", "side": "#0f172a", "acc": "#a855f7", "text": "#ffffff"},
+    "grey": {"mode": "light", "bg": "#d1d5db", "side": "#374151", "acc": "#4b5563", "text": "#111827"},
+    "dark": {"mode": "dark", "bg": "#080808", "side": "#000000", "acc": "#10b981", "text": "#ffffff"},
+    "light": {"mode": "light", "bg": "#ffffff", "side": "#f8fafc", "acc": "#2563eb", "text": "#0f172a"}
+}
+
+LANGUAGES = {
+    "pt_BR": "Português Brasileiro",
+    "en_US": "English (US)",
+    "es_ES": "Español"
+}
+
+SCALES = {
+    "auto": "Automático",
+    "100": "100%",
+    "125": "125%",
+    "150": "150%"
+}
+
+AI_SUGGESTIONS = [
+    "Ollama (local)", "OpenAI GPT", "Google Gemini", "Claude (Anthropic)",
+    "Llama 3 (Meta)", "Mistral AI", "Cohere", "DeepSeek", "Configure Local AI"
+]
+# =============================================================================
+# ActionHandler - Executa as ações dos cards
+# =============================================================================
+
+
+def apply_config(self):
+
+    def _restart_app(self):
+        import sys
+        import subprocess
+        self.destroy()
+        subprocess.Popen([sys.executable, "-m", "core.main"])
+        sys.exit()
+    """Aplica as configurações de tema, escala e reinicia a interface."""
+
+    def _restart_app(self):
+        import sys
+        import subprocess
+        self.destroy()
+        subprocess.Popen([sys.executable, "-m", "core.main"])
+        sys.exit()
+    # Salvar configurações
+
+    def _restart_app(self):
+        import sys
+        import subprocess
+        self.destroy()
+        subprocess.Popen([sys.executable, "-m", "core.main"])
+        sys.exit()
+    self._save_config()
+
+    def _restart_app(self):
+        import sys
+        import subprocess
+        self.destroy()
+        subprocess.Popen([sys.executable, "-m", "core.main"])
+        sys.exit()
+    # Atualizar tema
+
+    def _restart_app(self):
+        import sys
+        import subprocess
+        self.destroy()
+        subprocess.Popen([sys.executable, "-m", "core.main"])
+        sys.exit()
+    self.update_theme_vars()
+
+    def _restart_app(self):
+        import sys
+        import subprocess
+        self.destroy()
+        subprocess.Popen([sys.executable, "-m", "core.main"])
+        sys.exit()
+    # Aplicar escala
+
+    def _restart_app(self):
+        import sys
+        import subprocess
+        self.destroy()
+        subprocess.Popen([sys.executable, "-m", "core.main"])
+        sys.exit()
+    self.apply_ui_scale()
+
+    def _restart_app(self):
+        import sys
+        import subprocess
+        self.destroy()
+        subprocess.Popen([sys.executable, "-m", "core.main"])
+        sys.exit()
+    # Mostrar mensagem
+
+    def _restart_app(self):
+        import sys
+        import subprocess
+        self.destroy()
+        subprocess.Popen([sys.executable, "-m", "core.main"])
+        sys.exit()
+        self.show_toast("Configurações aplicadas. Reinicie o aplicativo para ver todas as alterações.", 3000)
+    self.after(1000, self._restart_app)
+
+    def _restart_app(self):
+        import sys
+        import subprocess
+        self.destroy()
+        subprocess.Popen([sys.executable, "-m", "core.main"])
+        sys.exit()
+        "Configurações aplicadas. Reinicie o aplicativo para ver todas as alterações.",
+        self.show_toast("Configurações aplicadas. Reinicie o aplicativo para ver todas as alterações.", 3000)
+# =============================================================================
+# Classe principal SpeedScan
+# =============================================================================
+
+
+    def apply_config(self):
+        """Aplica as configurações de tema, escala e reinicia a interface."""
+        self._save_config()
+        self.update_theme_vars()
+        self.apply_ui_scale()
+        self.show_toast("Configurações aplicadas. Reinicie o aplicativo para ver todas as alterações.", 3000)
+        self.after(1000, self._restart_app)
+
+    def _restart_app(self):
+        import sys
+        import subprocess
+        self.destroy()
+        subprocess.Popen([sys.executable, "-m", "core.main"])
+        sys.exit()
+
+class SpeedScan(ctk.CTk):
+
+        def _restart_app(self):
+            import sys
+            import subprocess
+            self.destroy()
+            subprocess.Popen([sys.executable, "-m", "core.main"])
+            sys.exit()
+
+
+        def apply_config(self):
+            """Aplica as configurações de tema, escala e reinicia a interface."""
+            self._save_config()
+            self.update_theme_vars()
+            self.apply_ui_scale()
+            self.show_toast("Configurações aplicadas. Reinicie o aplicativo para ver todas as alterações.", 3000)
+            self.after(1000, self._restart_app)
+
+
+if __name__ == "__main__":
+    app = SpeedScan()
+    app.mainloop()
