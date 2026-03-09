@@ -1,15 +1,20 @@
-from core import config
 #!/usr/bin/env python3
-import logging
-# Dashboard com 3 slots fixos e widgets disponíveis em duas linhas (4+4)
-# Versão 1.0.0
+# -*- coding: utf-8 -*-
+"""
+Dashboard module with 3 fixed slots and available widgets in two rows (4+4).
+Version 1.0.0
+"""
 
 import customtkinter as ctk
 import json
+import logging
 from pathlib import Path
+
+from core import config
 
 DASHBOARD_CONFIG = Path.home() / ".speedscan_dashboard.json"
 
+# List of available widgets with their display name and method callback.
 WIDGET_TYPES = [
     {"id": "hostname", "name": "Hostname", "callback": "widget_hostname"},
     {"id": "distro", "name": "Distribuição", "callback": "widget_distro"},
@@ -17,33 +22,64 @@ WIDGET_TYPES = [
     {"id": "uptime", "name": "Uptime", "callback": "widget_uptime"},
     {"id": "cpu", "name": "CPU", "callback": "widget_cpu"},
     {"id": "ram", "name": "Memória RAM", "callback": "widget_ram"},
-    {"id": "gpu", "name": "GPU", "callback": "widget_gpu"},
+    {"id": "gpu", "name": "GPu", "callback": "widget_gpu"},
     {"id": "disks", "name": "Discos", "callback": "widget_disks"},
     {"id": "battery", "name": "Bateria", "callback": "widget_battery"},
     {"id": "temps", "name": "Temperaturas", "callback": "widget_temps"},
     {"id": "health", "name": "Saúde", "callback": "widget_health"},
 ]
 
+
 class SlotWidget(ctk.CTkFrame):
+    """A widget that displays information in a dashboard slot.
+
+    Attributes:
+        slot_index (int): Slot number (0-2).
+        widget_type (dict): The current widget definition (from WIDGET_TYPES).
+        app (SpeedScan): Reference to the main application.
+        content_frame (ctk.CTkFrame): Frame that holds the widget's content.
+    """
+
     def __init__(self, parent, slot_index, widget_type, app_instance, **kwargs):
+        """Initialize the slot widget.
+
+        Args:
+            parent: The parent widget.
+            slot_index (int): The slot position (0,1,2).
+            widget_type (dict): Initial widget definition.
+            app_instance (SpeedScan): The main application.
+            **kwargs: Additional customtkinter frame keywords.
+        """
         super().__init__(parent, **kwargs)
         self.slot_index = slot_index
         self.widget_type = widget_type
         self.app = app_instance
         self.content_frame = None
 
-        self.configure(fg_color=app_instance.bg_color, corner_radius=10,
-                       border_width=1, border_color=app_instance.acc_color)
+        self.configure(
+            fg_color=app_instance.bg_color,
+            corner_radius=10,
+            border_width=1,
+            border_color=app_instance.acc_color,
+        )
         self.pack_propagate(False)
         self.configure(height=200)
 
-        self.title_label = ctk.CTkLabel(self, text=widget_type["name"], font=("Inter", 14, "bold"),
-                                         text_color=app_instance.acc_color)
+        self.title_label = ctk.CTkLabel(
+            self,
+            text=widget_type["name"],
+            font=("Inter", 14, "bold"),
+            text_color=app_instance.acc_color,
+        )
         self.title_label.pack(pady=(5, 0))
+
+        # Log de debug (agora com indentação correta)
+        print("DEBUG: SlotWidget __init__ chamado")
 
         self.update_content()
 
     def update_content(self):
+        """Refresh the content displayed in the widget."""
         if self.content_frame:
             self.content_frame.destroy()
         self.content_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -54,12 +90,23 @@ class SlotWidget(ctk.CTkFrame):
         callback(self.content_frame, f"slot_{self.slot_index}")
 
     def set_widget_type(self, new_type):
+        """Change the widget type and refresh the content."""
         self.widget_type = new_type
         self.title_label.configure(text=new_type["name"])
         self.update_content()
 
+
 class Dashboard(ctk.CTkFrame):
+    """The main dashboard widget containing 3 slots and a list of available widgets to add."""
+
     def __init__(self, parent, app_instance, **kwargs):
+        """Initialize the dashboard.
+
+        Args:
+            parent: The parent widget.
+            app_instance (SpeedScan): The main application.
+            **kwargs: Additional customtkinter frame keywords.
+        """
         super().__init__(parent, **kwargs)
         self.app = app_instance
         self.slots = []
@@ -71,6 +118,7 @@ class Dashboard(ctk.CTkFrame):
         self.load_state()
 
     def _build_ui(self):
+        """Create the user interface elements of the dashboard."""
         slots_frame = ctk.CTkFrame(self, fg_color="transparent")
         slots_frame.pack(fill="x", pady=10)
 
@@ -79,8 +127,12 @@ class Dashboard(ctk.CTkFrame):
             slot_frame.pack(side="left", fill="both", expand=True, padx=5)
             self.slots.append(slot_frame)
 
-        available_label = ctk.CTkLabel(self, text="Widgets disponíveis:", font=("Inter", 14, "bold"),
-                                        text_color=self.app.acc_color)
+        available_label = ctk.CTkLabel(
+            self,
+            text="Widgets disponíveis:",
+            font=("Inter", 14, "bold"),
+            text_color=self.app.acc_color,
+        )
         available_label.pack(anchor="center", pady=(20, 10))
 
         self.available_container = ctk.CTkFrame(self, fg_color="transparent")
@@ -93,13 +145,15 @@ class Dashboard(ctk.CTkFrame):
         self.row2_frame.pack(pady=3)
 
     def load_state(self):
+        """Load the saved dashboard state from JSON file."""
         if DASHBOARD_CONFIG.exists():
             try:
                 with open(DASHBOARD_CONFIG) as f:
                     data = json.load(f)
                     slot_ids = data.get("slots", [])
                     available_ids = data.get("available", [])
-            except:
+            except Exception as e:
+                logging.error(f"Error loading dashboard configuration: {e}")
                 slot_ids = []
                 available_ids = []
         else:
@@ -133,8 +187,9 @@ class Dashboard(ctk.CTkFrame):
                 widget_type = slot_widgets[i]
             else:
                 widget_type = WIDGET_TYPES[0]
-            slot_widget = SlotWidget(slot_frame, i, widget_type, self.app,
-                                      fg_color=self.app.bg_color)
+            slot_widget = SlotWidget(
+                slot_frame, i, widget_type, self.app, fg_color=self.app.bg_color
+            )
             slot_widget.pack(fill="both", expand=True)
             self.slots[i] = slot_widget
 
@@ -142,14 +197,16 @@ class Dashboard(ctk.CTkFrame):
         self.save_state()
 
     def save_state(self):
+        """Save the current dashboard configuration to a JSON file."""
         data = {
             "slots": [slot.widget_type["id"] for slot in self.slots],
-            "available": [w["id"] for w in self.available_widgets]
+            "available": [w["id"] for w in self.available_widgets],
         }
         with open(DASHBOARD_CONFIG, "w") as f:
             json.dump(data, f, indent=2)
 
     def _update_available_buttons(self):
+        """Rebuild the buttons for available widgets in two rows."""
         for child in self.row1_frame.winfo_children():
             child.destroy()
         for child in self.row2_frame.winfo_children():
@@ -165,25 +222,38 @@ class Dashboard(ctk.CTkFrame):
             second_half = self.available_widgets[half:]
 
         for widget in first_half:
-            btn = ctk.CTkButton(self.row1_frame, text=f"➕ {widget['name']}",
-                                 fg_color=self.app.acc_color,
-                                 height=40, corner_radius=8,
-                                 command=lambda w=widget: self.add_to_slot(w),
-                                 cursor="hand2")
+            btn = ctk.CTkButton(
+                self.row1_frame,
+                text=f"➕ {widget['name']}",
+                fg_color=self.app.acc_color,
+                height=40,
+                corner_radius=8,
+                command=lambda w=widget: self.add_to_slot(w),
+                cursor="hand2",
+            )
             btn.pack(side="left", padx=8, pady=5)
 
         for widget in second_half:
-            btn = ctk.CTkButton(self.row2_frame, text=f"➕ {widget['name']}",
-                                 fg_color=self.app.acc_color,
-                                 height=40, corner_radius=8,
-                                 command=lambda w=widget: self.add_to_slot(w),
-                                 cursor="hand2")
+            btn = ctk.CTkButton(
+                self.row2_frame,
+                text=f"➕ {widget['name']}",
+                fg_color=self.app.acc_color,
+                height=40,
+                corner_radius=8,
+                command=lambda w=widget: self.add_to_slot(w),
+                cursor="hand2",
+            )
             btn.pack(side="left", padx=8, pady=5)
 
         self.row1_frame.pack_configure(anchor="center")
         self.row2_frame.pack_configure(anchor="center")
 
     def add_to_slot(self, widget):
+        """Add a widget to the first slot, shifting the others right and putting the displaced widget into the available pool.
+
+        Args:
+            widget (dict): The widget type to add.
+        """
         current_slots = [slot.widget_type for slot in self.slots]
 
         new_slot0 = widget

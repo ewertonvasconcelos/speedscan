@@ -1,13 +1,25 @@
-from core import config
 #!/usr/bin/env python3
-import logging
-# Assistente de primeira execução (boas-vindas) com níveis de expertise
-# Versão 1.0.0
+# -*- coding: utf-8 -*-
+"""
+First run wizard for SpeedScan - displayed on first start to configure basic settings.
+Version 1.0.0
+"""
 
 import customtkinter as ctk
 
+from core import config
+
+
 class FirstRunWizard(ctk.CTkToplevel):
+    """Welcome wizard that appears on the first execution to configure user preferences."""
+
     def __init__(self, parent, config):
+        """Initialize the wizard with the given config.
+
+        Args:
+            parent: The main application window.
+            config (dict): The current configuration dictionary.
+        """
         super().__init__(parent)
         self.parent = parent
         self.config = config
@@ -20,7 +32,7 @@ class FirstRunWizard(ctk.CTkToplevel):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        title = ctk.CTkLabel(self, text="⚡ SpeedScan", font=("Inter", 24, "bold"),
+        title = ctk.CTkLabel(self, text=".SpeedScan", font=("Inter", 24, "bold"),
                               text_color=parent.acc_color)
         title.grid(row=0, column=0, pady=(20,10))
 
@@ -69,6 +81,7 @@ class FirstRunWizard(ctk.CTkToplevel):
                       fg_color="gray", width=100, cursor="hand2").pack(side="left", padx=10)
 
     def save_and_close(self):
+        """Write the selected configuration to the main config and close the wizard."""
         self.config["username"] = self.name_entry.get() or "Usuário"
         theme_map = {
             "Padrão (Roxo)": "default",
@@ -91,4 +104,3 @@ class FirstRunWizard(ctk.CTkToplevel):
         self.parent._save_config()
         self.parent.show_toast("Configurações salvas! Algumas alterações podem exigir reinício.")
         self.destroy()
-

@@ -1,17 +1,30 @@
-from core import config
 #!/usr/bin/env python3
-import logging
-# Módulo de cálculo do Health Score (0-100) do sistema
-# Versão 1.0.0
+# -*- coding: utf-8 -*-
+"""
+Health Score calculation module (0-100) for system health.
+Version 1.0.0
+"""
 
 import psutil
 import time
+import logging
+
+from core import config
+
 
 class HealthScore:
+    """Calculates a health score for the system based on various metrics."""
+
     def __init__(self):
+        """Initialize with a baseline CPU measurement."""
         self.last_cpu = psutil.cpu_percent(interval=0.1)
 
     def calculate_health_score(self):
+        """Calculate the current health score (0-100).
+
+        Returns:
+            dict: Contains 'score' (float) and 'details' with individual component scores.
+        """
         cpu_percent = psutil.cpu_percent(interval=0.1)
         mem = psutil.virtual_memory()
         disk = psutil.disk_usage('/')
@@ -21,12 +34,14 @@ class HealthScore:
         if battery:
             battery_score = battery.percent
 
+        # Weights for each component (sum to 1.0)
         cpu_weight = 0.3
         mem_weight = 0.3
         disk_weight = 0.2
         uptime_weight = 0.1
         battery_weight = 0.1 if battery else 0
 
+        # Individual scores (higher is better)
         cpu_score = 100 - cpu_percent
         mem_score = 100 - mem.percent
         disk_score = 100 - disk.percent

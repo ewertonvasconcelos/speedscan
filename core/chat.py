@@ -1,17 +1,40 @@
-from core import config
 #!/usr/bin/env python3
-import logging
-# Interface de chat para integração com IAs (Ollama, OpenAI, etc.)
-# Versão 1.0.0
+# -*- coding: utf-8 -*-
+"""
+Chat interface for integration with AI providers (Ollama, OpenAI, DeepSeek, etc.)
+Version 1.0.0
+"""
 
 import customtkinter as ctk
 import threading
 import requests
 import json
+import logging
 from pathlib import Path
 
+from core import config
+
+
 class ChatFrame(ctk.CTkFrame):
+    """A chat frame that allows the user to interact with AI assistants.
+
+    Attributes:
+        app (SpeedScan):) Reference to the main application.
+        history (list): List of message dicts with 'role' and 'content'.
+        current_ai (str): Current ai provider (ollama, openai, deepseek).
+        ai_model (str): AI model name.
+        endpoint (str): API endpoint URL.
+        api_key (str): API key for cloud services.
+    """
+
     def __init__(self, parent, app_instance, **kwargs):
+        """Initialize the chat frame.
+
+        Args:
+            parent: Widget parent.
+            app_instance: The main SpeedScan application instance.
+            **kwargs: Additional customtkinter frame keywords.
+        """
         super().__init__(parent, **kwargs)
         self.app = app_instance
         self.configure(fg_color="transparent")
@@ -42,6 +65,12 @@ class ChatFrame(ctk.CTkFrame):
         self._add_message("system", "🤖 Conectado ao assistente. Digite /help para comandos.")
 
     def _add_message(self, role, content):
+        """Add a message to the chat display and history.
+
+        Args:
+            role (str): 'user', 'assistant' or 'system'.
+            content (str): Message content.
+        """
         self.chat_display.configure(state="normal")
         if role == "user":
             self.chat_display.insert("end", f"Você: {content}\n\n")
@@ -54,6 +83,7 @@ class ChatFrame(ctk.CTkFrame):
         self.history.append({"role": role, "content": content})
 
     def send_message(self):
+        """Send the user's message and trigger an AI response."""
         msg = self.message_entry.get().strip()
         if not msg:
             return
@@ -67,6 +97,7 @@ class ChatFrame(ctk.CTkFrame):
         threading.Thread(target=self._get_ai_response, args=(msg,), daemon=True).start()
 
     def _handle_command(self, cmd):
+        """Handle special commands prefixed with '/'."""
         if cmd == "/help":
             self._add_message("system", "Comandos disponíveis:\n/help - ajuda\n/clear - limpa chat\n/modelo - mostra modelo atual\n/trash - lista lixeira\n/emptytrash - esvazia lixeira")
         elif cmd == "/clear":
@@ -86,11 +117,12 @@ class ChatFrame(ctk.CTkFrame):
             self._add_message("system", msg)
         elif cmd == "/emptytrash":
             self.app.trash_manager.empty_trash()
-            self._add_message("system", "🗑️ Lixeira esvaziada.")
+            self._add_message("system", "🗑️ Liƽeira esvaziada.")
         else:
             self._add_message("system", f"Comando desconhecido: {cmd}")
 
     def _get_ai_response(self, user_message):
+        """Query the configured AI provider in a background thread."""
         if self.current_ai == "ollama":
             self._query_ollama(user_message)
         elif self.current_ai == "openai":
@@ -98,9 +130,10 @@ class ChatFrame(ctk.CTkFrame):
         elif self.current_ai == "deepseek":
             self._query_deepseek(user_message)
         else:
-            self._add_message("system", "⚠️ Provedor não suportado.")
+            self._add_message("system", "⚠️ Provider not supported.")
 
     def _query_ollama(self, message):
+        """Query an Ollama instance and display the response."""
         try:
             messages = [{"role": m["role"], "content": m["content"]} for m in self.history if m["role"] != "system"]
             payload = {
@@ -114,12 +147,15 @@ class ChatFrame(ctk.CTkFrame):
                 reply = data.get("message", {}).get("content", "Sem resposta.")
                 self.app.after(0, lambda: self._add_message("assistant", reply))
             else:
-                self.app.after(0, lambda: self._add_message("system", f"Erro Ollama: {response.status_code}"))
+                self.app.after(0, lambda: self._add_message("system", f"Error Ollama: {response.status_code}"))
         except Exception as e:
-            self.app.after(0, lambda: self._add_message("system", f"Erro ao conectar ao Ollama: {e}"))
+            logging.error(f"Error querying Ollama: {e}")
+            self.app.after(0, lambda: self._add_message("system", f"Erro connecting to Ollama: {e}"))
 
     def _query_openai(self, message):
-        self.app.after(0, lambda: self._add_message("system", "⚠️ OpenAI não implementado. Configure sua chave."))
+        """OpenAI is not implemented yet. Show a message."""
+        self.app.after(0, lambda: self._add_message("system", "⚠️ OpenAI not implemented. Configure your key."))
 
     def _query_deepseek(self, message):
-        self.app.after(0, lambda: self._add_message("system", "⚠️ DeepSeek não implementado."))
+        """DeepSeek is not implemented yet. Show a message."""
+        self.app.after(0, lambda: self._add_message("system", "⚠️ DeepSeek not implemented."))

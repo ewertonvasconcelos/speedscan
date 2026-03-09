@@ -1,0 +1,500 @@
+        self.filter_entry = ctk.CTkEntry(toolbar, placeholder_text="nome do processo", width=150)
+        self.filter_entry.pack(side="left", padx=(0,10))
+        self.filter_entry.bind("<KeyRelease>", self._on_filter_change)
+
+        ctk.CTkLabel(toolbar, text="Ordenar por:", font=("Inter",12)).pack(side="left", padx=(10,5))
+        self.sort_var = ctk.StringVar(value="cpu_percent")
+        sort_menu = ctk.CTkOptionMenu(toolbar, values=["cpu_percent", "memory_percent", "name", "pid"],
+                                       variable=self.sort_var, command=self._on_sort_change, width=120,
+                                       cursor="left_ptr")
+        sort_menu.pack(side="left", padx=(0,10))
+
+        self.reverse_var = ctk.BooleanVar(value=True)
+        reverse_check = ctk.CTkCheckBox(toolbar, text="Decrescente", variable=self.reverse_var, command=self._on_sort_change)
+        reverse_check.pack(side="left", padx=(0,10))
+
+        refresh_btn = ctk.CTkButton(toolbar, text="🔄 Atualizar", command=self._refresh_process_list, width=100, fg_color=self.acc_color, cursor="hand2")
+        refresh_btn.pack(side="right", padx=5)
+
+        from tkinter import ttk
+        table_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        table_frame.pack(fill="both", expand=True, pady=10)
+
+        vsb = ttk.Scrollbar(table_frame, orient="vertical")
+        hsb = ttk.Scrollbar(table_frame, orient="horizontal")
+
+        columns = ('pid', 'name', 'cpu_percent', 'memory_percent', 'status', 'username', 'nice', 'create_time_str')
+        self.process_tree = ttk.Treeview(table_frame, columns=columns, show='headings',
+                                         yscrollcommand=vsb.set, xscrollcommand=hsb.set, height=20)
+        vsb.config(command=self.process_tree.yview)
+        hsb.config(command=self.process_tree.xview)
+
+        headings = {
+            'pid': 'PID', 'name': 'Nome', 'cpu_percent': 'CPU %', 'memory_percent': 'MEM %',
+            'status': 'Status', 'username': 'Usuário', 'nice': 'Nice', 'create_time_str': 'Início'
+        }
+        widths = {'pid':60, 'name':200, 'cpu_percent':70, 'memory_percent':70,
+                  'status':80, 'username':100, 'nice':60, 'create_time_str':80}
+        for col in columns:
+            self.process_tree.heading(col, text=headings[col], command=lambda c=col: self._sort_by_column(c))
+            self.process_tree.column(col, width=widths[col], minwidth=50, anchor='center')
+
+        self.process_tree.grid(row=0, column=0, sticky='nsew')
+        vsb.grid(row=0, column=1, sticky='ns')
+        hsb.grid(row=1, column=0, sticky='ew')
+        table_frame.grid_rowconfigure(0, weight=1)
+        table_frame.grid_columnconfigure(0, weight=1)
+
+        self.process_tree.bind('<Double-1>', self._on_process_double_click)
+
+        action_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        action_frame.pack(fill="x", pady=10)
+
+        kill_btn = ctk.CTkButton(action_frame, text="Finalizar processo", fg_color="#d32f2f",
+                                  command=self._kill_selected_process, width=150, cursor="hand2")
+        kill_btn.pack(side="left", padx=5)
+
+        suspend_btn = ctk.CTkButton(action_frame, text="Suspender", fg_color="#f57c00",
+                                     command=self._suspend_selected_process, width=100, cursor="hand2")
+        suspend_btn.pack(side="left", padx=5)
+
+        resume_btn = ctk.CTkButton(action_frame, text="Continuar", fg_color="#388e3c",
+                                    command=self._resume_selected_process, width=100, cursor="hand2")
+        resume_btn.pack(side="left", padx=5)
+
+        ctk.CTkLabel(action_frame, text="Nice:", font=("Inter",12)).pack(side="left", padx=(20,5))
+        self.nice_var = ctk.IntVar(value=0)
+        nice_spin = ctk.CTkEntry(action_frame, textvariable=self.nice_var, width=50)
+        nice_spin.pack(side="left", padx=(0,5))
+        set_nice_btn = ctk.CTkButton(action_frame, text="Definir", command=self._set_nice_selected,
+                                      width=70, fg_color=self.acc_color, cursor="hand2")
+        set_nice_btn.pack(side="left", padx=5)
+
+        self._refresh_process_list()
+
+    def _on_filter_change(self, event=None):
+        term = self.filter_entry.get()
+        self.proc_manager.set_filter(term)
+
+    def _on_sort_change(self, choice=None):
+        key = self.sort_var.get()
+        reverse = self.reverse_var.get()
+        self.proc_manager.set_sort(key, reverse)
+
+    def _sort_by_column(self, col):
+        current_sort = self.proc_manager.sort_by
+        if current_sort == col:
+            self.proc_manager.reverse = not self.proc_manager.reverse
+        else:
+            self.proc_manager.sort_by = col
+            self.proc_manager.reverse = True
+        self.sort_var.set(col)
+        self.reverse_var.set(self.proc_manager.reverse)
+
+    def _refresh_process_list(self):
+        procs = self.proc_manager.get_process_list()
+        self._update_process_tree(procs)
+
+    def _update_process_tree(self, procs):
+        for row in self.process_tree.get_children():
+            self.process_tree.delete(row)
+        for p in procs:
+            values = (
+                p['pid'], p['name'],
+                f"{p['cpu_percent']:.1f}",
+                f"{p['memory_percent']:.1f}",
+                p['status'], p['username'] or '', p['nice'],
+                p.get('create_time_str', '')
+            )
+            self.process_tree.insert('', 'end', values=values, iid=str(p['pid']))
+
+    def _check_process_queue(self):
+        try:
+            while True:
+                procs = self.proc_manager.callback_queue.get_nowait()
+                self._update_process_tree(procs)
+        except:
+            pass
+        self.after(500, self._check_process_queue)
+
+    def _kill_selected_process(self):
+        selected = self.process_tree.selection()
+        if not selected: return
+        pid = int(selected[0])
+        if self.proc_manager.kill_process(pid):
+            self._refresh_process_list()
+            self.show_toast(f"Processo {pid} finalizado.")
+        else:
+            self.show_toast(f"Erro ao finalizar processo {pid}.", duration=3000)
+
+    def _suspend_selected_process(self):
+        selected = self.process_tree.selection()
+        if not selected: return
+        pid = int(selected[0])
+        if self.proc_manager.suspend_process(pid):
+            self._refresh_process_list()
+            self.show_toast(f"Processo {pid} suspenso.")
+        else:
+            self.show_toast(f"Erro ao suspender processo {pid}.", duration=3000)
+
+    def _resume_selected_process(self):
+        selected = self.process_tree.selection()
+        if not selected: return
+        pid = int(selected[0])
+        if self.proc_manager.resume_process(pid):
+            self._refresh_process_list()
+            self.show_toast(f"Processo {pid} continuado.")
+        else:
+            self.show_toast(f"Erro ao continuar processo {pid}.", duration=3000)
+
+    def _set_nice_selected(self):
+        selected = self.process_tree.selection()
+        if not selected: return
+        pid = int(selected[0])
+        nice_val = self.nice_var.get()
+        if self.proc_manager.set_nice(pid, nice_val):
+            self._refresh_process_list()
+            self.show_toast(f"Nice do processo {pid} alterado para {nice_val}.")
+        else:
+            self.show_toast(f"Erro ao alterar nice do processo {pid}.", duration=3000)
+
+    def _on_process_double_click(self, event):
+        selected = self.process_tree.selection()
+        if not selected: return
+        pid = int(selected[0])
+        self.show_toast(f"Detalhes do PID {pid} em breve.", duration=2000)
+
+    # ---------- Aba Histórico ----------
+    def _fill_historico(self, parent):
+        ctk.CTkLabel(parent, text="Histórico de Desempenho", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="center", pady=(0,20))
+        control_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        control_frame.pack(fill="x", pady=(0,10))
+
+        ctk.CTkLabel(control_frame, text="Período:", font=("Inter",12)).pack(side="left", padx=(0,5))
+        self.period_var = ctk.StringVar(value="1h")
+        period_menu = ctk.CTkOptionMenu(control_frame, values=["1h", "6h", "24h", "7d"],
+                                        variable=self.period_var, command=self._on_period_change, width=100,
+                                        cursor="left_ptr")
+        period_menu.pack(side="left", padx=(0,10))
+
+        ctk.CTkLabel(control_frame, text="Métrica:", font=("Inter",12)).pack(side="left", padx=(10,5))
+        self.metric_var = ctk.StringVar(value="cpu")
+        metric_menu = ctk.CTkOptionMenu(control_frame, values=["cpu", "memory", "disk"],
+                                        variable=self.metric_var, command=self._on_metric_change, width=100,
+                                        cursor="left_ptr")
+        metric_menu.pack(side="left", padx=(0,10))
+
+        refresh_btn = ctk.CTkButton(control_frame, text="🔄 Atualizar", command=self._update_graphs, width=100, fg_color=self.acc_color, cursor="hand2")
+        refresh_btn.pack(side="right", padx=5)
+
+        self.graph_frame = ctk.CTkFrame(parent, fg_color=self.bg_color, corner_radius=10)
+        self.graph_frame.pack(fill="both", expand=True, pady=10)
+
+        self.figure = Figure(figsize=(8, 4), dpi=100, facecolor=self.bg_color)
+        self.ax = self.figure.add_subplot(111)
+        self.ax.set_facecolor(self.light_bg)
+        self.ax.tick_params(colors=self.text_color)
+        self.ax.xaxis.label.set_color(self.text_color)
+        self.ax.yaxis.label.set_color(self.text_color)
+        self.ax.title.set_color(self.acc_color)
+
+        self.canvas = FigureCanvasTkAgg(self.figure, master=self.graph_frame)
+        self.canvas.get_tk_widget().pack(fill="both", expand=True)
+
+        self.stats_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        self.stats_frame.pack(fill="x", pady=10)
+
+        self.stats_labels = {}
+        for label in ["Média", "Mínimo", "Máximo"]:
+            f = ctk.CTkFrame(self.stats_frame, fg_color=self.bg_color, corner_radius=5)
+            f.pack(side="left", expand=True, fill="x", padx=5)
+            ctk.CTkLabel(f, text=label, font=("Inter",10,"bold"), text_color=self.acc_color).pack()
+            lbl = ctk.CTkLabel(f, text="-", font=("Inter",12), text_color=self.text_color)
+            lbl.pack()
+            self.stats_labels[label.lower()] = lbl
+
+    def _on_period_change(self, choice):
+        self._update_graphs()
+
+    def _on_metric_change(self, choice):
+        self._update_graphs()
+
+    def _update_graphs(self):
+        period_map = {"1h": 1, "6h": 6, "24h": 24, "7d": 168}
+        hours = period_map.get(self.period_var.get(), 1)
+        metric = self.metric_var.get()
+        rows = self.metrics_db.get_last_hours(hours=hours, metrics=['timestamp', metric])
+        if not rows:
+            self.ax.clear()
+            self.ax.text(0.5, 0.5, "Sem dados suficientes", ha='center', va='center',
+                         transform=self.ax.transAxes, color=self.text_color)
+            self.canvas.draw()
+            return
+        timestamps = [time.strftime('%H:%M', time.localtime(r[0])) for r in rows]
+        values = [r[1] for r in rows]
+        self.ax.clear()
+        self.ax.plot(timestamps, values, marker='o', linestyle='-', color=self.acc_color, markersize=3)
+        self.ax.set_title(f"{metric.upper()} (%) - Últimas {hours} horas", color=self.acc_color)
+        self.ax.set_xlabel("Tempo", color=self.text_color)
+        self.ax.set_ylabel("%", color=self.text_color)
+        self.ax.tick_params(colors=self.text_color)
+        self.ax.set_facecolor(self.light_bg)
+        self.figure.tight_layout()
+        self.canvas.draw()
+        stats = self.metrics_db.get_stats(period_hours=hours)
+        if metric == 'cpu':
+            self.stats_labels['média'].configure(text=f"{stats['cpu_avg']:.1f}%")
+            self.stats_labels['mínimo'].configure(text=f"{stats['cpu_min']:.1f}%")
+            self.stats_labels['máximo'].configure(text=f"{stats['cpu_max']:.1f}%")
+        elif metric == 'memory':
+            self.stats_labels['média'].configure(text=f"{stats['mem_avg']:.1f}%")
+            self.stats_labels['mínimo'].configure(text=f"{stats['mem_min']:.1f}%")
+            self.stats_labels['máximo'].configure(text=f"{stats['mem_max']:.1f}%")
+        else:
+            self.stats_labels['média'].configure(text=f"{stats['disk_avg']:.1f}%")
+            self.stats_labels['mínimo'].configure(text=f"{stats['disk_min']:.1f}%")
+            self.stats_labels['máximo'].configure(text=f"{stats['disk_max']:.1f}%")
+
+    # ---------- Aba Segurança ----------
+    def _fill_seguranca(self, parent):
+        ctk.CTkLabel(parent, text="Segurança do Sistema", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="center", pady=(0,20))
+        items = [
+            ("🔍 Portas Abertas", "ports", False),
+            ("🛡️ Firewall", "firewall", False),
+            ("🔎 Atualizações de Segurança", "sec_updates", False)
+        ]
+        level = self.config.get("expert_level", 1)
+        if level == 1:
+            items = [item for item in items if item[1] not in ["ports", "sec_updates"]]
+        ui.create_card_grid(parent, items, "sec", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
+        btn, log = ui.add_console(parent, "sec", self.acc_color, self.toggle_console)
+        self.detail_buttons["sec"] = btn
+        self.logs["sec"] = log
+
+    # ---------- Aba Agente IA (configuração em painel expansível independente) ----------
+    def _fill_agente(self, parent):
+        ctk.CTkLabel(parent, text="Agente de IA", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="center", pady=(0,20))
+
+        # Frame principal com abas internas (Sugestões e Chat)
+        main_frame = ctk.CTkFrame(parent, fg_color=self.bg_color, corner_radius=10,
+                                   border_width=1, border_color=self.acc_color)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        tabview = ctk.CTkTabview(main_frame, fg_color=self.light_bg)
+        tabview.pack(fill="both", expand=True, padx=5, pady=5)
+
+        tab_sugestoes = tabview.add("Sugestões")
+        tab_chat = tabview.add("Chat")
+
+        self.ai_sugestoes_text = ctk.CTkTextbox(tab_sugestoes, height=200, fg_color=self.light_bg,
+                                                 text_color=self.text_color, font=("Consolas",11), wrap="word")
+        self.ai_sugestoes_text.pack(fill="both", expand=True, padx=10, pady=10)
+        btn_atualizar = ctk.CTkButton(tab_sugestoes, text="🔄 Analisar Agora", fg_color=self.acc_color,
+                                       command=self._update_ai_suggestions, cursor="hand2")
+        btn_atualizar.pack(pady=10)
+
+        self.chat_frame = ChatFrame(tab_chat, self, fg_color="transparent")
+        self.chat_frame.pack(fill="both", expand=True)
+
+        # Painel expansível para configuração da IA (igual aos Detalhes)
+        config_btn, config_panel = self._create_config_panel(parent)
+        self.detail_buttons["ai_config"] = config_btn
+        self.logs["ai_config"] = config_panel  # Reutilizamos logs para armazenar o frame
+
+        self._update_ai_suggestions()
+
+    def _create_config_panel(self, parent):
+        """Cria um botão e um frame expansível para configuração da IA."""
+        btn = ctk.CTkButton(parent, text="⚙️ Configurar IA ⌄", fg_color=self.acc_color,
+                            command=lambda: self.toggle_config_panel(), cursor="hand2")
+        btn.pack(anchor="e", padx=10, pady=5)
+
+        panel = ctk.CTkFrame(parent, fg_color=self.light_bg, corner_radius=10)
+        panel.pack_forget()  # Inicialmente oculto
+
+        # Conteúdo do painel
+        inner_frame = ctk.CTkFrame(panel, fg_color="transparent")
+        inner_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Provedor
+        provider_frame = ctk.CTkFrame(inner_frame, fg_color="transparent")
+        provider_frame.pack(fill="x", pady=5)
+        ctk.CTkLabel(provider_frame, text="Provedor:", font=("Inter",12), text_color=self.text_color).pack(side="left", padx=5)
+        self.ai_provider_var = ctk.StringVar(value=self.config.get("ai", {}).get("provider", "ollama"))
+        provider_menu = ctk.CTkOptionMenu(provider_frame, values=["ollama", "openai", "deepseek"],
+                                          variable=self.ai_provider_var, width=150, cursor="left_ptr")
+        provider_menu.pack(side="left", padx=5)
+
+        # Modelo
+        model_frame = ctk.CTkFrame(inner_frame, fg_color="transparent")
+        model_frame.pack(fill="x", pady=5)
+        ctk.CTkLabel(model_frame, text="Modelo:", font=("Inter",12), text_color=self.text_color).pack(side="left", padx=5)
+        self.ai_model_var = ctk.StringVar(value=self.config.get("ai", {}).get("model", "llama3.2"))
+        model_entry = ctk.CTkEntry(model_frame, textvariable=self.ai_model_var, width=200)
+        model_entry.pack(side="left", padx=5)
+
+        # Endpoint
+        endpoint_frame = ctk.CTkFrame(inner_frame, fg_color="transparent")
+        endpoint_frame.pack(fill="x", pady=5)
+        ctk.CTkLabel(endpoint_frame, text="Endpoint:", font=("Inter",12), text_color=self.text_color).pack(side="left", padx=5)
+        self.ai_endpoint_var = ctk.StringVar(value=self.config.get("ai", {}).get("endpoint", "http://localhost:11434"))
+        endpoint_entry = ctk.CTkEntry(endpoint_frame, textvariable=self.ai_endpoint_var, width=250)
+        endpoint_entry.pack(side="left", padx=5)
+
+        # API Key
+        key_frame = ctk.CTkFrame(inner_frame, fg_color="transparent")
+        key_frame.pack(fill="x", pady=5)
+        ctk.CTkLabel(key_frame, text="API Key:", font=("Inter",12), text_color=self.text_color).pack(side="left", padx=5)
+        self.ai_key_var = ctk.StringVar(value=self.config.get("ai", {}).get("api_key", ""))
+        key_entry = ctk.CTkEntry(key_frame, textvariable=self.ai_key_var, width=250, show="*")
+        key_entry.pack(side="left", padx=5)
+
+        # Botão Salvar
+        save_btn = ctk.CTkButton(inner_frame, text="Salvar configurações", fg_color=self.acc_color,
+                                  command=self._save_ai_config, width=200, cursor="hand2")
+        save_btn.pack(pady=10)
+
+        return btn, panel
+
+    def toggle_config_panel(self):
+        """Alterna a visibilidade do painel de configuração da IA."""
+        panel = self.logs.get("ai_config")
+        btn = self.detail_buttons.get("ai_config")
+        if not panel or not btn:
+            return
+        if self.consoles_visible.get("ai_config", False):
+            panel.pack_forget()
+            btn.configure(text="⚙️ Configurar IA ⌄")
+            self.consoles_visible["ai_config"] = False
+        else:
+            panel.pack(fill="x", padx=10, pady=5, after=btn)
+            btn.configure(text="⚙️ Configurar IA ⌃")
+            self.consoles_visible["ai_config"] = True
+
+    def _save_ai_config(self):
+        self.config["ai"] = {
+            "provider": self.ai_provider_var.get(),
+            "model": self.ai_model_var.get(),
+            "endpoint": self.ai_endpoint_var.get(),
+            "api_key": self.ai_key_var.get()
+        }
+        self._save_config()
+        self.show_toast("Configurações de IA salvas!")
+        if hasattr(self, 'chat_frame'):
+            self.chat_frame.current_ai = self.config["ai"]["provider"]
+            self.chat_frame.ai_model = self.config["ai"]["model"]
+            self.chat_frame.endpoint = self.config["ai"]["endpoint"]
+            self.chat_frame.api_key = self.config["ai"]["api_key"]
+
+    def _update_ai_suggestions(self):
+        sugestoes = self.ai_proactive.get_summary()
+        self.ai_sugestoes_text.delete("1.0", "end")
+        self.ai_sugestoes_text.insert("1.0", sugestoes)
+
+    # ---------- Execução de comandos ----------
+    def run_card_action(self, cmd, tag, is_dns):
+        log = self.logs.get(tag)
+        if not log:
+            return
+        log.delete("1.0", "end")
+        if tag in self.detail_buttons:
+            self.detail_buttons[tag].pack_forget()
+        self.consoles_visible[tag] = False
+        threading.Thread(target=self._execute_command, args=(cmd, log, tag, is_dns), daemon=True).start()
+
+    def _execute_command(self, cmd, log, tag, is_dns):
+        if is_dns:
+            mapper = ActionMapper(self.SO, self.runner, self.turbo_active)
+            real_cmd = mapper.dns_command(cmd)
+        else:
+            if cmd == "speedtest":
+                self.action_handler.run_speed_test(log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "browsers":
+                self.action_handler.run_browser_clean(log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "lanscan":
+                self.action_handler.run_lan_scan(log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "ports":
+                self.action_handler.run_port_scan(log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "firewall":
+                self.action_handler.run_firewall_check(log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "sec_updates":
+                self.action_handler.run_security_updates(log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "lancache":
+                self.action_handler.run_lan_cache_setup(log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "services":
+                self.action_handler.run_services_manager(log)
+                self._show_details_button(tag)
+                return
+            elif cmd == "logs":
+                self.action_handler.run_log_analysis(log)
+                self._show_details_button(tag)
+                return
+            elif cmd in ["video_drv", "net_drv", "auto_update", "cookies", "empty_trash"]:
+                self.action_handler.special_command(cmd, log)
+                self._show_details_button(tag)
+                return
+            mapper = ActionMapper(self.SO, self.runner, self.turbo_active)
+            real_cmd = mapper.get_command(cmd)
+            if real_cmd is None:
+                self.after(0, lambda: log.insert("end", f"Comando {cmd} não suportado neste SO.\n"))
+                self.after(0, lambda: self._show_details_button(tag))
+                return
+        use_sudo = False
+        if real_cmd and real_cmd.startswith("sudo "):
+            use_sudo = True
+            real_cmd = real_cmd[5:]
+        proc = self.runner.run(real_cmd, use_sudo=use_sudo, parent=self)
+        if proc:
+            for line in proc.stdout:
+                self.after(0, lambda l=line: log.insert("end", l))
+            proc.wait()
+            self.after(0, lambda: log.insert("end", "\n-- COMANDO FINALIZADO --\n"))
+        else:
+            self.after(0, lambda: log.insert("end", "Erro ao executar comando.\n"))
+        self.after(0, lambda: self._show_details_button(tag))
+
+    def _show_details_button(self, tag):
+        btn = self.detail_buttons.get(tag)
+        if btn and not btn.winfo_ismapped():
+            btn.configure(fg_color=self.acc_color, text_color="white")
+            btn.pack(anchor="e", pady=5)
+        if btn:
+            btn.configure(text="Detalhes ⌄")
+
+    def toggle_console(self, tag):
+        btn = self.detail_buttons.get(tag)
+        log = self.logs.get(tag)
+        if not btn or not log:
+            return
+        if self.consoles_visible.get(tag, False):
+            log.pack_forget()
+            btn.pack_forget()
+            self.consoles_visible[tag] = False
+        else:
+            log.pack(fill="x", pady=5, before=btn)
+            btn.configure(text="Detalhes ⌃")
+            self.consoles_visible[tag] = True
+
+    def toggle_ping(self):
+        if not self.ping_active:
+            self.ping_active = True
+            threading.Thread(target=self._ping_loop, daemon=True).start()
+        else:
+            self.ping_active = False
+
+    def _ping_loop(self):
+        param = "-n" if self.SO == "Windows" else "-c"

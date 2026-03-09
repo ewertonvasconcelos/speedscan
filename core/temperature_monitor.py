@@ -1,8 +1,6 @@
-from core import config
 #!/usr/bin/env python3
-import logging
-# Módulo de monitoramento de temperaturas (CPU, GPU, discos)
-# Versão 1.0.0
+# -*- coding: utf-8 -*-
+# core/temperature_monitor.py
 
 import psutil
 import subprocess
@@ -27,23 +25,26 @@ class TemperatureMonitor:
                     with open("/sys/class/thermal/thermal_zone0/temp") as f:
                         temp = int(f.read().strip()) / 1000.0
                         temps["CPU"] = round(temp, 1)
-                except:
+                except Exception as e:
+                    # Ignora erros de leitura
                     pass
         except Exception as e:
-            logging.error(f"Erro ao obter temperaturas da CPU: {e}")
+            # Log de erro
+            pass
         return temps
 
     def get_gpu_temperatures(self):
         temps = {}
         try:
-            out = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader"], 
+            out = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader"],
                                  capture_output=True, text=True, timeout=2)
             if out.returncode == 0:
                 lines = out.stdout.strip().split('\n')
                 for i, line in enumerate(lines):
                     if line.strip():
                         temps[f"GPU {i}"] = round(float(line.strip()), 1)
-        except:
+        except Exception as e:
+            # Se não tiver nvidia-smi, ignora
             pass
         return temps
 
@@ -55,15 +56,18 @@ class TemperatureMonitor:
             for disk in disks:
                 disk = disk.strip()
                 if disk:
-                    smart = subprocess.run(["sudo", "smartctl", "-A", f"/dev/{disk}"], 
-                                          capture_output=True, text=True, timeout=2)
-                    for line in smart.stdout.splitlines():
-                        if "Temperature_Celsius" in line:
-                            parts = line.split()
-                            if len(parts) >= 10:
-                                temp = parts[9]
-                                temps[f"Disk {disk}"] = round(float(temp), 1)
-                                break
+                    try:
+                        smart = subprocess.run(["sudo", "smartctl", "-A", f"/dev/{disk}"],
+                                              capture_output=True, text=True, timeout=2)
+                        for line in smart.stdout.splitlines():
+                            if "Temperature_Celsius" in line:
+                                parts = line.split()
+                                if len(parts) >= 10:
+                                    temp = parts[9]
+                                    temps[f"Disk {disk}"] = round(float(temp), 1)
+                                    break
+                    except:
+                        pass
         except:
             pass
         return temps

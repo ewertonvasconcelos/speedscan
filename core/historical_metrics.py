@@ -1,24 +1,33 @@
-from core import config
 #!/usr/bin/env python3
-import logging
-# Módulo de coleta e armazenamento de métricas históricas (não bloqueante)
-# Versão 1.0.0
+# -*- coding: utf-8 -*-
+"""
+Historical metrics collection and storage module (non-blocking).
+Version 1.0.0
+"""
 
 import sqlite3
 import time
 import threading
+import logging
 from pathlib import Path
 import psutil
+
+from core import config
 
 DB_PATH = Path.home() / "speedscan" / "metrics.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+
 class MetricsDB:
+    """Handles SQLite database operations for storing and retrieving system metrics."""
+
     def __init__(self, db_path=DB_PATH):
+        """Initialize the database connection and create table/index if needed."""
         self.db_path = db_path
         self._init_db()
 
     def _init_db(self):
+        """Create the metrics table and index if they do not exist."""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS metrics (
@@ -34,21 +43,36 @@ class MetricsDB:
                 )
             ''')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON metrics(timestamp)')
-    
-    def insert(self, cpu=None, memory=None, disk_usage=None, 
+
+    def insert(self, cpu=None, memory=None, disk_usage=None,
                disk_io_read=None, disk_io_write=None, net_sent=None, net_recv=None):
+        """
+        Insert a new metrics record with current timestamp.
+
+        All parameters are optional; None values will be stored as NULL.
+        """
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute('''
-                    INSERT INTO metrics 
+                    INSERT INTO metrics
                     (timestamp, cpu, memory, disk_usage, disk_io_read, disk_io_write, net_sent, net_recv)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (time.time(), cpu, memory, disk_usage,
                       disk_io_read, disk_io_write, net_sent, net_recv))
         except Exception as e:
-            logging.error(f"Erro ao inserir métrica: {e}")
+            logging.error(f"Failed to insert metrics: {e}")
 
     def get_last_hours(self, hours=1, metrics=None):
+        """
+        Retrieve metrics from the last N hours.
+
+        Args:
+            hours (int): Number of hours to look back.
+            metrics (list): List of column names to fetch (default: ['timestamp','cpu','memory','disk_usage']).
+
+        Returns:
+            list of tuples: Rows matching the query.
+        """
         if metrics is None:
             metrics = ['timestamp', 'cpu', 'memory', 'disk_usage']
         else:
@@ -60,17 +84,27 @@ class MetricsDB:
             cursor = conn.execute(f'SELECT {cols} FROM metrics WHERE timestamp >= ? ORDER BY timestamp', (cutoff,))
             rows = cursor.fetchall()
         return rows
-    
+
     def prune_old(self, days=7):
+        """Delete records older than the specified number of days."""
         cutoff = time.time() - days * 24 * 3600
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('DELETE FROM metrics WHERE timestamp < ?', (cutoff,))
-    
+
     def get_stats(self, period_hours=1):
+        """
+        Compute min, max, average for CPU, memory and disk usage over the given period.
+
+        Args:
+            period_hours (int): Lookback period in hours.
+
+        Returns:
+            dict: Keys like 'cpu_avg', 'cpu_min', 'cpu_max', etc.
+        """
         cutoff = time.time() - period_hours * 3600
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute('''
-                SELECT 
+                SELECT
                     AVG(cpu), MIN(cpu), MAX(cpu),
                     AVG(memory), MIN(memory), MAX(memory),
                     AVG(disk_usage), MIN(disk_usage), MAX(disk_usage)
@@ -83,8 +117,17 @@ class MetricsDB:
             'disk_avg': row[6], 'disk_min': row[7], 'disk_max': row[8]
         }
 
+
 class MetricsCollector:
+    """Background collector that periodically samples system metrics and stores them in the database."""
+
     def __init__(self, interval=5):
+        """
+        Initialize the collector.
+
+        Args:
+            interval (int): Sampling interval in seconds (approx).
+        """
         self.interval = interval
         self.db = MetricsDB()
         self._stop_event = threading.Event()
@@ -92,50 +135,58 @@ class MetricsCollector:
         self._last_disk_io = psutil.disk_io_counters()
         self._last_net_io = psutil.net_io_counters()
         self._last_time = time.time()
-    
+
     def start(self):
+        """Start the background collection thread."""
         if self._thread is None or not self._thread.is_alive():
             self._thread = threading.Thread(target=self._collect_loop, daemon=True)
             self._thread.start()
-    
+            logging.debug("Metrics collector started.")
+
     def stop(self):
+        """Stop the background collection thread."""
         self._stop_event.set()
-        # Não espera a thread terminar, pois é daemon e será morta ao final do programa
-    
+        logging.debug("Metrics collector stopping.")
+
     def _collect_loop(self):
+        """Main loop: collect metrics at approximate intervals."""
         while not self._stop_event.is_set():
             self._collect_once()
-            # Usa um loop com sleep curto para verificar o stop_event com mais frequência
+            # Sleep in small increments to allow quick stop
             for _ in range(self.interval * 2):
                 if self._stop_event.is_set():
                     return
                 time.sleep(0.5)
-    
+
     def _collect_once(self):
+        """Sample all metrics and store them in the database."""
         try:
             cpu = psutil.cpu_percent(interval=0.1)
             mem = psutil.virtual_memory().percent
             disk = psutil.disk_usage('/').percent
-            
+
+            # I/O rates
             disk_io = psutil.disk_io_counters()
+            net_io = psutil.net_io_counters()
             now = time.time()
             dt = now - self._last_time
+
             if disk_io and self._last_disk_io and dt > 0:
                 read_bps = (disk_io.read_bytes - self._last_disk_io.read_bytes) / dt
                 write_bps = (disk_io.write_bytes - self._last_disk_io.write_bytes) / dt
             else:
                 read_bps = write_bps = None
-            self._last_disk_io = disk_io
-            
-            net_io = psutil.net_io_counters()
+
             if net_io and self._last_net_io and dt > 0:
                 sent_bps = (net_io.bytes_sent - self._last_net_io.bytes_sent) / dt
                 recv_bps = (net_io.bytes_recv - self._last_net_io.bytes_recv) / dt
             else:
                 sent_bps = recv_bps = None
+
+            self._last_disk_io = disk_io
             self._last_net_io = net_io
             self._last_time = now
-            
+
             self.db.insert(
                 cpu=cpu,
                 memory=mem,
@@ -145,8 +196,10 @@ class MetricsCollector:
                 net_sent=sent_bps,
                 net_recv=recv_bps
             )
-            
-            if int(now) % 3600 < 5:  # aproximadamente a cada hora
+
+            # Prune old records once a day (approx at midnight)
+            if int(now) % 3600 < 5:
                 self.db.prune_old(days=7)
+
         except Exception as e:
-            logging.error(f"Erro na coleta de métricas: {e}")
+            logging.error(f"Error during metrics collection: {e}")

@@ -1,54 +1,72 @@
-from core import config
 #!/usr/bin/env python3
-import logging
-# Módulo de IA Proativa - Sugere otimizações baseado em métricas
-# Versão 1.0.0
+# -*- coding: utf-8 -*-
+"""
+Proactive AI module - Suggests optimizations based on metrics.
+Version 1.0.0
+"""
 
+import logging
 import psutil
 import time
 from core.cookie_manager import CookieManager
 from core.trash_manager import TrashManager
 
+from core import config
+
+
 class AIProactive:
+    """Proactively analyzes system metrics and suggests actions to improve performance or clean up."""
+
     def __init__(self, metrics_db, health_monitor):
+        """Initializes the proactive AI with database and health monitor references.
+
+        Args:
+            metrics_db: MetricsDB instance for historical data.
+            health_monitor: HealthScore instance for system health.
+        """
         self.metrics_db = metrics_db
         self.health_monitor = health_monitor
         self.cookie_mgr = CookieManager()
         self.trash_mgr = TrashManager()
 
     def analyze(self):
-        sugestoes = []
-        
+        """Analyze current system metrics and return a list of suggested actions.
+
+        Returns:
+            list of dict: Each dict contains 'title', 'description', 'action' (name), 'priority' (string).
+        """
+        suggestions = []
+
         disk_usage = psutil.disk_usage('/')
         if disk_usage.percent > 90:
-            sugestoes.append({
-                'titulo': '⚠️ Pouco espaço em disco',
-                'descricao': f'O disco está com {disk_usage.percent:.1f}% de uso. Libere espaço.',
-                'acao': 'browsers',
-                'prioridade': 'alta'
+            suggestions.append({
+                'title': '⚡ Low disk space',
+                'description': f'Disk is at {disk_usage.percent:.1f}% usage. Free up space.',
+                'action': 'browsers',
+                'priority': 'high'
             })
         elif disk_usage.percent > 75:
-            sugestoes.append({
-                'titulo': 'ℹ️ Espaço em disco',
-                'descricao': f'O disco está com {disk_usage.percent:.1f}% de uso. Considere limpar cache.',
-                'acao': 'cache',
-                'prioridade': 'media'
+            suggestions.append({
+                'title': 'ℹ️ Disk space',
+                'description': f'Disk is at {disk_usage.percent:.1f}% usage. Consider cache clean.',
+                'action': 'cache',
+                'priority': 'medium'
             })
 
         mem = psutil.virtual_memory()
         if mem.percent > 90:
-            sugestoes.append({
-                'titulo': '⚠️ Memória RAM alta',
-                'descricao': f'Uso de RAM em {mem.percent:.1f}%. Feche aplicativos pesados.',
-                'acao': None,
-                'prioridade': 'alta'
+            suggestions.append({
+                'title': '⚡ High RAM memory',
+                'description': f'RAM usage is {mem.percent:.1f}%. Close heavy applications.',
+                'action': None,
+                'priority': 'high'
             })
         elif mem.percent > 80:
-            sugestoes.append({
-                'titulo': 'ℹ️ Memória RAM',
-                'descricao': f'Uso de RAM em {mem.percent:.1f}%. Considere reiniciar.',
-                'acao': None,
-                'prioridade': 'media'
+            suggestions.append({
+                'title': 'ℹ️ RAM memory',
+                'description': f'RAM usage is {mem.percent:.1f}%. Consider restarting.',
+                'action': None,
+                'priority': 'medium'
             })
 
         try:
@@ -56,88 +74,93 @@ class AIProactive:
             for sensor, entries in temps.items():
                 for entry in entries:
                     if entry.current > 80:
-                        sugestoes.append({
-                            'titulo': '🔥 Temperatura alta',
-                            'descricao': f'{sensor}: {entry.current}°C. Verifique ventilação.',
-                            'acao': None,
-                            'prioridade': 'alta'
+                        suggestions.append({
+                            'title': '🔥 High temperature',
+                            'description': f'{sensor}: {entry.current}°C. Check cooling.',
+                            'action': None,
+                            'priority': 'high'
                         })
                         break
-        except:
+        except Exception as e:
+            logging.error(f"Error accessing temperatures: {e}")
             pass
 
         battery = psutil.sensors_battery()
         if battery and battery.percent < 20 and not battery.power_plugged:
-            sugestoes.append({
-                'titulo': '🔋 Bateria fraca',
-                'descricao': f'Bateria em {battery.percent:.1f}%. Conecte o carregador.',
-                'acao': None,
-                'prioridade': 'alta'
+            suggestions.append({
+                'title': '🔋 Low battery',
+                'description': f'Battery at {battery.percent:.1f}%. Plug in charger.',
+                'action': None,
+                'priority': 'high'
             })
 
         health = self.health_monitor.calculate_health_score()
         if health['score'] < 50:
-            sugestoes.append({
-                'titulo': '💔 Saúde do sistema crítica',
-                'descricao': 'Score muito baixo. Execute otimizações.',
-                'acao': 'check',
-                'prioridade': 'alta'
+            suggestions.append({
+                'title': '🔔 System health critical',
+                'description': 'Health score is low. Run optimizations.',
+                'action': 'check',
+                'priority': 'high'
             })
         elif health['score'] < 70:
-            sugestoes.append({
-                'titulo': '❤️‍🩹 Saúde do sistema',
-                'descricao': 'Score médio. Considere limpeza.',
-                'acao': 'cache',
-                'prioridade': 'media'
+            suggestions.append({
+                'title': '⛔🪣 System health',
+                'description': 'Health score is medium. Consider cleaning.',
+                'action': 'cache',
+                'priority': 'medium'
             })
 
         stats = self.metrics_db.get_stats(period_hours=24)
         if stats['cpu_avg'] and stats['cpu_avg'] > 80:
-            sugestoes.append({
-                'titulo': '📈 CPU consistentemente alta',
-                'descricao': f'Média de CPU nas últimas 24h: {stats["cpu_avg"]:.1f}%. Verifique processos.',
-                'acao': None,
-                'prioridade': 'media'
+            suggestions.append({
+                'title': '📈 CPU consistently high',
+                'description': f'Average CPU over last 24h: {stats["cpu_avg"]:.1f}%. Check processes.',
+                'action': None,
+                'priority': 'medium'
             })
         if stats['mem_avg'] and stats['mem_avg'] > 80:
-            sugestoes.append({
-                'titulo': '📈 Memória consistentemente alta',
-                'descricao': f'Média de memória nas últimas 24h: {stats["mem_avg"]:.1f}%.',
-                'acao': None,
-                'prioridade': 'media'
+            suggestions.append({
+                'title': '📈 Memory consistently high',
+                'description': f'Average memory over last 24h: {stats["mem_avg"]:.1f}%.',
+                'action': None,
+                'priority': 'medium'
             })
 
         cookie_sites = self.cookie_mgr.get_cookie_summary()
         if cookie_sites and len(cookie_sites) > 50:
-            sugestoes.append({
-                'titulo': '🍪 Muitos cookies armazenados',
-                'descricao': f'Você tem cookies de {len(cookie_sites)} sites. Gerenciar cookies pode liberar espaço.',
-                'acao': 'cookies',
-                'prioridade': 'baixa'
+            suggestions.append({
+                'title': '🍪 Many cookies stored',
+                'description': f'You have cookies from {len(cookie_sites)} sites. Cleaning cookies may free space.',
+                'action': 'cookies',
+                'priority': 'low'
             })
 
         trash_size = self.trash_mgr.get_trash_size()
         if trash_size > 100 * 1024 * 1024:  # > 100 MB
-            sugestoes.append({
-                'titulo': '🗑️ Lixeira do SpeedScan cheia',
-                'descricao': f'A lixeira contém {trash_size / (1024*1024):.1f} MB. Deseja esvaziar?',
-                'acao': 'empty_trash',
-                'prioridade': 'media'
+            suggestions.append({
+                'title': '🗑️ Trash is full',
+                'description': f'Trash contains {trash_size / (1024*1024):.1f} MB. Empty it?',
+                'action': 'empty_trash',
+                'priority': 'medium'
             })
 
-        return sugestoes
+        return suggestions
 
     def get_summary(self):
-        sugestoes = self.analyze()
-        if not sugestoes:
-            return "✅ Nenhuma sugestão no momento. Sistema OK!"
-        
-        linhas = []
-        for s in sugestoes:
-            prioridade_emoji = {
-                'alta': '🔴',
-                'media': '🟡',
-                'baixa': '🟢'
-            }.get(s['prioridade'], '⚪')
-            linhas.append(f"{prioridade_emoji} {s['titulo']}: {s['descricao']}")
-        return "\n".join(linhas)
+        """Generate a summary of all suggestions for display.
+
+        Returns:
+            str: A formatted summary with emoji icons.
+        """
+        suggestions = self.analyze()
+        if not suggestions:
+            return "✅ No suggestions at the moment. System is OK!"
+        lines = []
+        for s in suggestions:
+            priority_emoji = {
+                'high': '🔴',
+                'medium': '🟡',
+                'low': '🟢'
+            }.get(s['priority'], '⚪')
+            lines.append(f"{priority_emoji} {s['title']}: {s['description']}")
+        return "\n".join(lines)

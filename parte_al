@@ -1,0 +1,169 @@
+        with open(TRASH_METADATA) as f:
+            return json.load(f)
+
+    def _save_metadata(self, metadata):
+        with open(TRASH_METADATA, "w") as f:
+            json.dump(metadata, f, indent=2)
+
+    def move_to_trash(self, path, original_path):
+        if not os.path.exists(path):
+            return False
+        trash_name = f"{int(time.time())}_{os.path.basename(path)}"
+        trash_path = TRASH_DIR / trash_name
+        shutil.move(path, trash_path)
+        metadata = self._load_metadata()
+        metadata[trash_name] = {
+            'original': str(original_path),
+            'time': time.time()
+        }
+        self._save_metadata(metadata)
+        return True
+
+    def restore(self, trash_name):
+        metadata = self._load_metadata()
+        if trash_name not in metadata:
+            return False
+        info = metadata[trash_name]
+        trash_path = TRASH_DIR / trash_name
+        original = Path(info['original'])
+        if not trash_path.exists():
+            return False
+        original.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(trash_path), str(original))
+        del metadata[trash_name]
+        self._save_metadata(metadata)
+        return True
+
+    def empty_trash(self):
+        shutil.rmtree(TRASH_DIR)
+        TRASH_DIR.mkdir()
+        self._save_metadata({})
+
+    def list_trash(self):
+        metadata = self._load_metadata()
+        items = []
+        for name, info in metadata.items():
+            items.append({
+                'name': name,
+                'original': info['original'],
+                'time': info['time']
+            })
+        return items
+
+    def get_trash_size(self):
+        total = 0
+        for root, dirs, files in os.walk(TRASH_DIR):
+            for f in files:
+                if f == 'metadata.json':
+                    continue
+                fp = Path(root) / f
+                total += fp.stat().st_size
+        return total
+
+===== core/ui.py =====
+#!/usr/bin/env python3
+# core/ui.py
+# =============================================================================
+#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
+#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
+#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
+#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
+#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
+#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
+# =============================================================================
+# Funções auxiliares para interface do SpeedScan
+# Versão 0.3.1-beta
+# =============================================================================
+
+import customtkinter as ctk
+
+def add_tooltip(widget, text):
+    tooltip = None
+    def enter(event):
+        nonlocal tooltip
+        x, y, _, _ = widget.bbox("insert")
+        x += widget.winfo_rootx() + 25
+        y += widget.winfo_rooty() + 25
+        tooltip = ctk.CTkToplevel(widget)
+        tooltip.wm_overrideredirect(True)
+        tooltip.wm_geometry(f"+{x}+{y}")
+        label = ctk.CTkLabel(tooltip, text=text, justify="left",
+                              fg_color="#2b2b2b", text_color="white",
+                              corner_radius=5, padx=5, pady=5)
+        label.pack()
+    def leave(event):
+        nonlocal tooltip
+        if tooltip:
+            tooltip.destroy()
+    widget.bind("<Enter>", enter)
+    widget.bind("<Leave>", leave)
+
+def create_card_grid(parent, items, tag_prefix, acc_color, bg_color, text_color, command_callback):
+    grid_frame = ctk.CTkFrame(parent, fg_color="transparent")
+    grid_frame.pack(fill="x", pady=5)
+
+    ping_labels = []
+    for idx, (label, cmd, is_dns) in enumerate(items):
+        row, col = divmod(idx, 3)
+        card = ctk.CTkFrame(grid_frame, fg_color=bg_color, corner_radius=10,
+                             border_width=1, border_color=acc_color)
+        card.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+        card.grid_propagate(False)
+        card.configure(height=150)
+
+        title = ctk.CTkLabel(card, text=label, font=("Inter", 14, "bold"),
+                              text_color=acc_color)
+        title.pack(pady=(10,5))
+
+        if cmd == "ping":
+            ping_label = ctk.CTkLabel(card, text="-- ms", font=("Inter", 18, "bold"),
+                                       text_color=text_color)
+            ping_label.pack(expand=True)
+            ping_labels.append(ping_label)
+            btn = ctk.CTkButton(card, text="Iniciar", fg_color=acc_color,
+                                 command=lambda c=cmd, t=tag_prefix, d=is_dns: command_callback(c, t, d),
+                                 cursor="hand2")
+            btn.pack(pady=5)
+        else:
+            btn = ctk.CTkButton(card, text="Executar", fg_color=acc_color,
+                                 command=lambda c=cmd, t=tag_prefix, d=is_dns: command_callback(c, t, d),
+                                 cursor="hand2")
+            btn.pack(expand=True)
+
+    for i in range(3):
+        grid_frame.columnconfigure(i, weight=1)
+
+    return ping_labels
+
+def add_console(parent, tag_prefix, acc_color, toggle_callback):
+    console = ctk.CTkTextbox(parent, height=150, fg_color="#1e1e1e", text_color="#ffffff",
+                              font=("Consolas", 10), corner_radius=10)
+    btn = ctk.CTkButton(parent, text="Detalhes ⌄", fg_color=acc_color,
+                         command=lambda: toggle_callback(tag_prefix), cursor="hand2")
+    return btn, console
+
+===== requirements.txt =====
+customtkinter==5.2.2
+psutil==7.2.2
+Pillow==12.1.1
+speedtest-cli==2.1.3
+matplotlib==3.10.8
+requests==2.32.3
+ollama==0.4.0
+
+===== restart_speedscan.sh =====
+#!/bin/bash
+# Script de reinicialização do SpeedScan
+# Versão 0.3.0-beta
+
+PARENT_PID=$1
+
+while kill -0 "$PARENT_PID" 2>/dev/null; do
+    sleep 0.1
+done
+
+cd "$HOME/speedscan"
+source speedscan-venv/bin/activate
+python -m core.main
+
+

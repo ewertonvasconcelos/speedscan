@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from core import config
-# core/config.py
-# Arquivo centralizado de configurações do SpeedScan
-# Gerado automaticamente – não edite manualmente.
+"""
+Central configuration file for SpeedScan.
+Automatically generated - do not edit manually.
+"""
 
 import os
 from pathlib import Path
 
 # =============================================================================
-# Versão do aplicativo
+# Application version
 # =============================================================================
 VERSION = "1.0.0"
 
 # =============================================================================
-# Caminhos de diretórios e arquivos
+# Directory and file paths
 # =============================================================================
 CONFIG_FILE = Path.home() / ".speedscan_conf"
 ICON_PATH = Path.home() / "speedscan" / "assets" / "icon.png"
@@ -22,7 +22,7 @@ LOG_DIR = Path.home() / "speedscan" / "logs"
 AGENT_SCRIPT = Path.home() / "speedscan" / "speedscan-agent.py"
 
 # =============================================================================
-# Configuração padrão
+# Default configuration
 # =============================================================================
 DEFAULT_CONFIG = {
     "theme": "default",
@@ -58,7 +58,7 @@ DEFAULT_CONFIG = {
 }
 
 # =============================================================================
-# Temas
+# Themes
 # =============================================================================
 THEMES = {
     "default": {"mode": "dark", "bg": "#1e293b", "side": "#0f172a", "acc": "#a855f7", "text": "#ffffff"},
@@ -68,7 +68,7 @@ THEMES = {
 }
 
 # =============================================================================
-# Idiomas suportados
+# Supported languages
 # =============================================================================
 LANGUAGES = {
     "pt_BR": "Português Brasileiro",
@@ -77,19 +77,26 @@ LANGUAGES = {
 }
 
 # =============================================================================
-# Escalas de interface
+# UI scale options
 # =============================================================================
 SCALES = {
-    "auto": "Automático",
+    "auto": "Automatic",
     "100": "100%",
     "125": "125%",
     "150": "150%"
 }
 
 # =============================================================================
-# Lista de sugestões de IA
+# AI suggestion list (for display)
 # =============================================================================
 AI_SUGGESTIONS = [
-    "Ollama (local)", "OpenAI GPT", "Google Gemini", "Claude (Anthropic)",
-    "Llama 3 (Meta)", "Mistral AI", "Cohere", "DeepSeek", "Configurar IA Local"
+    "Ollama (local)",
+    "OpenAI GPT",
+    "Google Gemini",
+    "Claude (Anthropic)",
+    "Llama 3 (Meta)",
+    "Mistral AI",
+    "Cohere",
+    "DeepSeek",
+    "Configure Local AI"
 ]

@@ -1,23 +1,37 @@
-from core import config
 #!/usr/bin/env python3
-import logging
-# Módulo de teste de velocidade de internet
-# Versão 1.0.0
+# -*- coding: utf-8 -*-
+"""
+Internet speed test module.
+Version 1.0.0
+"""
 
+import logging
 import subprocess
+import sys
 import time
 import threading
-import sys
+import os
 
 try:
     import speedtest
 except ImportError:
-    logging.error("Instalando speedtest-cli...")
+    logging.error("Installing speedtest-cli...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "speedtest-cli"])
     import speedtest
 
+from core import config
+
+
 class SpeedTester:
+    """Performs internet speed tests using speedtest-cli or a fallback method."""
+
     def __init__(self, use_fallback=False):
+        """Initialize the speed tester.
+
+        Args:
+            use_fallback (bool): If True, always use the fallback method (using requests).
+                         Otherwise, try speedtest-cli first, and fall back on failure.
+        """
         self.use_fallback = use_fallback
         self.result = {
             'ping': None,
@@ -29,6 +43,11 @@ class SpeedTester:
         }
 
     def test_with_speedtest(self):
+        """Run the speed test using the speedtest-cli library.
+
+        Returns:
+            bool: True on success, False on error.
+        """
         try:
             st = speedtest.Speedtest(secure=True)
             st.get_best_server()
@@ -41,10 +60,16 @@ class SpeedTester:
             self.result['timestamp'] = time.time()
             return True
         except Exception as e:
+            logging.error(f"Error in test_with_speedtest: {e}")
             self.result['error'] = str(e)
             return False
 
     def test_fallback(self):
+        """Run a manual speed test using requests (download/1post to google/httpbin).
+
+        Returns:
+            bool: True on success, False on error.
+        """
         import requests
         import tempfile
         try:
@@ -73,14 +98,23 @@ class SpeedTester:
             upload_mbps = (len(data) * 8) / elapsed / 1_000_000
             self.result['upload'] = round(upload_mbps, 2)
 
-            self.result['server'] = "Fallback (servidores públicos)"
+            self.result['server'] = "Fallback (public servers)"
             self.result['timestamp'] = time.time()
             return True
         except Exception as e:
+            logging.error(f"Error in test_fallback: {e}")
             self.result['error'] = str(e)
             return False
 
     def run_test(self, callback=None):
+        """Run the speed test in a separate thread.
+
+        Args:
+            callback (callable): Optional function that will be called with the result dict after the test.
+
+        Returns:
+            threading.Thread: The thread object (daemon).
+        """
         def _run():
             if self.use_fallback:
                 success = self.test_fallback()
@@ -89,28 +123,36 @@ class SpeedTester:
                 if not success:
                     self.use_fallback = True
                     success = self.test_fallback()
-            if callback:
+            if callback: 
                 callback(self.result)
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
         return thread
 
     def format_result(self, result=None):
+        """Format the speed test result as a readable string.
+
+        Args:
+            result (dict): The result dictionary (if None, uses self.result).
+
+        Returns:
+            str: A formatted string with the results.
+        """
         if result is None:
             result = self.result
         if result.get('error'):
-            return f"❌ Erro: {result['error']}"
+            return f"❌ Error: {result['error']}"
         lines = []
-        if result.get('ping') is not None:
+        if result.get('ping')  is not None:
             lines.append(f"📡 Ping: {result['ping']} ms")
         if result.get('download') is not None:
             lines.append(f"⬇️ Download: {result['download']} Mbps")
         if result.get('upload') is not None:
             lines.append(f"⬆️ Upload: {result['upload']} Mbps")
         if result.get('server'):
-            lines.append(f"🌍 Servidor: {result['server']}")
+            lines.append(f"🌍 Server: {result['server']}")
         if result.get('timestamp'):
             from datetime import datetime
             dt = datetime.fromtimestamp(result['timestamp'])
-            lines.append(f"🕒 {dt.strftime('%d/%m/%Y %H:%M:%S')}")
+            lines.append(f"⟕ {dt.strftime('%d/%m/%y %H:%M:%S')}")
         return "\n".join(lines)

@@ -1,16 +1,24 @@
-from core import config
 #!/usr/bin/env python3
-import logging
-# Gerenciador de cookies para navegadores
-# Versão 1.0.0
+# -*- coding: utf-8 -*-
+"""
+Cookie manager for browsers - read, backup, restore, and delete cookies.
+Version 1.0.0
+"""
 
+import logging
 import sqlite3
 import json
 from pathlib import Path
 import shutil
 
+from core import config
+
+
 class CookieManager:
+    """Manages browser cookies: read, backup, restore, and selective deletion."""
+
     def __init__(self):
+        """Initialize with a dictionary of paths to browser cookie files."""
         self.cookie_files = {
             'chrome': Path.home() / '.config/google-chrome/Default/Cookies',
             'chromium': Path.home() / '.config/chromium/Default/Cookies',
@@ -23,6 +31,14 @@ class CookieManager:
         }
 
     def get_cookies_from_browser(self, browser_key):
+        """Fetch all cookies from a specific browser's database.
+
+        Args:
+            browser_key (str): Key identifying the browser (e.g., 'chrome', 'firefox').
+
+        Returns:
+            list: A list of dicts with 'host', 'name', 'value' for each cookie.
+        """
         path = self.cookie_files.get(browser_key)
         if not path:
             return []
@@ -42,11 +58,17 @@ class CookieManager:
             for row in rows:
                 cookies.append({'host': row[0], 'name': row[1], 'value': row[2]})
             conn.close()
+            return cookies
         except Exception as e:
-            logging.error(f"Erro ao ler cookies de {browser_key}: {e}")
-        return cookies
+            logging.error(f"Error reading cookies from {browser_key}: {e}")
+            return []
 
     def get_cookie_summary(self):
+        """Generate a summary of cookie counts per domain across all browsers.
+
+        Returns:
+            dict: A dictionary where keys are domain names and values are counts.
+        """
         summary = {}
         for browser in self.cookie_files:
             cookies = self.get_cookies_from_browser(browser)
@@ -56,6 +78,15 @@ class CookieManager:
         return summary
 
     def backup_cookies(self, browser_key, backup_path):
+        """Create a backup of the cookie file for a given browser.
+
+        Args:
+            browser_key (str): Identifier for the browser.
+            backup_path (Path): Destination path for the backup.
+
+        Returns:
+            bool: True on success, False on failure.
+        """
         src = self.cookie_files.get(browser_key)
         if not src or not src.exists():
             return False
@@ -63,6 +94,15 @@ class CookieManager:
         return True
 
     def restore_cookies(self, backup_path, browser_key):
+        """Restore cookies from a backup to the original browser location.
+
+        Args:
+            backup_path (Path): Path to the backup file.
+            browser_key (str): Identifier for the browser.
+
+        Returns:
+            bool: True on success, False on failure.
+        """
         dest = self.cookie_files.get(browser_key)
         if not dest:
             return False
@@ -70,6 +110,15 @@ class CookieManager:
         return True
 
     def delete_cookies_except(self, browser_key, keep_domains):
+        """Delete all cookies for a browser, except for those on domains in the keep_list.
+
+        Args:
+            browser_key (str): Identifier for the browser.
+            keep_domains (list): List of domain names to preserve.
+
+        Returns:
+            bool: True on success, False on failure.
+        """
         path = self.cookie_files.get(browser_key)
         if not path:
             return False
@@ -92,5 +141,5 @@ class CookieManager:
             conn.close()
             return True
         except Exception as e:
-            logging.error(f"Erro ao deletar cookies: {e}")
+            logging.error(f"Error deleting cookies: {e}")
             return False

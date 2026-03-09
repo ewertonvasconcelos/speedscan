@@ -1,0 +1,500 @@
+            log.insert("end", "Erros recentes (log show):\n")
+            log.insert("end", "="*40 + "\n")
+            proc = self.app.runner.run('log show --predicate \'eventMessage contains "error"\' --last 1h | head -20', use_sudo=False)
+            if proc:
+                for line in proc.stdout:
+                    log.insert("end", line)
+                proc.wait()
+        else:
+            log.insert("end", "Sistema não suportado para análise de logs.\n")
+        log.insert("end", "\n✅ Análise concluída.\n")
+
+    def special_command(self, cmd, log):
+        if cmd == "video_drv":
+            log.insert("end", "Detectando GPU...\n")
+            log.insert("end", "Funcionalidade em desenvolvimento.\n")
+        elif cmd == "net_drv":
+            log.insert("end", "Detectando placa de rede...\n")
+            log.insert("end", "Funcionalidade em desenvolvimento.\n")
+        elif cmd == "auto_update":
+            log.insert("end", "Configurando atualizações automáticas...\n")
+            log.insert("end", "Funcionalidade em desenvolvimento.\n")
+        elif cmd == "cookies":
+            self.run_cookie_manager(log)
+        elif cmd == "empty_trash":
+            self.app.trash_manager.empty_trash()
+            log.insert("end", "🗑️ Lixeira esvaziada.\n")
+
+    def run_cookie_manager(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "🍪 Gerenciador de Cookies\n")
+        log.insert("end", "="*40 + "\n")
+        summary = self.app.cookie_manager.get_cookie_summary()
+        if not summary:
+            log.insert("end", "Nenhum cookie encontrado.\n")
+            return
+        log.insert("end", f"Total de domínios com cookies: {len(summary)}\n")
+        for domain, count in list(summary.items())[:10]:
+            log.insert("end", f"{domain}: {count} cookies\n")
+        if len(summary) > 10:
+            log.insert("end", f"... e mais {len(summary)-10} domínios.\n")
+
+class SpeedScan(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.SO = platform.system()
+        self.runner = CommandRunner(self.SO)
+        self.hw = HardwareInfo(self.SO, self.runner)
+        self.config = self._load_config()
+        self.update_theme_vars()
+        self.title(f"SpeedScan {VERSION}")
+
+        self.configure(fg_color=self.bg_color)
+        self.minsize(900, 600)
+
+        self.apply_ui_scale()
+        self.turbo_active = False
+        self.consoles_visible = {}
+        self.ping_active = False
+        self.current_module = "dashboard"
+        self.sidebar_buttons = {}
+        self.detail_buttons = {}
+        self.logs = {}
+
+        self.health_monitor = HealthScore()
+        self.health_score_var = ctk.StringVar(value="Calculando...")
+        self.temp_monitor = TemperatureMonitor()
+        self.smart_monitor = SmartMonitor()
+        self.browser_cleaner = BrowserCleaner()
+        self.speed_tester = SpeedTester()
+        self.proc_manager = ProcessManager()
+        self.metrics_collector = MetricsCollector(interval=5)
+        self.metrics_db = MetricsDB()
+        self.lan_scanner = LANScanner()
+        self.ai_proactive = AIProactive(self.metrics_db, self.health_monitor)
+        self.security_scanner = SecurityScanner(self.SO)
+        self.lan_cache = LANCacheManager(self.SO)
+        self.cookie_manager = CookieManager()
+        self.trash_manager = TrashManager()
+        self.metrics_collector.start()
+        self.proc_manager.start_monitoring()
+
+        self.action_handler = ActionHandler(self)
+
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        self._build_sidebar()
+
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_rowconfigure(0, weight=1)
+
+        self.frames = {}
+
+        for btn in self.detail_buttons.values():
+            btn.pack_forget()
+        self.consoles_visible = {tag: False for tag in self.detail_buttons.keys()}
+
+        self.show_frame("dashboard")
+
+        self._setup_bindings()
+        threading.Thread(target=self._monitor_loop, daemon=True).start()
+        self._check_process_queue()
+
+        self.after(200, self._restore_window_state)
+
+        self.protocol("WM_DELETE_WINDOW", self._on_closing)
+
+        self.after(500, self._check_first_run)
+
+    def _check_first_run(self):
+        if self.config == DEFAULT_CONFIG:
+            wizard = FirstRunWizard(self, self.config)
+            self.wait_window(wizard)
+            self.config = self._load_config()
+            self.update_theme_vars()
+            self._save_config()
+            self.show_toast("Configurações iniciais salvas! Algumas alterações podem exigir reinicialização.")
+
+    def _restore_window_state(self):
+        ws = self.config.get("window_state", DEFAULT_CONFIG["window_state"])
+        if ws.get("maximized", False):
+            self._maximize_window()
+        else:
+            w = ws.get("width", 1000)
+            h = ws.get("height", 700)
+            x = ws.get("x")
+            y = ws.get("y")
+            w = max(w, self.winfo_width())
+            h = max(h, self.winfo_height())
+            self.update_idletasks()
+            if x is not None and y is not None:
+                self.geometry(f"{w}x{h}+{x}+{y}")
+            else:
+                self.geometry(f"{w}x{h}")
+        self.update_idletasks()
+
+    def _save_window_state(self):
+        ws = {}
+        try:
+            if self.state() == 'zoomed' or self.attributes('-zoomed'):
+                ws['maximized'] = True
+            else:
+                ws['maximized'] = False
+                geom = self.geometry()
+                match = re.match(r'(\d+)x(\d+)([+-]\d+)([+-]\d+)', geom)
+                if match:
+                    ws['width'] = int(match.group(1))
+                    ws['height'] = int(match.group(2))
+                    ws['x'] = int(match.group(3))
+                    ws['y'] = int(match.group(4))
+                else:
+                    ws['width'] = self.winfo_width()
+                    ws['height'] = self.winfo_height()
+                    ws['x'] = self.winfo_x()
+                    ws['y'] = self.winfo_y()
+        except Exception as e:
+            print(f"Erro ao salvar estado da janela: {e}")
+            ws = DEFAULT_CONFIG["window_state"]
+        self.config['window_state'] = ws
+        self._save_config()
+
+    def _on_closing(self):
+        self._save_window_state()
+        self.metrics_collector.stop()
+        self.proc_manager.stop_monitoring()
+        self.quit()
+        self.destroy()
+
+    def _maximize_window(self):
+        try:
+            self.attributes('-zoomed', True)
+        except:
+            try:
+                self.state('zoomed')
+            except:
+                w = self.winfo_screenwidth()
+                h = self.winfo_screenheight()
+                self.geometry(f"{w}x{h}+0+0")
+                self.update()
+
+    def _load_config(self):
+        if CONFIG_FILE.exists():
+            try:
+                with open(CONFIG_FILE) as f:
+                    config = json.load(f)
+                    if 'window_state' not in config:
+                        config['window_state'] = DEFAULT_CONFIG['window_state']
+                    if 'simple_mode' not in config:
+                        config['simple_mode'] = DEFAULT_CONFIG['simple_mode']
+                    if 'expert_level' not in config:
+                        config['expert_level'] = DEFAULT_CONFIG['expert_level']
+                    if 'ai' not in config:
+                        config['ai'] = DEFAULT_CONFIG['ai']
+                    return config
+            except:
+                pass
+        return DEFAULT_CONFIG.copy()
+
+    def _save_config(self):
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(self.config, f, indent=2)
+
+    def update_theme_vars(self):
+        t = THEMES.get(self.config["theme"], THEMES["default"])
+        ctk.set_appearance_mode(t["mode"])
+        self.bg_color = t["bg"]
+        self.side_bg = t["side"]
+        self.acc_color = t["acc"]
+        self.text_color = t["text"]
+        self.light_bg = self._lighten_color(self.bg_color, 0.2)
+
+    def _lighten_color(self, hex_color, factor):
+        h = hex_color.lstrip('#')
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        r = min(255, int(r + (255 - r) * factor))
+        g = min(255, int(g + (255 - g) * factor))
+        b = min(255, int(b + (255 - b) * factor))
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def apply_ui_scale(self):
+        scale = self.config.get("ui_scale", "auto")
+        ctk.set_widget_scaling(1.0 if scale == "auto" else float(scale)/100)
+
+    def round_image(self, path, size=(96,96), radius=20):
+        try:
+            img = Image.open(path).convert("RGBA").resize(size, Image.Resampling.LANCZOS)
+            mask = Image.new("L", size, 0)
+            ImageDraw.Draw(mask).rounded_rectangle((0,0)+size, radius=radius, fill=255)
+            result = Image.new("RGBA", size)
+            result.paste(img, (0,0), mask)
+            return ctk.CTkImage(result, size=size)
+        except:
+            return None
+
+    def _build_sidebar(self):
+        sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=self.side_bg)
+        sidebar.grid(row=0, column=0, sticky="nsew")
+        sidebar.grid_propagate(False)
+
+        top = ctk.CTkFrame(sidebar, fg_color="transparent")
+        top.pack(pady=(30, 5))
+        icon = self.round_image(str(ICON_PATH)) if ICON_PATH.exists() else None
+        if icon:
+            lbl_icon = ctk.CTkLabel(top, image=icon, text="", width=96, height=96)
+        else:
+            lbl_icon = ctk.CTkLabel(top, text="⚡", font=("Inter",48), width=96, height=96,
+                                     text_color=self.acc_color)
+        lbl_icon.pack()
+
+        center = ctk.CTkFrame(sidebar, fg_color="transparent")
+        center.pack(expand=False, fill="x", pady=(19, 0))
+
+        nav_items = [
+            ("📊", "Dashboard", "dashboard"),
+            ("🚀", "Otimização", "otimizacao"),
+            ("🌐", "Rede", "rede"),
+            ("🛠", "Drivers", "drivers"),
+        ]
+        level_items = {
+            1: [],
+            2: [("📊", "Processos", "processos")],
+            3: [
+                ("📊", "Processos", "processos"),
+                ("📈", "Histórico", "historico"),
+                ("🔒", "Segurança", "seguranca"),
+                ("🤖", "Agente IA", "agente"),
+            ]
+        }
+
+        for icon, text, target in nav_items:
+            btn = self._sidebar_btn(center, icon, text, target)
+            self.sidebar_buttons[target] = btn
+
+        level = self.config.get("expert_level", 1)
+        if level >= 2:
+            spacer = ctk.CTkLabel(center, text="", height=10)
+            spacer.pack(expand=False)
+            for icon, text, target in level_items.get(level, []):
+                btn = self._sidebar_btn(center, icon, text, target)
+                self.sidebar_buttons[target] = btn
+
+        spacer = ctk.CTkLabel(center, text="", height=20)
+        spacer.pack(expand=False)
+
+        bottom = ctk.CTkFrame(sidebar, fg_color="transparent")
+        bottom.pack(side="bottom", fill="x", pady=(5, 20))
+        for icon, text, target in [("⚙", "Configurações", "config"), ("ℹ", "Sobre", "sobre")]:
+            btn = self._sidebar_btn(bottom, icon, text, target)
+            self.sidebar_buttons[target] = btn
+
+    def _sidebar_btn(self, parent, icon, text, target):
+        frame = ctk.CTkFrame(parent, fg_color="transparent")
+        frame.pack(pady=5, fill="x", padx=10)
+        btn = ctk.CTkButton(frame, text=f"{icon}  {text}", anchor="w", height=40,
+                             fg_color="transparent", hover_color=self.acc_color,
+                             font=("Inter",13), corner_radius=10,
+                             text_color=self.text_color,
+                             command=lambda: self.show_frame(target),
+                             cursor="hand2")
+        btn.pack(fill="x")
+        # Tooltips removidos conforme solicitado
+        return btn
+
+    def show_frame(self, target):
+        for f in self.frames.values():
+            f.pack_forget()
+        if target not in self.frames:
+            self.frames[target] = self._create_frame(target)
+        self.frames[target].pack(fill="both", expand=True)
+        self.current_module = target
+        for key, btn in self.sidebar_buttons.items():
+            btn.configure(fg_color=self.acc_color if key == target else "transparent")
+        if target == "processos":
+            self._refresh_process_list()
+        elif target == "historico":
+            self._update_graphs()
+        elif target == "agente":
+            self._update_ai_suggestions()
+
+    def _create_frame(self, target):
+        frame = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        getattr(self, f"_fill_{target}")(frame)
+        return frame
+
+    # ---------- Dashboard ----------
+    def _fill_dashboard(self, parent):
+        ctk.CTkLabel(parent, text="Dashboard Rotativo", font=("Inter",28,"bold"),
+                     text_color=self.acc_color).pack(anchor="center", pady=(0,20))
+        self.dashboard = Dashboard(parent, self, fg_color="transparent")
+        self.dashboard.pack(fill="both", expand=True)
+
+    # ---------- Widgets ----------
+    def widget_hostname(self, parent, widget_id):
+        lbl = ctk.CTkLabel(parent, text=platform.node(), font=("Inter", 18, "bold"), text_color=self.acc_color)
+        lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Nome do computador na rede")
+
+    def widget_distro(self, parent, widget_id):
+        lbl = ctk.CTkLabel(parent, text=self.hw.get_distro(), font=("Inter", 18, "bold"), text_color=self.acc_color)
+        lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Sistema operacional e versão")
+
+    def widget_kernel(self, parent, widget_id):
+        lbl = ctk.CTkLabel(parent, text=platform.release(), font=("Inter", 18, "bold"), text_color=self.acc_color)
+        lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Versão do kernel")
+
+    def widget_uptime(self, parent, widget_id):
+        lbl = ctk.CTkLabel(parent, text=self.hw.get_uptime(), font=("Inter", 18, "bold"), text_color=self.acc_color)
+        lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Tempo desde a última inicialização")
+
+    def widget_cpu(self, parent, widget_id):
+        info = self.hw.get_cpu()
+        percent = psutil.cpu_percent()
+        text = f"{info}\nUso: {percent}%"
+        lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 14), justify="center", text_color=self.text_color)
+        lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Processador: modelo e uso atual")
+
+    def widget_ram(self, parent, widget_id):
+        mem = psutil.virtual_memory()
+        info = self.hw.get_ram()
+        text = f"{info}\nUso: {mem.percent}%"
+        lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 14), justify="center", text_color=self.text_color)
+        lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Memória RAM: usada/total e percentual")
+
+    def widget_gpu(self, parent, widget_id):
+        info = self.hw.get_gpu()
+        lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 14), justify="center", wraplength=250, text_color=self.text_color)
+        lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Placa de vídeo detectada")
+
+    def widget_disks(self, parent, widget_id):
+        info = self.hw.get_disks_detailed()
+        lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 12), justify="center", wraplength=250, text_color=self.text_color)
+        lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Discos e partições com uso percentual")
+
+    def widget_battery(self, parent, widget_id):
+        info = self.hw.get_battery()
+        lbl = ctk.CTkLabel(parent, text=info, font=("Inter", 14), justify="center", text_color=self.text_color)
+        lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Status da bateria")
+
+    def widget_temps(self, parent, widget_id):
+        temps = self.temp_monitor.get_all_temperatures()
+        text = "\n".join([f"{s}: {t}°C" for s, t in temps.items()])
+        lbl = ctk.CTkLabel(parent, text=text, font=("Inter", 12), justify="center", text_color=self.text_color)
+        lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Temperaturas de CPU, GPU e discos")
+
+    def widget_health(self, parent, widget_id):
+        score = self.health_monitor.calculate_health_score()['score']
+        lbl = ctk.CTkLabel(parent, text=f"Saúde: {score}/100", font=("Inter", 18, "bold"), text_color=self.acc_color)
+        lbl.pack(expand=True)
+        ui.add_tooltip(lbl, "Pontuação geral de saúde do sistema (0-100)")
+
+    # ---------- Aba Otimização (18 cards) ----------
+    def _fill_otimizacao(self, parent):
+        ctk.CTkLabel(parent, text="Otimização", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="center", pady=(0,20))
+        items = [
+            ("🧹 Limpeza de Cache", "cache", False),
+            ("🔄 Reset de Swap", "swap", False),
+            ("✅ Verificar Erros", "check", False),
+            ("🔥 Modo Turbo", "turbo", False),
+            ("Steam", "steam", False),
+            ("Lutris", "lutris", False),
+            ("Heroic Launcher", "heroic", False),
+            ("Bottles", "bottles", False),
+            ("Wine", "wine", False),
+            ("MangoHud", "mangohud", False),
+            ("Goverlay", "goverlay", False),
+            ("🎮 Emulador Dolphin", "dolphin", False),
+            ("🧹 Limpeza de Navegadores", "browsers", False),
+            ("⚙️ Gerenciar Serviços", "services", False),
+            ("📊 Análise de Logs", "logs", False),
+            ("🍪 Gerenciar Cookies", "cookies", False),
+            # Novos cards 0.4.0
+            ("⚙️ Otimizar SSD (TRIM)", "trim", False),
+            ("🔧 Reparar Pacotes Quebrados", "fix_broken", False),
+        ]
+        level = self.config.get("expert_level", 1)
+        if level == 1:
+            items = [item for item in items if item[1] not in ["services", "logs", "cookies", "trim", "fix_broken"]]
+        elif level == 2:
+            items = [item for item in items if item[1] not in ["logs", "cookies"]]
+        ui.create_card_grid(parent, items, "ot", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
+        btn, log = ui.add_console(parent, "ot", self.acc_color, self.toggle_console)
+        self.detail_buttons["ot"] = btn
+        self.logs["ot"] = log
+
+    # ---------- Aba Rede (15 cards) ----------
+    def _fill_rede(self, parent):
+        ctk.CTkLabel(parent, text="Rede", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="center", pady=(0,20))
+        items = [
+            ("📡 Ping", "ping", False),
+            ("☁ Cloudflare DNS", "1.1.1.1", True),
+            ("🔵 Google DNS", "8.8.8.8", True),
+            ("🛡 AdGuard DNS", "94.140.14.14", True),
+            ("🔄 DNS Automático", "auto", True),
+            ("🌐 Testar Velocidade", "speedtest", False),
+            ("🔌 Diagnóstico Placa", "ethtool", False),
+            ("🔄 Renovar IP", "dhclient", False),
+            ("🧭 Portas Abertas", "ports", False),
+            ("📶 Traceroute", "traceroute", False),
+            ("📶 Informações Wi-Fi", "wifi", False),
+            ("🌍 Testar DNS", "testdns", False),
+            ("🔍 Scanner LAN", "lanscan", False),
+            ("🚀 LANCache", "lancache", False),
+            # Novo card 0.4.0
+            ("🌍 Verificar IP Público", "public_ip", False),
+        ]
+        level = self.config.get("expert_level", 1)
+        if level == 1:
+            items = [item for item in items if item[1] not in ["ports", "traceroute", "ethtool", "dhclient", "lanscan", "lancache"]]
+        elif level == 2:
+            items = [item for item in items if item[1] not in ["lanscan", "lancache"]]
+        ping_labels = ui.create_card_grid(parent, items, "net", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
+        if ping_labels:
+            self.ping_label = ping_labels[0]
+        btn, log = ui.add_console(parent, "net", self.acc_color, self.toggle_console)
+        self.detail_buttons["net"] = btn
+        self.logs["net"] = log
+
+    # ---------- Aba Drivers ----------
+    def _fill_drivers(self, parent):
+        ctk.CTkLabel(parent, text="Drivers", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="center", pady=(0,20))
+        items = [
+            ("🖥 PCI (Vídeo/Rede)", "pci", False),
+            ("📦 Atualizar Sistema", "update", False),
+            ("🔌 USB Conectados", "usb", False),
+            ("🧩 Módulos Kernel", "modules", False),
+            ("⚙ CPU Detalhada", "cpu_info", False),
+            ("⚠ Firmware Erros", "firmware", False),
+            ("🎮 Drivers de Vídeo", "video_drv", False),
+            ("🌐 Drivers de Rede", "net_drv", False),
+            ("🔄 Atualizações Automáticas", "auto_update", False)
+        ]
+        level = self.config.get("expert_level", 1)
+        if level == 1:
+            items = [item for item in items if item[1] not in ["modules", "cpu_info", "firmware", "video_drv", "net_drv", "auto_update"]]
+        elif level == 2:
+            items = [item for item in items if item[1] not in ["video_drv", "net_drv", "auto_update"]]
+        ui.create_card_grid(parent, items, "drv", self.acc_color, self.bg_color, self.text_color, self.run_card_action)
+        btn, log = ui.add_console(parent, "drv", self.acc_color, self.toggle_console)
+        self.detail_buttons["drv"] = btn
+        self.logs["drv"] = log
+
+    # ---------- Aba Processos ----------
+    def _fill_processos(self, parent):
+        ctk.CTkLabel(parent, text="Gerenciador de Processos", font=("Inter",28,"bold"), text_color=self.acc_color).pack(anchor="center", pady=(0,20))
+
+        toolbar = ctk.CTkFrame(parent, fg_color="transparent")
+        toolbar.pack(fill="x", pady=(0,10))
+
+        ctk.CTkLabel(toolbar, text="Filtrar:", font=("Inter",12)).pack(side="left", padx=(0,5))

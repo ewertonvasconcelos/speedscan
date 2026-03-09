@@ -1,15 +1,23 @@
-from core import config
 #!/usr/bin/env python3
-import logging
-# Módulo de limpeza de navegadores (cache, cookies, histórico) com suporte Flatpak/Snap
-# Versão 1.0.0
+# -*- coding: utf-8 -*-
+"""
+Browser cleaning module - cache, cookies, and history supporting Flatpak/Snap.
+Version 1.0.0
+"""
 
 import os
 import shutil
+import logging
 from pathlib import Path
 
+from core import config
+
+
 class BrowserCleaner:
+    """Cleans browser caches, cookies and history for supported browsers."""
+
     def __init__(self):
+        """Initialize the browser cleaner with predefined paths."""
         self.browsers = {
             'chrome': {
                 'name': 'Google Chrome',
@@ -62,6 +70,7 @@ class BrowserCleaner:
         }
 
     def format_bytes(self, bytes):
+        """Format a byte count into human-readable units (B/, KB,/MB,/GB, TB)."""
         for unit in ['B', 'KB', 'MB', 'GB']:
             if bytes < 1024.0:
                 return f"{bytes:.1f} {unit}"
@@ -69,6 +78,7 @@ class BrowserCleaner:
         return f"{bytes:.1f} TB"
 
     def get_size(self, path):
+        """Calculate the total size of a file or directory (including subdirectories)."""
         try:
             if path.is_file():
                 return path.stat().st_size
@@ -79,11 +89,22 @@ class BrowserCleaner:
                         fp = Path(root) / f
                         total += fp.stat().st_size
                 return total
-        except:
             return 0
-        return 0
+        except Exception as e:
+            logging.error(f"Error calculating size for {path}: {e}")
+            return 0
 
     def clean_browser(self, browser_key, preserve_cookies=False, cookie_keep_list=None):
+        """Clean a specific browser's cache, cookies and history.
+
+        Args:
+            browser_key (str): The key identifying the browser in self.browsers.
+            preserve_cookies (bool): If True, cookies are not cleaned. (Not fully implemented).
+            cookie_keep_list (list): List of cookie names to keep. (Not implemented).
+
+        Returns:
+            dict: A dictionary with 'name', 'cache_freed', 'cookies_freed', 'history_freed', 'errors'.
+        """
         browser = self.browsers.get(browser_key)
         if not browser:
             return None
@@ -105,9 +126,11 @@ class BrowserCleaner:
                 result['cache_freed'] = size
             except Exception as e:
                 result['errors'].append(f"cache: {e}")
+        # TODO: implement cookies and history cleaning
         return result
 
     def clean_all_browsers(self, preserve_cookies=False, cookie_keep_list=None):
+        """Clean all supported browsers and return a dictionary of results."""
         results = {}
         for key in self.browsers:
             results[key] = self.clean_browser(key, preserve_cookies, cookie_keep_list)

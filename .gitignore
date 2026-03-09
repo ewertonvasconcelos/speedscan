@@ -1,56 +1,17 @@
-# Python temporários
+speedscan-venv/
+venv/
 __pycache__/
-*.py[cod]
-*$py.class
-
-# PyInstaller (Arquivos de Build)
-build/
-dist/
-*.spec
-
-# Sistema e Logs
-.DS_Store
-*.log
-
-# Opcional: Se não quiser subir os instaladores pesados no futuro
-# installers/
-
-# Backups do código (arquivos .bak)
-*.bak
-
-# Pasta extraída do AppImage
-squashfs-root/
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Builds
-dist/
-build/
-*.spec
-*.deb
-*.rpm
-*.flatpak
-*.AppImage
-
-# Logs e temporários
+*.pyc
 logs/
 *.log
-*.bak
-*.atual
-test_*.txt
-run.sh
-
-# IDEs
-.vscode/
-.idea/
-
-# Build artifacts (already in releases)
-*.deb
-*.rpm
-*.flatpak
-*.AppImage
+*.db
+.speedscan_conf
+.speedscan_dashboard.json
 dist/
 build/
+*.spec
+*.exe
+*.dmg
+*.deb
+*.rpm
+*.AppImage
