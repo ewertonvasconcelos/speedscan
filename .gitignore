@@ -15,3 +15,24 @@ build/
 *.deb
 *.rpm
 *.AppImage
+
+# Artefatos de build
+dist/
+build/
+*.spec
+*.db
+*.log
+*.deb
+*.rpm
+*.exe
+*.dmg
+*.AppImage
+
+# Scripts temporários
+fix_*.py
+debug_*.py
+temp_*.py
+*.bak
+*.b64
+*.patch
+parte_*
