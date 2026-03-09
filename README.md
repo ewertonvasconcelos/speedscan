@@ -43,10 +43,10 @@ O SpeedScan nasceu da necessidade de ter uma ferramenta centralizada para diagno
 
 ## 🖼️ Capturas de Tela
 <p align="center">
-  <img src="screenshots/dashboard.png" alt="Dashboard" width="30%"/>
-  <img src="screenshots/otimizacao.png" alt="Otimização" width="30%"/>
-  <img src="screenshots/configuracoes.png" alt="Configurações" width="30%"/>
-  <img src="screenshots/agente-ia.png" alt="Agente IA" width="30%"/>
+  <img src="screenshots/dashboard.png" alt="Dashboard" width="23%"/>
+  <img src="screenshots/otimizacao.png" alt="Otimização" width="23%"/>
+  <img src="screenshots/configuracoes.png" alt="Configurações" width="23%"/>
+  <img src="screenshots/agente-ia.png" alt="Agente IA" width="23%"/>
   <p><em>Exemplo do Dashboard, aba de Otimização,aba do Agente IA e Configurações.</em></p>
 </p>
 
