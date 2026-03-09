@@ -1,190 +1,59 @@
-name: Build SpeedScan Multi-Platform
+name: Build Linux Packages
 
 on:
   push:
     tags:
-      - 'v*'
-  workflow_dispatch:
+      - 'v*'  # Executa apenas quando uma tag como v1.0.0 for criada
 
 jobs:
-  build-executables:
-    name: Build executables on ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.10']
-        include:
-          - os: ubuntu-latest
-            artifact-name: speedscan-linux
-            executable-suffix: ''
-          - os: windows-latest
-            artifact-name: speedscan-windows
-            executable-suffix: '.exe'
-          - os: macos-latest
-            artifact-name: speedscan-macos
-            executable-suffix: ''
-    runs-on: ${{ matrix.os }}
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pyinstaller
-        pip install -r requirements.txt
-
-    - name: Build executable with PyInstaller
-      run: |
-        pyinstaller --onefile --name speedscan core/main.py
-
-    - name: Test executable
-      run: |
-        dist/speedscan${{ matrix.executable-suffix }} --version || true
-
-    - name: Upload executable artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.artifact-name }}-executable
-        path: dist/speedscan${{ matrix.executable-suffix }}
-
-  package-linux:
-    name: Package Linux (.deb, .rpm, .snap, .flatpak)
-    needs: build-executables
+  build-linux:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Download Linux executable
-      uses: actions/download-artifact@v4
-      with:
-        name: speedscan-linux-executable
-        path: dist/
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: Make executable
-      run: chmod +x dist/speedscan
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
 
-    - name: Install packaging tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y rpm fpm snapcraft flatpak flatpak-builder
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name SpeedScan core/main.py
 
-    - name: Create .deb package
-      run: |
-        fpm -s dir -t deb -n speedscan -v ${GITHUB_REF_NAME#v} \
-          --prefix /usr/local/bin \
-          dist/speedscan=speedscan
+      - name: Create .deb package
+        run: |
+          # Cria estrutura de diretórios
+          mkdir -p package/DEBIAN
+          mkdir -p package/usr/local/bin
+          # Copia o executável (gerado pelo PyInstaller)
+          cp dist/SpeedScan package/usr/local/bin/speedscan
+          # Extrai a versão da tag (remove o 'v' inicial)
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          # Cria arquivo de controle (substitua o e-mail pelo seu)
+          echo "Package: speedscan" > package/DEBIAN/control
+          echo "Version: $VERSION" >> package/DEBIAN/control
+          echo "Architecture: amd64" >> package/DEBIAN/control
+          echo "Maintainer: Ewerton Vasconcelos <seu-email@example.com>" >> package/DEBIAN/control
+          echo "Description: SpeedScan - All-in-one system diagnostic and optimization tool" >> package/DEBIAN/control
+          # Gera o .deb (a flag --root-owner-group evita o aviso de rootless)
+          dpkg-deb --root-owner-group --build package speedscan_${VERSION}_amd64.deb
 
-    - name: Create .rpm package
-      run: |
-        fpm -s dir -t rpm -n speedscan -v ${GITHUB_REF_NAME#v} \
-          --prefix /usr/local/bin \
-          dist/speedscan=speedscan
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: speedscan-deb-package
+          path: speedscan_*.deb
 
-    - name: Build Snap package
-      run: |
-        mkdir -p snap/stage/bin
-        cp dist/speedscan snap/stage/bin/
-        snapcraft
-
-    - name: Build Flatpak package
-      run: |
-        flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-        flatpak install -y flathub org.freedesktop.Platform//23.08 org.freedesktop.Sdk//23.08
-        flatpak-builder --force-clean build-dir io.github.ewertonvasconcelos.speedscan.yml
-        flatpak build-bundle build-dir speedscan.flatpak io.github.ewertonvasconcelos.speedscan
-
-    - name: Upload Linux packages
-      uses: actions/upload-artifact@v4
-      with:
-        name: speedscan-linux-packages
-        path: |
-          *.deb
-          *.rpm
-          *.snap
-          speedscan.flatpak
-
-  package-windows:
-    name: Package Windows
-    needs: build-executables
-    runs-on: ubuntu-latest
-    steps:
-    - name: Download Windows executable
-      uses: actions/download-artifact@v4
-      with:
-        name: speedscan-windows-executable
-        path: dist/
-
-    - name: Rename executable
-      run: mv dist/speedscan.exe dist/SpeedScan.exe
-
-    - name: Upload Windows executable
-      uses: actions/upload-artifact@v4
-      with:
-        name: speedscan-windows
-        path: dist/SpeedScan.exe
-
-  package-macos:
-    name: Package macOS
-    needs: build-executables
-    runs-on: macos-latest
-    steps:
-    - name: Download macOS executable
-      uses: actions/download-artifact@v4
-      with:
-        name: speedscan-macos-executable
-        path: dist/
-
-    - name: Make executable
-      run: chmod +x dist/speedscan
-
-    - name: Create .app bundle
-      run: |
-        mkdir -p SpeedScan.app/Contents/MacOS
-        cp dist/speedscan SpeedScan.app/Contents/MacOS/
-        chmod +x SpeedScan.app/Contents/MacOS/speedscan
-
-    - name: Create .dmg
-      run: |
-        hdiutil create -volname SpeedScan -srcfolder SpeedScan.app -ov -format UDZO speedscan.dmg
-
-    - name: Upload macOS DMG
-      uses: actions/upload-artifact@v4
-      with:
-        name: speedscan-macos
-        path: speedscan.dmg
-
-  create-release:
-    name: Create GitHub Release
-    needs: [package-linux, package-windows, package-macos]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts
-
-    - name: Display structure of downloaded files
-      run: ls -R artifacts/
-
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ github.ref_name }}
-        name: Release ${{ github.ref_name }}
-        files: |
-          artifacts/**/*
-        draft: false
-        prerelease: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: speedscan_*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
