@@ -1,0 +1,5 @@
+Package: speedscan
+Version: 1.0.0
+Architecture: amd64
+Maintainer: Ewerton Vasconcelos <seu-email@example.com>
+Description: SpeedScan - All-in-one system diagnostic and optimization tool
