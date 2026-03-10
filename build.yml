@@ -1,0 +1,67 @@
+cat > build.yml << 'EOF'
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller --onefile --windowed --name SpeedScan core/main.py
+      - name: Create .deb package
+        run: |
+          mkdir -p package/DEBIAN package/usr/local/bin
+          cp dist/SpeedScan package/usr/local/bin/speedscan
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "Package: speedscan" > package/DEBIAN/control
+          echo "Version: $VERSION" >> package/DEBIAN/control
+          echo "Architecture: amd64" >> package/DEBIAN/control
+          echo "Maintainer: Ewerton Vasconcelos <ewertonvasconcelosdossantos@gmail.com>" >> package/DEBIAN/control
+          echo "Description: SpeedScan - All-in-one system diagnostic and optimization tool" >> package/DEBIAN/control
+          dpkg-deb --root-owner-group --build package speedscan_${VERSION}_amd64.deb
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            speedscan_*.deb
+            dist/SpeedScan
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller --onefile --windowed --name SpeedScan.exe core/main.py
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/SpeedScan.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller --onefile --windowed --name SpeedScan core/main.py
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/SpeedScan
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+EOF
