@@ -27,6 +27,9 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-mock pytest-html pytest-cov
 
+    - name: Install xvfb
+      run: sudo apt-get update && sudo apt-get install -y xvfb
+
     - name: Run tests with coverage
       run: |
         pytest tests/ --cov=core --cov-report=xml --cov-report=html --html=report.html --self-contained-html
