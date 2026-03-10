@@ -36,3 +36,5 @@ temp_*.py
 *.b64
 *.patch
 parte_*
+.coverage
+report.html
