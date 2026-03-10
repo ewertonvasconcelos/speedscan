@@ -94,3 +94,14 @@ pip install -r requirements.txt
 
 # Execute o programa
 python -m core.main
+## 🧪 Testes
+
+O SpeedScan utiliza `pytest` para testes unitários e de integração. Para executar os testes localmente:
+
+### Pré-requisitos
+- Ambiente virtual ativado com as dependências instaladas:
+  ```bash
+  python -m venv venv
+  source venv/bin/activate  # Linux/macOS
+  pip install -r requirements.txt
+  pip install pytest pytest-mock pytest-html pytest-cov
