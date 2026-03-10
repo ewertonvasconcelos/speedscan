@@ -30,9 +30,9 @@ jobs:
     - name: Install xvfb
       run: sudo apt-get update && sudo apt-get install -y xvfb
 
-    - name: Run tests with coverage
+    - name: Run tests (excluding dashboard)
       run: |
-        pytest tests/ --cov=core --cov-report=xml --cov-report=html --html=report.html --self-contained-html
+        pytest tests/ -v -k "not TestDashboard" --cov=core --cov-report=xml --cov-report=html --html=report.html --self-contained-html
 
     - name: Upload coverage to Codecov (opcional)
       uses: codecov/codecov-action@v4

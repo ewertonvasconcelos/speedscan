@@ -52,7 +52,7 @@ class SmartMonitor:
                 disk = disk.strip()
                 if not disk:
                     continue
-                smart = self.get_smart_inffo(f"/dev/{disk}")
+                smart = self.get_smart_info(f"/dev/{disk}")
                 if smart:
                     match = re.search(r'SMART  overall-health self-assessment test result: (\w+)', smart)
                     if match:
