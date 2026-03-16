@@ -1,0 +1,1020 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-03-14 19:57-0300\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: core/main.py:78
+msgid "SpeedScan"
+msgstr ""
+
+#: core/main.py:92
+msgid "Calculating..."
+msgstr ""
+
+#: core/main.py:225 core/main.py:313
+msgid "Dashboard"
+msgstr ""
+
+#: core/main.py:226 core/main.py:319
+msgid "Optimization"
+msgstr ""
+
+#: core/main.py:227 core/main.py:352
+msgid "Network"
+msgstr ""
+
+#: core/main.py:228 core/main.py:384
+msgid "Drivers"
+msgstr ""
+
+#: core/main.py:233 core/main.py:234 core/main.py:244
+msgid "Processes"
+msgstr ""
+
+#: core/main.py:234 core/main.py:245
+msgid "History"
+msgstr ""
+
+#: core/main.py:234 core/main.py:246
+msgid "Security"
+msgstr ""
+
+#: core/main.py:234 core/main.py:247 core/main.py:630
+msgid "AI Agent"
+msgstr ""
+
+#: core/main.py:234 core/main.py:248
+msgid "Windows Cleaner"
+msgstr ""
+
+#: core/main.py:255 core/main.py:636
+msgid "Settings"
+msgstr ""
+
+#: core/main.py:255
+msgid "About"
+msgstr ""
+
+#: core/main.py:322
+msgid "🧹 Cache Cleanup"
+msgstr ""
+
+#: core/main.py:323
+msgid "🔄 Swap Reset"
+msgstr ""
+
+#: core/main.py:324
+msgid "🔍 Verify Errors"
+msgstr ""
+
+#: core/main.py:325
+msgid "🚀 Turbo Mode"
+msgstr ""
+
+#: core/main.py:326
+msgid "Steam"
+msgstr ""
+
+#: core/main.py:327
+msgid "Lutris"
+msgstr ""
+
+#: core/main.py:328
+msgid "Heroic Launcher"
+msgstr ""
+
+#: core/main.py:329
+msgid "Bottles"
+msgstr ""
+
+#: core/main.py:330
+msgid "Wine"
+msgstr ""
+
+#: core/main.py:331
+msgid "MangoHud"
+msgstr ""
+
+#: core/main.py:332
+msgid "Governor"
+msgstr ""
+
+#: core/main.py:333
+msgid "🐬 Dolphin Emulator"
+msgstr ""
+
+#: core/main.py:334
+msgid "🧹 Browser Cleanup"
+msgstr ""
+
+#: core/main.py:335
+msgid "⚙️ Manage Services"
+msgstr ""
+
+#: core/main.py:336
+msgid "🗂️ Log Analysis"
+msgstr ""
+
+#: core/main.py:337
+msgid "🗑️ Manage Cookies"
+msgstr ""
+
+#: core/main.py:338
+msgid "💾 Optimize SSD (TRIM)"
+msgstr ""
+
+#: core/main.py:339
+msgid "📦 Repair Broken Packages"
+msgstr ""
+
+#: core/main.py:355
+msgid "📡 Ping"
+msgstr ""
+
+#: core/main.py:356
+msgid "🌩️ Cloudflare DNS"
+msgstr ""
+
+#: core/main.py:357
+msgid "🎛️ Google DNS"
+msgstr ""
+
+#: core/main.py:358
+msgid "🎛️ AdGuard DNS"
+msgstr ""
+
+#: core/main.py:359
+msgid "🔄 DNS Auto"
+msgstr ""
+
+#: core/main.py:360
+msgid "📊 Speedtest"
+msgstr ""
+
+#: core/main.py:361
+msgid "🕵️ Diagnostic Tool"
+msgstr ""
+
+#: core/main.py:362
+msgid "🔄 Renew IP"
+msgstr ""
+
+#: core/main.py:363
+msgid "🔓 Open Ports"
+msgstr ""
+
+#: core/main.py:364
+msgid "🌍 Traceroute"
+msgstr ""
+
+#: core/main.py:365
+msgid "📶 Wi-Fi Info"
+msgstr ""
+
+#: core/main.py:366
+msgid "🛠️ Test DNS"
+msgstr ""
+
+#: core/main.py:367
+msgid "📡 LAN Scanner"
+msgstr ""
+
+#: core/main.py:368
+msgid "📦 LANCache"
+msgstr ""
+
+#: core/main.py:369
+msgid "🌍 Public IP"
+msgstr ""
+
+#: core/main.py:387
+msgid "🖥️ PCI (Video/Net)"
+msgstr ""
+
+#: core/main.py:388
+msgid "📦 System Update"
+msgstr ""
+
+#: core/main.py:389
+msgid "🔌 USB Devices"
+msgstr ""
+
+#: core/main.py:390
+msgid "🧩 Kernel Modules"
+msgstr ""
+
+#: core/main.py:391
+msgid "⚡ CPU Details"
+msgstr ""
+
+#: core/main.py:392
+msgid "⚡ Firmware Errors"
+msgstr ""
+
+#: core/main.py:393
+msgid "🖥️ Video Drivers"
+msgstr ""
+
+#: core/main.py:394
+msgid "🌐 Network Drivers"
+msgstr ""
+
+#: core/main.py:395
+msgid "🔄 Auto Updates"
+msgstr ""
+
+#: core/main.py:408
+msgid "Process Manager"
+msgstr ""
+
+#: core/main.py:414
+msgid "Filter:"
+msgstr ""
+
+#: core/main.py:415
+msgid "Process name"
+msgstr ""
+
+#: core/main.py:419
+msgid "Sort by:"
+msgstr ""
+
+#: core/main.py:427
+msgid "Descending"
+msgstr ""
+
+#: core/main.py:436
+msgid "Kill"
+msgstr ""
+
+#: core/main.py:438
+msgid "Suspend"
+msgstr ""
+
+#: core/main.py:440
+msgid "Resume"
+msgstr ""
+
+#: core/main.py:443
+msgid "Nice:"
+msgstr ""
+
+#: core/main.py:447
+msgid "Set"
+msgstr ""
+
+#: core/main.py:493
+#, python-brace-format
+msgid "Process {pid} killed."
+msgstr ""
+
+#: core/main.py:496
+#, python-brace-format
+msgid "Failed to kill process {pid}."
+msgstr ""
+
+#: core/main.py:498 core/main.py:516 core/main.py:534
+msgid "Select a process."
+msgstr ""
+
+#: core/main.py:500
+msgid "Error killing process."
+msgstr ""
+
+#: core/main.py:511
+#, python-brace-format
+msgid "Process {pid} suspended."
+msgstr ""
+
+#: core/main.py:514
+#, python-brace-format
+msgid "Failed to suspend process {pid}."
+msgstr ""
+
+#: core/main.py:518
+msgid "Error suspending process."
+msgstr ""
+
+#: core/main.py:529
+#, python-brace-format
+msgid "Process {pid} resumed."
+msgstr ""
+
+#: core/main.py:532
+#, python-brace-format
+msgid "Failed to resume process {pid}."
+msgstr ""
+
+#: core/main.py:536
+msgid "Error resuming process."
+msgstr ""
+
+#: core/main.py:548
+#, python-brace-format
+msgid "Nice of process {pid} set to {nice}."
+msgstr ""
+
+#: core/main.py:551
+#, python-brace-format
+msgid "Failed to set nice for process {pid}."
+msgstr ""
+
+#: core/main.py:553
+msgid "Select a process and enter a nice value."
+msgstr ""
+
+#: core/main.py:555
+msgid "Error setting nice."
+msgstr ""
+
+#: core/main.py:558
+msgid "Historical Performance"
+msgstr ""
+
+#: core/main.py:564
+msgid "Period:"
+msgstr ""
+
+#: core/main.py:585
+msgid "Not enough data to display."
+msgstr ""
+
+#: core/main.py:605
+msgid "Time (hours from now)"
+msgstr ""
+
+#: core/main.py:614
+msgid "System Security"
+msgstr ""
+
+#: core/main.py:617
+msgid "🛡️ Open Ports"
+msgstr ""
+
+#: core/main.py:618
+msgid "🛡️ Firewall"
+msgstr ""
+
+#: core/main.py:619
+msgid "📦 Security Updates"
+msgstr ""
+
+#: core/main.py:641
+msgid "Username:"
+msgstr ""
+
+#: core/main.py:642
+msgid "Your name"
+msgstr ""
+
+#: core/main.py:648
+msgid "Language:"
+msgstr ""
+
+#: core/main.py:655
+msgid "UI Scale:"
+msgstr ""
+
+#: core/main.py:662
+msgid "Theme:"
+msgstr ""
+
+#: core/main.py:674
+msgid "Open files in new tab"
+msgstr ""
+
+#: core/main.py:679
+msgid "Expert level:"
+msgstr ""
+
+#: core/main.py:681
+msgid "Beginner"
+msgstr ""
+
+#: core/main.py:683
+msgid "Intermediate"
+msgstr ""
+
+#: core/main.py:685
+msgid "Advanced"
+msgstr ""
+
+#: core/main.py:691
+msgid "Enable automatic scheduling"
+msgstr ""
+
+#: core/main.py:694
+msgid "Apply"
+msgstr ""
+
+#: core/main.py:718
+msgid "Settings saved! Restarting..."
+msgstr ""
+
+#: core/main.py:729
+msgid "About SpeedScan"
+msgstr ""
+
+#: core/main.py:734
+msgid "⚡ SpeedScan"
+msgstr ""
+
+#: core/main.py:735
+msgid "Version"
+msgstr ""
+
+#: core/main.py:736
+msgid "Developer: Ewerton Vasconcelos"
+msgstr ""
+
+#: core/main.py:737
+msgid "Technologies: Python, CustomTkinter, psutil"
+msgstr ""
+
+#: core/main.py:738
+msgid "Repository: github.com/ewertonvasconcelos/speedscan"
+msgstr ""
+
+#: core/main.py:739
+msgid "This software is under development."
+msgstr ""
+
+#: core/main.py:740
+msgid "Main features:"
+msgstr ""
+
+#: core/main.py:741
+msgid "• Dashboard with customizable widgets"
+msgstr ""
+
+#: core/main.py:742
+msgid "• CPU, RAM, disk, GPU and temperature monitoring"
+msgstr ""
+
+#: core/main.py:743
+msgid "• Optimization: cache, swap, turbo mode and browser cleanup"
+msgstr ""
+
+#: core/main.py:744
+msgid "• Network: ping, DNS, speedtest, LAN scanner, LANCache"
+msgstr ""
+
+#: core/main.py:745
+msgid "• Diagnostics for drivers and hardware"
+msgstr ""
+
+#: core/main.py:746
+msgid "• Process manager with actions"
+msgstr ""
+
+#: core/main.py:747
+msgid "• Historical performance graphs"
+msgstr ""
+
+#: core/main.py:748
+msgid "• Security checks (ports, firewall, updates)"
+msgstr ""
+
+#: core/main.py:749
+msgid "• Proactive AI with suggestions and local chat"
+msgstr ""
+
+#: core/main.py:750
+msgid "• Selective cookie manager"
+msgstr ""
+
+#: core/main.py:751
+msgid "• Internal trash for deleted items"
+msgstr ""
+
+#: core/main.py:752
+msgid "• Automatic task scheduling"
+msgstr ""
+
+#: core/main.py:753
+msgid "• Expert levels (Beginner, Intermediate, Advanced)"
+msgstr ""
+
+#: core/main.py:754
+msgid "• Detailed tooltips"
+msgstr ""
+
+#: core/main.py:755
+msgid "• Customizable themes"
+msgstr ""
+
+#: core/main.py:756
+msgid "All rights reserved."
+msgstr ""
+
+#: core/main.py:762
+msgid ""
+"⚠️ This module is exclusive to Windows!\n"
+"\n"
+"Run SpeedScan on a Windows system to access these features."
+msgstr ""
+
+#: core/main.py:765
+msgid "Windows Cleanup"
+msgstr ""
+
+#: core/main.py:772
+msgid "Installed Bloatware"
+msgstr ""
+
+#: core/main.py:777
+msgid "No known bloatware found."
+msgstr ""
+
+#: core/main.py:787
+msgid "Remove Selected"
+msgstr ""
+
+#: core/main.py:794
+msgid "System Tweaks"
+msgstr ""
+
+#: core/main.py:797
+msgid "Disable Telemetry"
+msgstr ""
+
+#: core/main.py:803
+#, python-brace-format
+msgid "Disable {name}"
+msgstr ""
+
+#: core/main.py:806
+msgid "Clean temporary files and cache"
+msgstr ""
+
+#: core/main.py:808
+msgid "Execute Selected Actions"
+msgstr ""
+
+#: core/main.py:819
+msgid "No bloatware selected."
+msgstr ""
+
+#: core/main.py:822
+msgid "Removing bloatware...\n"
+msgstr ""
+
+#: core/main.py:824
+#, python-brace-format
+msgid "Removing {pkg}...\n"
+msgstr ""
+
+#: core/main.py:826
+#, python-brace-format
+msgid "✓ {pkg} removed.\n"
+msgstr ""
+
+#: core/main.py:826
+#, python-brace-format
+msgid "✗ Failed to remove {pkg}.\n"
+msgstr ""
+
+#: core/main.py:828
+msgid "Removal completed."
+msgstr ""
+
+#: core/main.py:832
+msgid "Executing actions...\n"
+msgstr ""
+
+#: core/main.py:834
+msgid "Disabling telemetry...\n"
+msgstr ""
+
+#: core/main.py:836
+msgid "Telemetry disabled.\n"
+msgstr ""
+
+#: core/main.py:836
+msgid "Failed to disable telemetry.\n"
+msgstr ""
+
+#: core/main.py:839
+#, python-brace-format
+msgid "Disabling {name}...\n"
+msgstr ""
+
+#: core/main.py:841
+#, python-brace-format
+msgid "{name} disabled.\n"
+msgstr ""
+
+#: core/main.py:841
+#, python-brace-format
+msgid "Failed to disable {name}.\n"
+msgstr ""
+
+#: core/main.py:843
+msgid "Cleaning temporary files...\n"
+msgstr ""
+
+#: core/main.py:845
+msgid "Cleanup completed.\n"
+msgstr ""
+
+#: core/main.py:845
+msgid "Cleanup failed.\n"
+msgstr ""
+
+#: core/main.py:847
+msgid "Actions executed."
+msgstr ""
+
+#: core/main.py:873 core/main.py:1079
+msgid "Details ▼"
+msgstr ""
+
+#: core/main.py:932 core/main.py:1067
+#, python-brace-format
+msgid "Error executing command: {e}\n"
+msgstr ""
+
+#: core/main.py:934
+#, python-brace-format
+msgid "Unknown command: {cmd}\n"
+msgstr ""
+
+#: core/main.py:940
+msgid "Pinging google.com...\n"
+msgstr ""
+
+#: core/main.py:944
+msgid "Running speed test...\n"
+msgstr ""
+
+#: core/main.py:950
+msgid "Running ethtool...\n"
+msgstr ""
+
+#: core/main.py:954
+msgid "Renewing IP via dhclient...\n"
+msgstr ""
+
+#: core/main.py:958
+msgid "Scanning open ports...\n"
+msgstr ""
+
+#: core/main.py:964
+msgid "Running traceroute to google.com...\n"
+msgstr ""
+
+#: core/main.py:968
+msgid "Wi-Fi info...\n"
+msgstr ""
+
+#: core/main.py:972
+msgid "Testing DNS (google.com)...\n"
+msgstr ""
+
+#: core/main.py:976
+msgid "Scanning local network...\n"
+msgstr ""
+
+#: core/main.py:982
+msgid "Checking LANCache...\n"
+msgstr ""
+
+#: core/main.py:987
+msgid "Obtaining public IP...\n"
+msgstr ""
+
+#: core/main.py:990
+#, python-brace-format
+msgid "Public IP: {ip}\n"
+msgstr ""
+
+#: core/main.py:992
+msgid "Error obtaining public IP.\n"
+msgstr ""
+
+#: core/main.py:998
+msgid "Updating package list...\n"
+msgstr ""
+
+#: core/main.py:1012
+msgid "Could not read /proc/cpuinfo.\n"
+msgstr ""
+
+#: core/main.py:1024
+msgid "Configuring auto updates (not implemented).\n"
+msgstr ""
+
+#: core/main.py:1027
+msgid "Checking firewall...\n"
+msgstr ""
+
+#: core/main.py:1032
+msgid "Checking security updates...\n"
+msgstr ""
+
+#: core/main.py:1038
+#, python-brace-format
+msgid "Changing DNS to {dns_ip}...\n"
+msgstr ""
+
+#: core/main.py:1044
+msgid "Could not generate DNS command for this OS.\n"
+msgstr ""
+
+#: core/main.py:1046
+msgid "ActionMapper not available.\n"
+msgstr ""
+
+#: core/main.py:1083
+msgid "Hide Details ▲"
+msgstr ""
+
+#: core/main.py:1141
+msgid "Initial settings saved! Some changes may require restart."
+msgstr ""
+
+#: core/main.py:1266
+msgid "Charging"
+msgstr ""
+
+#: core/main.py:1266
+msgid "Discharging"
+msgstr ""
+
+#: core/main.py:1269
+msgid "No battery"
+msgstr ""
+
+#: core/windows_cleaner.py:22
+msgid "Xbox App"
+msgstr ""
+
+#: core/windows_cleaner.py:22
+msgid "Xbox application"
+msgstr ""
+
+#: core/windows_cleaner.py:23
+msgid "Xbox Game Bar"
+msgstr ""
+
+#: core/windows_cleaner.py:23
+msgid "Xbox game bar"
+msgstr ""
+
+#: core/windows_cleaner.py:24
+msgid "Xbox Identity Provider"
+msgstr ""
+
+#: core/windows_cleaner.py:24
+msgid "Xbox identity provider"
+msgstr ""
+
+#: core/windows_cleaner.py:25
+msgid "Xbox Speech to Text Overlay"
+msgstr ""
+
+#: core/windows_cleaner.py:25
+msgid "Xbox speech overlay"
+msgstr ""
+
+#: core/windows_cleaner.py:26
+msgid "Candy Crush"
+msgstr ""
+
+#: core/windows_cleaner.py:26
+msgid "Candy Crush game"
+msgstr ""
+
+#: core/windows_cleaner.py:27
+msgid "Skype"
+msgstr ""
+
+#: core/windows_cleaner.py:28
+msgid "OneDrive"
+msgstr ""
+
+#: core/windows_cleaner.py:29
+msgid "Bing Weather"
+msgstr ""
+
+#: core/windows_cleaner.py:30
+msgid "Bing News"
+msgstr ""
+
+#: core/windows_cleaner.py:31
+msgid "Bing Sports"
+msgstr ""
+
+#: core/windows_cleaner.py:32
+msgid "Bing Finance"
+msgstr ""
+
+#: core/windows_cleaner.py:33
+msgid "3D Builder"
+msgstr ""
+
+#: core/windows_cleaner.py:34
+msgid "People"
+msgstr ""
+
+#: core/windows_cleaner.py:35
+msgid "Zune Music"
+msgstr ""
+
+#: core/windows_cleaner.py:36
+msgid "Zune Video"
+msgstr ""
+
+#: core/windows_cleaner.py:37
+msgid "Mixed Reality Portal"
+msgstr ""
+
+#: core/windows_cleaner.py:38
+msgid "Office Hub"
+msgstr ""
+
+#: core/windows_cleaner.py:39
+msgid "Solitaire Collection"
+msgstr ""
+
+#: core/windows_cleaner.py:40
+msgid "Sticky Notes"
+msgstr ""
+
+#: core/windows_cleaner.py:41
+msgid "Windows Camera"
+msgstr ""
+
+#: core/windows_cleaner.py:42
+msgid "Windows Communications Apps"
+msgstr ""
+
+#: core/windows_cleaner.py:42
+msgid "Communications apps"
+msgstr ""
+
+#: core/windows_cleaner.py:43
+msgid "Windows Feedback Hub"
+msgstr ""
+
+#: core/windows_cleaner.py:43
+msgid "Feedback Hub"
+msgstr ""
+
+#: core/windows_cleaner.py:44
+msgid "Windows Maps"
+msgstr ""
+
+#: core/windows_cleaner.py:45
+msgid "Windows Sound Recorder"
+msgstr ""
+
+#: core/windows_cleaner.py:45
+msgid "Sound Recorder"
+msgstr ""
+
+#: core/windows_cleaner.py:46
+msgid "Your Phone"
+msgstr ""
+
+#: core/windows_cleaner.py:47
+msgid "Get Help"
+msgstr ""
+
+#: core/windows_cleaner.py:48
+msgid "Messaging"
+msgstr ""
+
+#: core/windows_cleaner.py:49
+msgid "Office OneNote"
+msgstr ""
+
+#: core/windows_cleaner.py:49
+msgid "OneNote"
+msgstr ""
+
+#: core/windows_cleaner.py:50
+msgid "Outlook for Windows"
+msgstr ""
+
+#: core/windows_cleaner.py:50
+msgid "Outlook"
+msgstr ""
+
+#: core/windows_cleaner.py:51
+msgid "Paint 3D"
+msgstr ""
+
+#: core/windows_cleaner.py:52
+msgid "Print 3D"
+msgstr ""
+
+#: core/windows_cleaner.py:53
+msgid "Snip & Sketch"
+msgstr ""
+
+#: core/windows_cleaner.py:54
+msgid "Teams"
+msgstr ""
+
+#: core/windows_cleaner.py:54
+msgid "Microsoft Teams"
+msgstr ""
+
+#: core/windows_cleaner.py:55
+msgid "Todos"
+msgstr ""
+
+#: core/windows_cleaner.py:55
+msgid "Microsoft To Do"
+msgstr ""
+
+#: core/windows_cleaner.py:56
+msgid "Wallet"
+msgstr ""
+
+#: core/windows_cleaner.py:57
+msgid "Windows Alarms"
+msgstr ""
+
+#: core/windows_cleaner.py:57
+msgid "Alarms"
+msgstr ""
+
+#: core/windows_cleaner.py:58
+msgid "Windows Calculator"
+msgstr ""
+
+#: core/windows_cleaner.py:58
+msgid "Calculator"
+msgstr ""
+
+#: core/windows_cleaner.py:59
+msgid "Windows Clock"
+msgstr ""
+
+#: core/windows_cleaner.py:59
+msgid "Clock"
+msgstr ""
+
+#: core/windows_cleaner.py:63
+msgid "Copilot"
+msgstr ""
+
+#: core/windows_cleaner.py:64
+msgid "Windows Recall"
+msgstr ""
+
+#: core/windows_cleaner.py:65
+msgid "Cortana"
+msgstr ""
+
+#: core/windows_cleaner.py:66
+msgid "Web Search in Start"
+msgstr ""
+
+#: core/windows_cleaner.py:67
+msgid "News & Interests"
+msgstr ""
+
+#: core/windows_cleaner.py:68
+msgid "Widgets"
+msgstr ""
+
+#: core/windows_cleaner.py:103
+#, python-brace-format
+msgid "Error executing PowerShell: {stderr}"
+msgstr ""
+
+#: core/windows_cleaner.py:110
+#, python-brace-format
+msgid "Exception while verifying bloatware: {error}"
+msgstr ""
+
+#: core/windows_cleaner.py:160
+#, python-brace-format
+msgid "ERROR: {stderr}"
+msgstr ""
+
+#: core/windows_cleaner.py:165
+msgid "Command exceeded time limit and was killed."
+msgstr ""
+
+#: core/windows_cleaner.py:169
+#, python-brace-format
+msgid "Exception: {error}"
+msgstr ""

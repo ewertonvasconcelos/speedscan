@@ -1,0 +1,1 @@
+DEBUG: config.py carregado

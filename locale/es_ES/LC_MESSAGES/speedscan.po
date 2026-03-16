@@ -1,0 +1,37 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: es_ES\n"
+
+msgid "Dashboard"
+msgstr "Panel"
+
+msgid "Network"
+msgstr "Red"
+
+msgid "Optimization"
+msgstr "Optimización"
+
+msgid "Drivers"
+msgstr "Controladores"
+
+msgid "Process Manager"
+msgstr "Administrador de Procesos"
+
+msgid "Historical Performance"
+msgstr "Rendimiento Histórico"
+
+msgid "System Security"
+msgstr "Seguridad del Sistema"
+
+msgid "AI Agent"
+msgstr "Agente IA"
+
+msgid "Settings"
+msgstr "Ajustes"
+
+msgid "About"
+msgstr "Acerca de"
+
+msgid "Windows Cleaner"
+msgstr "Limpiador de Windows"

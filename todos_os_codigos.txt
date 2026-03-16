@@ -1,0 +1,28 @@
+# Cria o arquivo com todos os códigos
+for file in core/*.py; do
+  echo "===== $file =====" >> todos_os_codigos.txt
+  cat "$file" >> todos_os_codigos.txt
+  echo -e "\n\n" >> todos_os_codigos.txt
+done
+
+# Adiciona os arquivos de tradução (se existirem)
+if [ -f locale/pt_BR/LC_MESSAGES/speedscan.po ]; then
+  echo "===== locale/pt_BR/LC_MESSAGES/speedscan.po =====" >> todos_os_codigos.txt
+  cat locale/pt_BR/LC_MESSAGES/speedscan.po >> todos_os_codigos.txt
+  echo -e "\n\n" >> todos_os_codigos.txt
+fi
+
+if [ -f locale/en_US/LC_MESSAGES/speedscan.po ]; then
+  echo "===== locale/en_US/LC_MESSAGES/speedscan.po =====" >> todos_os_codigos.txt
+  cat locale/en_US/LC_MESSAGES/speedscan.po >> todos_os_codigos.txt
+  echo -e "\n\n" >> todos_os_codigos.txt
+fi
+
+if [ -f locale/es_ES/LC_MESSAGES/speedscan.po ]; then
+  echo "===== locale/es_ES/LC_MESSAGES/speedscan.po =====" >> todos_os_codigos.txt
+  cat locale/es_ES/LC_MESSAGES/speedscan.po >> todos_os_codigos.txt
+  echo -e "\n\n" >> todos_os_codigos.txt
+fi
+
+echo "Arquivo todos_os_codigos.txt gerado com sucesso!"o
+
