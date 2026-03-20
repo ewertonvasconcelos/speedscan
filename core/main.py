@@ -2294,6 +2294,12 @@ class SpeedScan(ctk.CTk):
             else:
                 percent_str = f"{percent}%"
             
+            # Status text
+            if plugged:
+                status_text = "Carregando"
+            else:
+                status_text = ""
+            
             if is_small:
                 icon = "🔌" if plugged else "🔋"
                 label = ctk.CTkLabel(
@@ -2303,6 +2309,14 @@ class SpeedScan(ctk.CTk):
                     text_color=color
                 )
                 label.pack(expand=True)
+                if status_text:
+                    status_label = ctk.CTkLabel(
+                        frame,
+                        text=status_text,
+                        font=("Inter", 8),
+                        text_color=color
+                    )
+                    status_label.pack()
             else:
                 icon = "🔌" if plugged else "🔋"
                 icon_label = ctk.CTkLabel(
@@ -2328,6 +2342,15 @@ class SpeedScan(ctk.CTk):
                     text_color=color
                 )
                 label.pack(expand=True)
+                
+                if status_text:
+                    status_label = ctk.CTkLabel(
+                        frame,
+                        text=status_text,
+                        font=("Inter", 12),
+                        text_color=color
+                    )
+                    status_label.pack()
         else:
             # No battery
             label = ctk.CTkLabel(
