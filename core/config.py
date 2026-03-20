@@ -17,7 +17,7 @@ DEFAULT_CONFIG = {
     "theme": "default",
     "username": "user",
     "language": "pt_BR",
-    "ui_scale": "auto",
+    "ui_scale": "125",
     "open_file_in_tab": False,
     "simple_mode": True,
     "expert_level": 1,

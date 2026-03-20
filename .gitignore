@@ -1,1 +1,37 @@
-Miniconda3-latest-Linux-x86_64.sh
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+*.pyd
+
+# Virtual environments
+venv/
+venv_*/
+.env
+
+# IDEs
+.vscode/
+.idea/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+*.orig
+*~
+
+# Large files
+Miniconda3-*.sh
+*.tar.gz
+*.zip
+
+# Compiled translations (optional, you may want to keep .mo)
+# locale/*/LC_MESSAGES/*.mo
+
+# Scripts that are not part of the core app
+corrigir*.sh
+correcoes*.md
+corrigir_problemas.py
+run_speedscan.sh
+test_dashboard.py

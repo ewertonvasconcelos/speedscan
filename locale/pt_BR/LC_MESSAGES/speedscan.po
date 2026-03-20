@@ -35,3 +35,268 @@ msgstr "Sobre"
 
 msgid "Windows Cleaner"
 msgstr "Limpeza do Windows"
+
+# Novas traduções adicionadas
+msgid "Details ▼"
+msgstr "Detalhes ▼"
+
+msgid "Hide Details ▲"
+msgstr "Ocultar Detalhes ▲"
+
+msgid "Running command..."
+msgstr "Executando comando..."
+
+msgid "Error executing command:"
+msgstr "Erro ao executar comando:"
+
+msgid "Unknown command:"
+msgstr "Comando desconhecido:"
+
+msgid "Cleaning memory cache..."
+msgstr "Limpando cache de memória..."
+
+msgid "Cache cleaned successfully."
+msgstr "Cache limpa com sucesso."
+
+msgid "Error cleaning cache."
+msgstr "Erro ao limpar cache."
+
+msgid "Resetting swap..."
+msgstr "Resetando swap..."
+
+msgid "Swap reset."
+msgstr "Swap resetado."
+
+msgid "Verifying filesystem errors..."
+msgstr "Verificando erros do sistema de arquivos..."
+
+msgid "Verification completed."
+msgstr "Verificação concluída."
+
+msgid "Activating turbo mode..."
+msgstr "Ativando modo turbo..."
+
+msgid "Turbo mode activated."
+msgstr "Modo turbo ativado."
+
+msgid "Cleaning browser cache..."
+msgstr "Limpando cache do navegador..."
+
+msgid "Total freed:"
+msgstr "Total liberado:"
+
+msgid "Running Ping test..."
+msgstr "Executando teste de Ping..."
+
+msgid "Running Speed Test..."
+msgstr "Executando Teste de Velocidade..."
+
+msgid "Scan complete."
+msgstr "Varredura completa."
+
+msgid "Open ports found:"
+msgstr "Portas abertas encontradas:"
+
+msgid "No open ports found."
+msgstr "Nenhuma porta aberta encontrada."
+
+msgid "Public IP:"
+msgstr "IP Público:"
+
+msgid "WiFi Info:"
+msgstr "Info WiFi:"
+
+msgid "System Update"
+msgstr "Atualização do Sistema"
+
+msgid "USB Devices"
+msgstr "Dispositivos USB"
+
+msgid "PCI Devices"
+msgstr "Dispositivos PCI"
+
+msgid "CPU Info"
+msgstr "Info CPU"
+
+msgid "Modules"
+msgstr "Módulos"
+
+msgid "Firmware"
+msgstr "Firmware"
+
+msgid "GPU Driver"
+msgstr "Driver de Vídeo"
+
+msgid "Network Driver"
+msgstr "Driver de Rede"
+
+msgid "Firewall Status"
+msgstr "Status do Firewall"
+
+msgid "Security Updates"
+msgstr "Atualizações de Segurança"
+
+msgid "Services"
+msgstr "Serviços"
+
+msgid "Logs"
+msgstr "Logs"
+
+msgid "Cookies"
+msgstr "Cookies"
+
+msgid "TRIM"
+msgstr "TRIM"
+
+msgid "Fix Broken"
+msgstr "Reparar Pacotes"
+
+msgid "Memory Cache"
+msgstr "Cache de Memória"
+
+msgid "Swap"
+msgstr "Swap"
+
+msgid "File System"
+msgstr "Sistema de Arquivos"
+
+msgid "Turbo Mode"
+msgstr "Modo Turbo"
+
+msgid "Steam"
+msgstr "Steam"
+
+msgid "Lutris"
+msgstr "Lutris"
+
+msgid "Heroic"
+msgstr "Heroic"
+
+msgid "Bottles"
+msgstr "Bottles"
+
+msgid "Wine"
+msgstr "Wine"
+
+msgid "MangoHud"
+msgstr "MangoHud"
+
+msgid "CPU Governor"
+msgstr "Governor da CPU"
+
+msgid "Dolphin"
+msgstr "Dolphin"
+
+msgid "Period:"
+msgstr "Período:"
+
+msgid "Filter:"
+msgstr "Filtrar:"
+
+msgid "Sort by:"
+msgstr "Ordenar por:"
+
+msgid "Descending"
+msgstr "Decrescente"
+
+msgid "Username:"
+msgstr "Nome de usuário:"
+
+msgid "Your name"
+msgstr "Seu nome"
+
+msgid "Language:"
+msgstr "Idioma:"
+
+msgid "UI Scale:"
+msgstr "Escala da interface:"
+
+msgid "Theme:"
+msgstr "Tema:"
+
+msgid "Open files in new tab"
+msgstr "Abrir arquivos em nova aba"
+
+msgid "Expert level:"
+msgstr "Nível de experiência:"
+
+msgid "Beginner"
+msgstr "Iniciante"
+
+msgid "Intermediate"
+msgstr "Intermediário"
+
+msgid "Advanced"
+msgstr "Avançado"
+
+msgid "Automation:"
+msgstr "Automação:"
+
+msgid "Auto cache cleanup"
+msgstr "Limpeza automática de cache"
+
+msgid "Auto swap reset"
+msgstr "Reset automático de swap"
+
+msgid "Auto SSD trim"
+msgstr "Trim automático de SSD"
+
+msgid "Interval (hours):"
+msgstr "Intervalo (horas):"
+
+msgid "Enable automation"
+msgstr "Ativar automação"
+
+msgid "Apply"
+msgstr "Aplicar"
+
+msgid "This module is exclusive to Windows!"
+msgstr "Este módulo é exclusivo para Windows!"
+
+msgid "Run"
+msgstr "Executar"
+
+msgid "Start"
+msgstr "Iniciar"
+
+msgid "Stop"
+msgstr "Parar"
+
+msgid "Kill"
+msgstr "Finalizar"
+
+msgid "Suspend"
+msgstr "Suspender"
+
+msgid "Resume"
+msgstr "Continuar"
+
+msgid "Set"
+msgstr "Definir"
+
+msgid "PID"
+msgstr "PID"
+
+msgid "CPU%"
+msgstr "CPU %"
+
+msgid "MEM%"
+msgstr "MEM %"
+
+msgid "STATUS"
+msgstr "Status"
+
+msgid "NICE"
+msgstr "Nice"
+
+msgid "USER"
+msgstr "Usuário"
+
+msgid "NAME"
+msgstr "Nome"
+
+msgid "Ping"
+msgstr "Ping"
+
+msgid "Speedtest"
+msgstr "Teste de Velocidade"

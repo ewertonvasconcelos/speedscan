@@ -16,9 +16,9 @@ class CommandRunner:
         try:
             if use_sudo and self.so == "Linux":
                 if isinstance(cmd, list):
-                    cmd = ["pkexec"] + cmd
+                    cmd = ["sudo"] + cmd  # Use sudo instead of pkexec
                 else:
-                    cmd = f"pkexec {cmd}"
+                    cmd = f"sudo {cmd}"
             elif use_sudo and self.so == "Windows":
                 if isinstance(cmd, list):
                     cmd = ["runas", "/user:Administrator"] + cmd
@@ -216,24 +216,54 @@ class ActionHandler:
     def __init__(self, app):
         self.app = app
     def _run_linux_command(self, cmd, log, use_sudo=True):
+        print(f"DEBUG: _run_linux_command called with cmd={cmd}, use_sudo={use_sudo}")
         proc = self.app.runner.run(cmd, use_sudo=use_sudo, parent=self.app)
         if proc:
-            for line in proc.stdout:
-                self.app.after(0, lambda l=line: log.insert("end", l))
-            proc.wait()
-            return True
+            try:
+                # Ler stdout linha por linha com update da UI
+                output_lines = []
+                while True:
+                    line = proc.stdout.readline()
+                    if not line and proc.poll() is not None:
+                        break
+                    if line:
+                        output_lines.append(line)
+                
+                # Se não houve saída, mostrar mensagem
+                if not output_lines:
+                    log.insert("end", f"⚠️ Command executed but no output: {' '.join(cmd) if isinstance(cmd, list) else cmd}\n")
+                else:
+                    for line in output_lines:
+                        log.insert("end", line)
+                        log.see("end")
+                
+                proc.wait()
+                log.update()
+                return True
+            except Exception as e:
+                print(f"DEBUG: Error reading output: {e}")
+                log.insert("end", f"Error reading output: {e}\n")
+                log.update()
+                return False
+        print("DEBUG: proc is None - command failed to start")
+        log.insert("end", f"⚠️ Command not available or failed to start: {' '.join(cmd) if isinstance(cmd, list) else cmd}\n")
+        log.update()
         return False
     def run_cache_clean(self, log):
+        print("DEBUG: run_cache_clean called")
         log.delete("1.0", "end")
         log.insert("end", "🧹 Cleaning memory cache...\n")
+        log.update()  # Force UI refresh
         if self.app.SO != "Linux":
             log.insert("end", "⚠️ Operation only for Linux.\n")
             return
         success = self._run_linux_command(["sh", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"], log, use_sudo=True)
         log.insert("end", "✅ Cache cleaned successfully.\n" if success else "❌ Error cleaning cache.\n")
     def run_swap_reset(self, log):
+        print("DEBUG: run_swap_reset called")
         log.delete("1.0", "end")
         log.insert("end", "🔄 Resetting swap...\n")
+        log.update()
         if self.app.SO != "Linux":
             log.insert("end", "⚠️ Operation only for Linux.\n")
             return
@@ -241,8 +271,10 @@ class ActionHandler:
         self._run_linux_command(["sudo", "swapon", "-a"], log, use_sudo=True)
         log.insert("end", "✅ Swap reset.\n")
     def run_fs_check(self, log):
+        print("DEBUG: run_fs_check called")
         log.delete("1.0", "end")
         log.insert("end", "🔍 Verifying filesystem errors...\n")
+        log.update()
         if self.app.SO != "Linux":
             log.insert("end", "⚠️ Operation only for Linux.\n")
             return

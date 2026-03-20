@@ -18,14 +18,46 @@ class ChatFrame(ctk.CTkFrame):
         self.history = []
         self.current_ai = app_instance.config_data.get("ai", {}).get("provider", "ollama")
         self.ai_model = app_instance.config_data.get("ai", {}).get("model", "llama3.2")
-        self.endpoint = app_instance.config_data.get("ai", {}).get("endpoint", "http://localhost:11434")
+        # Tentar múltiplas URLs para Ollama (localhost, host.docker.internal, etc.)
+        default_endpoint = app_instance.config_data.get("ai", {}).get("endpoint", "http://localhost:11434")
+        # Tentar URLs alternativas para container
+        self.endpoint = self._try_ollama_endpoints(default_endpoint)
         self.api_key = app_instance.config_data.get("ai", {}).get("api_key", "")
 
+        # Get colors safely, with fallback values
+        try:
+            light_bg = getattr(self.app, 'light_bg', '#2b2b2b')
+            text_color = getattr(self.app, 'text_color', '#ffffff')
+            acc_color = getattr(self.app, 'acc_color', '#1f6aa5')
+        except Exception as e:
+            logging.error(f"Error getting theme colors: {e}")
+            light_bg = '#2b2b2b'
+            text_color = '#ffffff'
+            acc_color = '#1f6aa5'
+
         self.chat_display = ctk.CTkTextbox(self, wrap="word", font=("Inter", 12),
-                                            fg_color=self.app.light_bg,
-                                            text_color=self.app.text_color)
+                                            fg_color=light_bg,
+                                            text_color=text_color)
         self.chat_display.pack(fill="both", expand=True, padx=10, pady=10)
         self.chat_display.configure(state="disabled")
+
+        # Provider selector
+        provider_frame = ctk.CTkFrame(self, fg_color="transparent")
+        provider_frame.pack(fill="x", padx=10, pady=(5,0))
+        ctk.CTkLabel(provider_frame, text="Provider:", font=("Inter", 12)).pack(side="left", padx=5)
+        
+        # Available providers
+        self.providers = {
+            "ollama": "Ollama (Local)",
+            "openai": "OpenAI (ChatGPT)",
+            "deepseek": "DeepSeek",
+            "anthropic": "Anthropic (Claude)",
+        }
+        self.provider_var = ctk.StringVar(value=self.providers.get(self.current_ai, "Ollama (Local)"))
+        provider_menu = ctk.CTkOptionMenu(provider_frame, values=list(self.providers.values()),
+                                         variable=self.provider_var, width=180,
+                                         command=self._on_provider_change)
+        provider_menu.pack(side="left", padx=5)
 
         input_frame = ctk.CTkFrame(self, fg_color="transparent")
         input_frame.pack(fill="x", padx=10, pady=(0,10))
@@ -35,10 +67,41 @@ class ChatFrame(ctk.CTkFrame):
         self.message_entry.bind("<Return>", lambda e: self.send_message())
 
         self.send_btn = ctk.CTkButton(input_frame, text="Send", command=self.send_message,
-                                      fg_color=self.app.acc_color, cursor="hand2")
+                                      fg_color=acc_color, cursor="hand2")
         self.send_btn.pack(side="right")
 
-        self._add_message("system", "🤖 Connected to assistant. Type /help for commands.")
+        self._add_message("system", "🤖 SpeedScan AI Assistant\n"
+                          "Type /help for available commands.\n"
+                          f"Current provider: {self.current_ai}\n"
+                          f"Model: {self.ai_model}\n\n"
+                          "Note: Make sure Ollama is running for local AI.")
+
+    def _try_ollama_endpoints(self, default_endpoint):
+        """Tenta múltiplos endpoints para encontrar Ollama."""
+        endpoints = [
+            default_endpoint,
+            "http://localhost:11434",
+            "http://host.containers.internal:11434",
+            "http://172.17.0.1:11434",  # Docker default bridge
+        ]
+        for endpoint in endpoints:
+            try:
+                response = requests.get(f"{endpoint}/api/tags", timeout=2)
+                if response.status_code == 200:
+                    print(f"DEBUG: Ollama encontrado em {endpoint}")
+                    return endpoint
+            except:
+                continue
+        print(f"DEBUG: Nenhum endpoint de Ollama funcionou, usando {default_endpoint}")
+        return default_endpoint
+
+    def _on_provider_change(self, choice):
+        # Find provider key from value
+        for key, value in self.providers.items():
+            if value == choice:
+                self.current_ai = key
+                break
+        self._add_message("system", f"✅ Provider changed to: {choice}\nPlease enter your API key in Settings if needed.")
 
     def _add_message(self, role, content):
         self.chat_display.configure(state="normal")
@@ -67,7 +130,13 @@ class ChatFrame(ctk.CTkFrame):
 
     def _handle_command(self, cmd):
         if cmd == "/help":
-            self._add_message("system", "Available commands:\n/help - show this help\n/clear - clear chat\n/model - show current model\n/trash - list trash items\n/emptytrash - empty trash")
+            self._add_message("system", "Available commands:\n"
+                              "/help - show this help\n"
+                              "/clear - clear chat\n"
+                              "/model - show current model\n"
+                              "/test - test Ollama connection\n"
+                              "/trash - list trash items\n"
+                              "/emptytrash - empty trash")
         elif cmd == "/clear":
             self.chat_display.configure(state="normal")
             self.chat_display.delete("1.0", "end")
@@ -75,7 +144,10 @@ class ChatFrame(ctk.CTkFrame):
             self.history = []
             self._add_message("system", "🗑️ Chat cleared.")
         elif cmd == "/model":
-            self._add_message("system", f"Current model: {self.current_ai} ({self.ai_model})")
+            self._add_message("system", f"Current model: {self.current_ai} ({self.ai_model})\nEndpoint: {self.endpoint}")
+        elif cmd == "/test":
+            self._add_message("system", "🔄 Testing connection to Ollama...")
+            threading.Thread(target=self._test_connection, daemon=True).start()
         elif cmd == "/trash":
             items = self.app.trash_manager.list_trash()
             if items:
@@ -107,13 +179,29 @@ class ChatFrame(ctk.CTkFrame):
                 "messages": messages,
                 "stream": False
             }
-            response = requests.post(f"{self.endpoint}/api/chat", json=payload, timeout=60)
+            # First check if Ollama is reachable
+            try:
+                test_response = requests.get(f"{self.endpoint}/api/tags", timeout=5)
+                if test_response.status_code != 200:
+                    self.app.after(0, lambda: self._add_message("system", f"⚠️ Ollama returned status {test_response.status_code}. Is it running?"))
+                    return
+            except requests.exceptions.ConnectionError:
+                self.app.after(0, lambda: self._add_message("system", "⚠️ Cannot connect to Ollama. Make sure Ollama is running:\n\n  ollama serve\n\nThen try again."))
+                return
+            except requests.exceptions.Timeout:
+                self.app.after(0, lambda: self._add_message("system", "⚠️ Connection to Ollama timed out."))
+                return
+            
+            response = requests.post(f"{self.endpoint}/api/chat", json=payload, timeout=120)
             if response.status_code == 200:
                 data = response.json()
                 reply = data.get("message", {}).get("content", "No response.")
                 self.app.after(0, lambda: self._add_message("assistant", reply))
             else:
-                self.app.after(0, lambda: self._add_message("system", f"Error Ollama: {response.status_code}"))
+                self.app.after(0, lambda: self._add_message("system", f"Error from Ollama: {response.status_code}"))
+        except requests.exceptions.Timeout:
+            logging.error("Ollama request timed out")
+            self.app.after(0, lambda: self._add_message("system", "⚠️ Request timed out. Try a simpler query or check Ollama."))
         except Exception as e:
             logging.error(f"Error querying Ollama: {e}")
             self.app.after(0, lambda e=e: self._add_message("system", f"Error connecting to Ollama: {e}"))
@@ -123,3 +211,23 @@ class ChatFrame(ctk.CTkFrame):
 
     def _query_deepseek(self, message):
         self.app.after(0, lambda: self._add_message("system", "⚠️ DeepSeek not implemented."))
+
+    def _test_connection(self):
+        """Test connection to Ollama server."""
+        try:
+            response = requests.get(f"{self.endpoint}/api/tags", timeout=10)
+            if response.status_code == 200:
+                models = response.json().get("models", [])
+                model_names = [m.get("name", "unknown") for m in models]
+                msg = f"✅ Connection successful!\nAvailable models: {', '.join(model_names) if model_names else 'none'}"
+                self.app.after(0, lambda: self._add_message("system", msg))
+            else:
+                self.app.after(0, lambda: self._add_message("system", f"⚠️ Server returned status {response.status_code}"))
+        except requests.exceptions.ConnectionError:
+            self.app.after(0, lambda: self._add_message("system", "⚠️ Cannot connect to Ollama.\n\n"
+                                                        "Make sure Ollama is running:\n"
+                                                        "  ollama serve\n\n"
+                                                        "Or install Ollama:\n"
+                                                        "  curl -fsSL https://ollama.com/install.sh | sh"))
+        except Exception as e:
+            self.app.after(0, lambda e=e: self._add_message("system", f"⚠️ Error: {e}"))

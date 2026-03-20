@@ -62,4 +62,6 @@ def add_console(parent, tag_prefix, acc_color, toggle_callback):
                              font=("Consolas", 10), corner_radius=10)
     btn = ctk.CTkButton(parent, text="Details ▼", fg_color=acc_color,
                         command=lambda: toggle_callback(tag_prefix), cursor="hand2")
+    # Add button to interface
+    btn.pack(side="right", anchor="e", padx=10, pady=5)
     return btn, console
