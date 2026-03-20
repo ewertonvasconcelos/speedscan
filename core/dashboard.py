@@ -148,10 +148,11 @@ class SmallWidget(ctk.CTkFrame):
         )
         self.grid_propagate(False)
         
-        # Title
+        # Title - use widget_title method from app
+        widget_name = app_instance.widget_title(widget_type)
         self.title_label = ctk.CTkLabel(
             self,
-            text=widget_type["name"],
+            text=widget_name,
             font=("Inter", 10, "bold"),
             text_color=app_instance.acc_color,
         )
@@ -275,7 +276,18 @@ class Dashboard(ctk.CTkFrame):
         if big_1:
             self._create_big_widget(2, big_1)
         
-        # Recreate small widgets (the clicked one goes up, big_2 goes down to small)
+        # Remove the clicked widget from small list and add big_2 to the end
+        # This ensures no duplicates and proper rotation
+        if widget_type in self.small_widgets:
+            self.small_widgets.remove(widget_type)
+        
+        # If there was a widget in slot 2, add it to the end of small widgets
+        if big_2:
+            # Check if big_2 is not already in small_widgets to avoid duplicates
+            if big_2 not in self.small_widgets:
+                self.small_widgets.append(big_2)
+        
+        # Recreate small widgets grid
         self._create_small_widgets()
     
     def _create_big_widget(self, index, widget_type):

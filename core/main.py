@@ -1570,6 +1570,25 @@ class SpeedScan(ctk.CTk):
     # ------------------------------------------------------------------------
     # Dashboard widgets (called by Dashboard class)
     # ------------------------------------------------------------------------
+    
+    def widget_title(self, widget_type):
+        """Get title for a widget type."""
+        titles = {
+            "battery": "Bateria",
+            "gpu": "GPU",
+            "temperatures": "Temperaturas",
+            "uptime": "Uptime",
+            "kernel": "Kernel",
+            "distribution": "Distribuição",
+            "hostname": "Hostname",
+            "health": "Saúde",
+        }
+        # Handle both id and full dict
+        if isinstance(widget_type, dict):
+            widget_id = widget_type.get("id", "")
+            return titles.get(widget_id, widget_id.capitalize())
+        return titles.get(widget_type, widget_type.capitalize())
+    
     def widget_hostname(self, frame, tag):
         # Clear previous content
         for child in frame.winfo_children():
