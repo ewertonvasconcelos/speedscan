@@ -4,27 +4,79 @@
 Dashboard module with 3 fixed slots and available widgets in two rows (4+4).
 Version 1.0.0
 """
+
 import customtkinter as ctk
 import json
 import logging
 from pathlib import Path
-from core import config
+
+# Color constants
+COLOR_SUCCESS = "#4CAF50"   # Green
+COLOR_WARNING = "#FF9800"   # Orange/Yellow
+COLOR_DANGER = "#F44336"    # Red
+COLOR_COLD = "#2196F3"      # Blue
+
+
+def get_temp_icon(temp):
+    """Get icon based on temperature."""
+    if temp < 30:
+        return "❄️"  # Cold
+    elif temp < 50:
+        return "🌡️"  # Normal
+    elif temp < 70:
+        return "⚠️"  # Warning
+    else:
+        return "🔥"  # Hot
+
+
+def get_temp_color(temp):
+    """Get color based on temperature."""
+    if temp < 30:
+        return COLOR_COLD   # blue
+    elif temp < 50:
+        return COLOR_SUCCESS  # green
+    elif temp < 70:
+        return COLOR_WARNING  # orange
+    else:
+        return COLOR_DANGER   # red
+
+
+def get_usage_color(percent):
+    """Get color based on usage percentage."""
+    if percent <= 60:
+        return "#4CAF50"  # green
+    elif percent <= 85:
+        return "#FF9800"  # orange
+    else:
+        return "#F44336"  # red
+
+
+def get_battery_color(percent):
+    """Get color based on battery percentage."""
+    if percent <= 20:
+        return "#F44336"  # red
+    elif percent <= 50:
+        return "#FF9800"  # orange
+    else:
+        return "#4CAF50"  # green
+
 
 DASHBOARD_CONFIG = Path.home() / ".speedscan_dashboard.json"
 
 WIDGET_TYPES = [
     {"id": "hostname", "name": "Hostname", "callback": "widget_hostname"},
-    {"id": "distro", "name": "Distribution", "callback": "widget_distro"},
+    {"id": "distro", "name": "Distribuição", "callback": "widget_distro"},
     {"id": "kernel", "name": "Kernel", "callback": "widget_kernel"},
     {"id": "uptime", "name": "Uptime", "callback": "widget_uptime"},
     {"id": "cpu", "name": "CPU", "callback": "widget_cpu"},
-    {"id": "ram", "name": "RAM", "callback": "widget_ram"},
+    {"id": "ram", "name": "Memória RAM", "callback": "widget_ram"},
     {"id": "gpu", "name": "GPU", "callback": "widget_gpu"},
-    {"id": "disks", "name": "Disks", "callback": "widget_disks"},
-    {"id": "battery", "name": "Battery", "callback": "widget_battery"},
-    {"id": "temps", "name": "Temperatures", "callback": "widget_temps"},
-    {"id": "health", "name": "Health", "callback": "widget_health"},
+    {"id": "disks", "name": "Discos", "callback": "widget_disks"},
+    {"id": "battery", "name": "Bateria", "callback": "widget_battery"},
+    {"id": "temps", "name": "Temperaturas", "callback": "widget_temps"},
+    {"id": "health", "name": "Saúde", "callback": "widget_health"},
 ]
+
 
 class SlotWidget(ctk.CTkFrame):
     def __init__(self, parent, slot_index, widget_type, app_instance, **kwargs):
@@ -33,6 +85,7 @@ class SlotWidget(ctk.CTkFrame):
         self.widget_type = widget_type
         self.app = app_instance
         self.content_frame = None
+
         self.configure(
             fg_color=app_instance.bg_color,
             corner_radius=10,
@@ -41,6 +94,7 @@ class SlotWidget(ctk.CTkFrame):
         )
         self.pack_propagate(False)
         self.configure(height=200)
+
         self.title_label = ctk.CTkLabel(
             self,
             text=widget_type["name"],
@@ -48,6 +102,7 @@ class SlotWidget(ctk.CTkFrame):
             text_color=app_instance.acc_color,
         )
         self.title_label.pack(pady=(5, 0))
+
         self.update_content()
 
     def update_content(self):
@@ -55,6 +110,7 @@ class SlotWidget(ctk.CTkFrame):
             self.content_frame.destroy()
         self.content_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.content_frame.pack(fill="both", expand=True, padx=5, pady=5)
+
         callback_name = self.widget_type["callback"]
         callback = getattr(self.app, callback_name)
         callback(self.content_frame, f"slot_{self.slot_index}")
@@ -64,34 +120,42 @@ class SlotWidget(ctk.CTkFrame):
         self.title_label.configure(text=new_type["name"])
         self.update_content()
 
+
 class Dashboard(ctk.CTkFrame):
     def __init__(self, parent, app_instance, **kwargs):
         super().__init__(parent, **kwargs)
         self.app = app_instance
         self.slots = []
         self.available_widgets = []
+
         self.configure(fg_color="transparent")
+
         self._build_ui()
         self.load_state()
 
     def _build_ui(self):
         slots_frame = ctk.CTkFrame(self, fg_color="transparent")
-        slots_frame.pack(fill="x", pady=10)
+        slots_frame.pack(fill="x", padx=10)
+
         for i in range(3):
             slot_frame = ctk.CTkFrame(slots_frame, fg_color="transparent")
             slot_frame.pack(side="left", fill="both", expand=True, padx=5)
             self.slots.append(slot_frame)
+
         available_label = ctk.CTkLabel(
             self,
-            text="Available widgets:",
+            text="Widgets disponíveis:",
             font=("Inter", 14, "bold"),
             text_color=self.app.acc_color,
         )
         available_label.pack(anchor="center", pady=(20, 10))
+
         self.available_container = ctk.CTkFrame(self, fg_color="transparent")
         self.available_container.pack(anchor="center", pady=5)
+
         self.row1_frame = ctk.CTkFrame(self.available_container, fg_color="transparent")
         self.row1_frame.pack(pady=3)
+
         self.row2_frame = ctk.CTkFrame(self.available_container, fg_color="transparent")
         self.row2_frame.pack(pady=3)
 
@@ -100,8 +164,8 @@ class Dashboard(ctk.CTkFrame):
             try:
                 with open(DASHBOARD_CONFIG) as f:
                     data = json.load(f)
-                slot_ids = data.get("slots", [])
-                available_ids = data.get("available", [])
+                    slot_ids = data.get("slots", [])
+                    available_ids = data.get("available", [])
             except Exception as e:
                 logging.error(f"Error loading dashboard configuration: {e}")
                 slot_ids = []
@@ -109,14 +173,17 @@ class Dashboard(ctk.CTkFrame):
         else:
             slot_ids = []
             available_ids = []
+
         if not slot_ids:
             slot_ids = ["hostname", "distro", "uptime"]
             available_ids = [w["id"] for w in WIDGET_TYPES if w["id"] not in slot_ids]
+
         def find_widget(wid):
             for w in WIDGET_TYPES:
                 if w["id"] == wid:
                     return w
             return WIDGET_TYPES[0]
+
         slot_widgets = [find_widget(wid) for wid in slot_ids]
         available_widgets = []
         for wid in available_ids:
@@ -126,7 +193,9 @@ class Dashboard(ctk.CTkFrame):
         for w in WIDGET_TYPES:
             if w not in slot_widgets and w not in available_widgets:
                 available_widgets.append(w)
+
         self.available_widgets = available_widgets
+
         for i, slot_frame in enumerate(self.slots):
             if i < len(slot_widgets):
                 widget_type = slot_widgets[i]
@@ -137,6 +206,7 @@ class Dashboard(ctk.CTkFrame):
             )
             slot_widget.pack(fill="both", expand=True)
             self.slots[i] = slot_widget
+
         self._update_available_buttons()
         self.save_state()
 
@@ -153,6 +223,7 @@ class Dashboard(ctk.CTkFrame):
             child.destroy()
         for child in self.row2_frame.winfo_children():
             child.destroy()
+
         total = len(self.available_widgets)
         if total >= 8:
             first_half = self.available_widgets[:4]
@@ -161,6 +232,7 @@ class Dashboard(ctk.CTkFrame):
             half = (total + 1) // 2
             first_half = self.available_widgets[:half]
             second_half = self.available_widgets[half:]
+
         for widget in first_half:
             btn = ctk.CTkButton(
                 self.row1_frame,
@@ -172,6 +244,7 @@ class Dashboard(ctk.CTkFrame):
                 cursor="hand2",
             )
             btn.pack(side="left", padx=8, pady=5)
+
         for widget in second_half:
             btn = ctk.CTkButton(
                 self.row2_frame,
@@ -183,22 +256,27 @@ class Dashboard(ctk.CTkFrame):
                 cursor="hand2",
             )
             btn.pack(side="left", padx=8, pady=5)
+
         self.row1_frame.pack_configure(anchor="center")
         self.row2_frame.pack_configure(anchor="center")
 
     def add_to_slot(self, widget):
         current_slots = [slot.widget_type for slot in self.slots]
+
         new_slot0 = widget
         new_slot1 = current_slots[0]
         new_slot2 = current_slots[1]
         removed = current_slots[2]
+
         self.slots[0].set_widget_type(new_slot0)
         self.slots[1].set_widget_type(new_slot1)
         self.slots[2].set_widget_type(new_slot2)
+
         if widget in self.available_widgets:
             self.available_widgets.remove(widget)
         if removed not in [s.widget_type for s in self.slots]:
             self.available_widgets.append(removed)
+
         seen = set()
         unique = []
         for w in self.available_widgets:
@@ -206,5 +284,6 @@ class Dashboard(ctk.CTkFrame):
                 seen.add(w["id"])
                 unique.append(w)
         self.available_widgets = unique
+
         self._update_available_buttons()
         self.save_state()

@@ -32,7 +32,7 @@ from core.ai_proactive import AIProactive
 from core.browser_cleaner import BrowserCleaner
 from core.chat import ChatFrame
 from core.cookie_manager import CookieManager
-from core.dashboard import Dashboard
+from core.dashboard import Dashboard, get_usage_color, get_temp_color, get_temp_icon, get_battery_color, COLOR_SUCCESS, COLOR_WARNING, COLOR_DANGER, COLOR_COLD
 from core.first_run import FirstRunWizard
 from core.hardware import HardwareInfo
 from core.health_score import HealthScore
@@ -62,6 +62,166 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logging.basicConfig(level=logging.ERROR, handlers=[handler])
 
+# Inline translations dictionary (fallback when .mo files not available)
+INLINE_TRANSLATIONS = {
+    "pt_BR": {
+        # Tab names
+        "Dashboard": "Painel",
+        "Settings": "Configurações",
+        "AI Agent": "Agente IA",
+        "System Security": "Segurança do Sistema",
+        "Optimization": "Otimização",
+        "Network": "Rede",
+        "Hardware": "Hardware",
+        "Processes": "Processos",
+        "History": "Histórico",
+        "About": "Sobre",
+        
+        # Common buttons and labels
+        "Run": "Executar",
+        "Start": "Iniciar",
+        "Stop": "Parar",
+        "Details ▼": "Detalhes ▼",
+        "Details ▲": "Detalhes ▲",
+        "Hide Details ▲": "Ocultar Detalhes ▲",
+        "Username:": "Usuário:",
+        "Your name": "Seu nome",
+        "Language:": "Idioma:",
+        "UI Scale:": "Escala da UI:",
+        "Theme:": "Tema:",
+        
+        # Network cards
+        "🛡️ Open Ports": "🛡️ Portas Abertas",
+        "🛡️ Firewall": "🛡️ Firewall",
+        "📦 Security Updates": "📦 Atualizações de Segurança",
+        
+        # Messages
+        "Executing:": "Executando:",
+        "Error executing command": "Erro ao executar comando",
+        "Unknown command": "Comando desconhecido",
+        "Not enough data to display.": "Dados insuficientes para exibir.",
+        "Time (hours from now)": "Tempo (horas atrás)",
+        
+        # AI
+        "AI suggestions:": "Sugestões IA:",
+        
+        # Dashboard
+        "Available widgets:": "Widgets disponíveis:",
+        
+        # Settings
+        "Expert Mode": "Modo Experto",
+        "Basic Mode": "Modo Básico",
+        "Light": "Claro",
+        "Dark": "Escuro",
+        "System": "Sistema",
+        "Auto": "Auto",
+        
+        # About
+        "SpeedScan": "SpeedScan",
+        "Version:": "Versão:",
+        "About SpeedScan": "Sobre o SpeedScan",
+        "System Information": "Informações do Sistema",
+        
+        # Optimization
+        "Cache Cleaner": "Limpeza de Cache",
+        "Swap Reset": "Resetar Swap",
+        "Filesystem Check": "Verificar Sistema de Arquivos",
+        "Turbo Mode": "Modo Turbo",
+        
+        # History
+        "CPU %": "CPU %",
+        "RAM %": "RAM %",
+        "Disk %": "Disco %",
+        
+        # Errors
+        "Error:": "Erro:",
+        "Warning:": "Aviso:",
+        "Success:": "Sucesso:",
+    },
+    "es_ES": {
+        # Tab names
+        "Dashboard": "Panel",
+        "Settings": "Configuración",
+        "AI Agent": "Agente IA",
+        "System Security": "Seguridad del Sistema",
+        "Optimization": "Optimización",
+        "Network": "Red",
+        "Hardware": "Hardware",
+        "Processes": "Procesos",
+        "History": "Historial",
+        "About": "Acerca de",
+        
+        # Common buttons and labels
+        "Run": "Ejecutar",
+        "Start": "Iniciar",
+        "Stop": "Detener",
+        "Details ▼": "Detalles ▼",
+        "Details ▲": "Detalles ▲",
+        "Hide Details ▲": "Ocultar Detalles ▲",
+        "Username:": "Usuario:",
+        "Your name": "Tu nombre",
+        "Language:": "Idioma:",
+        "UI Scale:": "Escala UI:",
+        "Theme:": "Tema:",
+        
+        # Network cards
+        "🛡️ Open Ports": "🛡️ Puertos Abiertos",
+        "🛡️ Firewall": "🛡️ Firewall",
+        "📦 Security Updates": "📦 Actualizaciones de Seguridad",
+        
+        # Messages
+        "Executing:": "Ejecutando:",
+        "Error executing command": "Error al ejecutar comando",
+        "Unknown command": "Comando desconocido",
+        "Not enough data to display.": "Datos insuficientes para mostrar.",
+        "Time (hours from now)": "Tiempo (horas atrás)",
+        
+        # AI
+        "AI suggestions:": "Sugerencias IA:",
+        
+        # Dashboard
+        "Available widgets:": "Widgets disponibles:",
+        
+        # Settings
+        "Expert Mode": "Modo Experto",
+        "Basic Mode": "Modo Básico",
+        "Light": "Claro",
+        "Dark": "Oscuro",
+        "System": "Sistema",
+        "Auto": "Auto",
+        
+        # About
+        "SpeedScan": "SpeedScan",
+        "Version:": "Versión:",
+        "About SpeedScan": "Acerca de SpeedScan",
+        "System Information": "Información del Sistema",
+    },
+    "en_US": {
+        # English is the default
+        "About": "About",
+    }
+}
+
+def get_translation_with_fallback(language):
+    """Get translation function with inline dictionary fallback."""
+    # Try gettext first
+    try:
+        t = get_translation(language)
+        # Test if it actually translates something
+        test = t("Dashboard")
+        if test != "Dashboard":  # gettext is working
+            return t
+    except:
+        pass
+    
+    # Fallback to inline dictionary
+    translations = INLINE_TRANSLATIONS.get(language, {})
+    
+    def translate(s):
+        return translations.get(s, s)
+    
+    return translate
+
 # ============================================================================
 # Main application class
 # ============================================================================
@@ -73,7 +233,7 @@ class SpeedScan(ctk.CTk):
         self.runner = CommandRunner(self.SO)
         self.hw = HardwareInfo(self.SO, self.runner)
         self.config_data = self._load_config()
-        self._ = get_translation(self.config_data.get("language", "pt_BR"))
+        self._ = get_translation_with_fallback(self.config_data.get("language", "pt_BR"))
         self.update_theme_vars()
         self.title(self._("SpeedScan") + f" {config.VERSION}")
         self.configure(fg_color=self.bg_color)
@@ -164,9 +324,11 @@ class SpeedScan(ctk.CTk):
     # Theme handling
     def update_theme_vars(self):
         theme_key = self.config_data.get("theme", "default")
+        logging.info(f"Loading theme: {theme_key}")
         theme_map = {"Still": "grey", "Tecno": "dark", "Snow": "light"}
         internal_key = theme_map.get(theme_key, theme_key)
         t = config.THEMES.get(internal_key, config.THEMES["default"])
+        logging.info(f"Using internal theme key: {internal_key}, colors: {t}")
         ctk.set_appearance_mode(t["mode"])
         self.bg_color = t["bg"]
         self.side_bg = t["side"]
@@ -183,9 +345,9 @@ class SpeedScan(ctk.CTk):
         return f"#{r:02x}{g:02x}{b:02x}"
 
     def apply_ui_scale(self):
-        scale = self.config_data.get("ui_scale", "auto")
-        if scale == "auto":
-            ctk.set_widget_scaling(1.0)
+        scale = self.config_data.get("ui_scale", "125")
+        if scale == "auto" or scale == "Auto":
+            ctk.set_widget_scaling(1.25)  # Default to 125% instead of 100%
         else:
             ctk.set_widget_scaling(float(scale) / 100)
 
@@ -204,7 +366,8 @@ class SpeedScan(ctk.CTk):
     # Sidebar building
     # ------------------------------------------------------------------------
     def _build_sidebar(self):
-        sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=self.side_bg)
+        sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=self.side_bg,
+                            border_width=2, border_color=self.acc_color)
         sidebar.grid(row=0, column=0, sticky="nsw")
         sidebar.grid_propagate(False)
 
@@ -282,6 +445,16 @@ class SpeedScan(ctk.CTk):
     # Frame management
     # ------------------------------------------------------------------------
     def show_frame(self, target):
+        # Close all detail panels when switching tabs
+        for tag in list(self.logs.keys()):
+            log = self.logs.get(tag)
+            btn = self.detail_buttons.get(tag)
+            if log and btn:
+                log.pack_forget()
+                btn.pack_forget()
+                btn.configure(text=self._("Details ▼"))
+            self.consoles_visible[tag] = False
+        
         for f in self.frames.values():
             f.pack_forget()
 
@@ -302,22 +475,30 @@ class SpeedScan(ctk.CTk):
             self._update_ai_suggestions()
 
     def _create_frame(self, target):
-        frame = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        # Destroy existing frame before creating new one to avoid duplicates
+        if target in self.frames:
+            old_frame = self.frames[target]
+            old_frame.destroy()
+        
+        # Use regular frame for tabs that don't need scrolling
+        # to avoid scrollbar appearing when not needed
+        no_scroll_tabs = ["about", "dashboard"]
+        if target in no_scroll_tabs:
+            frame = ctk.CTkFrame(self.container, fg_color="transparent")
+        else:
+            frame = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
         getattr(self, f"_fill_{target}")(frame)
+        self.frames[target] = frame
         return frame
 
     # ------------------------------------------------------------------------
     # Tab content filling methods
     # ------------------------------------------------------------------------
     def _fill_dashboard(self, parent):
-        ctk.CTkLabel(parent, text=self._("Dashboard"), font=("Inter", 28, "bold"),
-                     text_color=self.acc_color).pack(anchor="center", pady=(0,20))
         self.dashboard = Dashboard(parent, self, fg_color="transparent")
         self.dashboard.pack(fill="both", expand=True)
 
     def _fill_optimization(self, parent):
-        ctk.CTkLabel(parent, text=self._("Optimization"), font=("Inter", 28, "bold"),
-                     text_color=self.acc_color).pack(anchor="center", pady=(0,20))
         items = [
             (self._("🧹 Cache Cleanup"), "cache", False),
             (self._("🔄 Swap Reset"), "swap", False),
@@ -349,8 +530,6 @@ class SpeedScan(ctk.CTk):
         self.logs["opt"] = log
 
     def _fill_network(self, parent):
-        ctk.CTkLabel(parent, text=self._("Network"), font=("Inter", 28, "bold"),
-                     text_color=self.acc_color).pack(anchor="center", pady=(0,20))
         items = [
             (self._("📡 Ping"), "ping", False),
             (self._("🌩️ Cloudflare DNS"), "1.1.1.1", True),
@@ -381,8 +560,6 @@ class SpeedScan(ctk.CTk):
         self.logs["net"] = log
 
     def _fill_drivers(self, parent):
-        ctk.CTkLabel(parent, text=self._("Drivers"), font=("Inter", 28, "bold"),
-                     text_color=self.acc_color).pack(anchor="center", pady=(0,20))
         items = [
             (self._("🖥️ PCI (Video/Net)"), "pci", False),
             (self._("📦 System Update"), "update", False),
@@ -405,9 +582,6 @@ class SpeedScan(ctk.CTk):
         self.logs["drv"] = log
 
     def _fill_processes(self, parent):
-        ctk.CTkLabel(parent, text=self._("Process Manager"), font=("Inter", 28, "bold"),
-                     text_color=self.acc_color).pack(anchor="center", pady=(0,20))
-
         control_frame = ctk.CTkFrame(parent, fg_color="transparent")
         control_frame.pack(fill="x", pady=5)
 
@@ -447,8 +621,10 @@ class SpeedScan(ctk.CTk):
         ctk.CTkButton(action_frame, text=self._("Set"), command=self._set_nice_selected,
                       fg_color=self.acc_color, width=60).pack(side="left", padx=5)
 
-        self.process_text = ctk.CTkTextbox(parent, font=("Courier", 10), wrap="none")
+        self.process_text = ctk.CTkTextbox(parent, font=("Courier", 11), wrap="none")
         self.process_text.pack(fill="both", expand=True, padx=10, pady=10)
+        # Configurar para só mostrar scrollbar quando necessário
+        self.process_text.configure(scrollbar_button_color=self.acc_color, scrollbar_button_hover_color=self.light_bg)
 
         self._refresh_process_list()
 
@@ -555,9 +731,6 @@ class SpeedScan(ctk.CTk):
             self.show_toast(self._("Error setting nice."), duration=2000)
 
     def _fill_history(self, parent):
-        ctk.CTkLabel(parent, text=self._("Historical Performance"), font=("Inter", 28, "bold"),
-                     text_color=self.acc_color).pack(anchor="center", pady=(0,20))
-
         period_frame = ctk.CTkFrame(parent, fg_color="transparent")
         period_frame.pack(fill="x", pady=5)
 
@@ -610,9 +783,21 @@ class SpeedScan(ctk.CTk):
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
 
+    def _update_ai_suggestions(self):
+        """Atualiza sugestões de IA quando a aba Agent é exibida."""
+        if hasattr(self, 'ai_proactive'):
+            try:
+                suggestions = self.ai_proactive.analyze()
+                print(f"AI suggestions: {len(suggestions)} suggestions found")
+                
+                # MOSTRAR AS SUGESTÕES NA UI
+                if hasattr(self, 'chat_frame'):
+                    summary = self.ai_proactive.get_summary()
+                    self.chat_frame._add_message("system", "💡 " + summary.replace("\n", "\n💡 "))
+            except Exception as e:
+                print(f"Error updating AI suggestions: {e}")
+
     def _fill_security(self, parent):
-        ctk.CTkLabel(parent, text=self._("System Security"), font=("Inter", 28, "bold"),
-                     text_color=self.acc_color).pack(anchor="center", pady=(0,20))
         items = [
             (self._("🛡️ Open Ports"), "ports", False),
             (self._("🛡️ Firewall"), "firewall", False),
@@ -627,15 +812,10 @@ class SpeedScan(ctk.CTk):
         self.logs["sec"] = log
 
     def _fill_agent(self, parent):
-        ctk.CTkLabel(parent, text=self._("AI Agent"), font=("Inter", 28, "bold"),
-                     text_color=self.acc_color).pack(anchor="center", pady=(0,20))
         self.chat_frame = ChatFrame(parent, self, fg_color="transparent")
         self.chat_frame.pack(fill="both", expand=True)
 
     def _fill_settings(self, parent):
-        ctk.CTkLabel(parent, text=self._("Settings"), font=("Inter", 28, "bold"),
-                     text_color=self.acc_color).pack(anchor="center", pady=(0,30))
-
         f_user = ctk.CTkFrame(parent, fg_color="transparent")
         f_user.pack(fill="x", pady=5)
         ctk.CTkLabel(f_user, text=self._("Username:"), font=("Inter", 12)).pack(anchor="w")
@@ -648,14 +828,16 @@ class SpeedScan(ctk.CTk):
         ctk.CTkLabel(f_lang, text=self._("Language:"), font=("Inter", 12)).pack(anchor="w")
         lang_values = list(config.LANGUAGES.values())
         self.lang_var = ctk.StringVar(value=config.LANGUAGES.get(self.config_data.get("language","pt_BR"), "Português Brasileiro"))
-        ctk.CTkOptionMenu(f_lang, values=lang_values, variable=self.lang_var, width=200).pack(anchor="w", pady=2)
+        ctk.CTkOptionMenu(f_lang, values=lang_values, variable=self.lang_var, width=200,
+                          fg_color=self.bg_color, button_color=self.acc_color, button_hover_color=self.light_bg).pack(anchor="w", pady=2)
 
         f_scale = ctk.CTkFrame(parent, fg_color="transparent")
         f_scale.pack(fill="x", pady=5)
         ctk.CTkLabel(f_scale, text=self._("UI Scale:"), font=("Inter", 12)).pack(anchor="w")
         scale_values = list(config.SCALES.values())
         self.scale_var = ctk.StringVar(value=config.SCALES.get(self.config_data.get("ui_scale","auto"), "Auto"))
-        ctk.CTkOptionMenu(f_scale, values=scale_values, variable=self.scale_var, width=200).pack(anchor="w", pady=2)
+        ctk.CTkOptionMenu(f_scale, values=scale_values, variable=self.scale_var, width=200,
+                          fg_color=self.bg_color, button_color=self.acc_color, button_hover_color=self.light_bg).pack(anchor="w", pady=2)
 
         f_theme = ctk.CTkFrame(parent, fg_color="transparent")
         f_theme.pack(fill="x", pady=5)
@@ -666,7 +848,8 @@ class SpeedScan(ctk.CTk):
         theme_display_map = {"grey": "Still", "dark": "Tecno", "light": "Snow"}
         display = theme_display_map.get(current_theme, "Still")
         self.theme_var.set(display)
-        ctk.CTkOptionMenu(f_theme, values=theme_names, variable=self.theme_var, width=200).pack(anchor="w", pady=2)
+        ctk.CTkOptionMenu(f_theme, values=theme_names, variable=self.theme_var, width=200,
+                          fg_color=self.bg_color, button_color=self.acc_color, button_hover_color=self.light_bg).pack(anchor="w", pady=2)
 
         f_tab = ctk.CTkFrame(parent, fg_color="transparent")
         f_tab.pack(fill="x", pady=5)
@@ -687,9 +870,30 @@ class SpeedScan(ctk.CTk):
 
         f_sched = ctk.CTkFrame(parent, fg_color="transparent")
         f_sched.pack(fill="x", pady=10)
-        self.sched_enabled = ctk.BooleanVar(value=self.config_data.get("schedule",{}).get("enabled", False))
-        ctk.CTkCheckBox(f_sched, text=self._("Enable automatic scheduling"), variable=self.sched_enabled,
+        ctk.CTkLabel(f_sched, text=self._("Automation:"), font=("Inter", 14, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0,5))
+        
+        self.auto_cache = ctk.BooleanVar(value=self.config_data.get("automation",{}).get("auto_cache", False))
+        ctk.CTkCheckBox(f_sched, text=self._("Auto cache cleanup"), variable=self.auto_cache,
                         onvalue=True, offvalue=False).pack(anchor="w")
+        
+        self.auto_swap = ctk.BooleanVar(value=self.config_data.get("automation",{}).get("auto_swap", False))
+        ctk.CTkCheckBox(f_sched, text=self._("Auto swap reset"), variable=self.auto_swap,
+                        onvalue=True, offvalue=False).pack(anchor="w")
+        
+        self.auto_trim = ctk.BooleanVar(value=self.config_data.get("automation",{}).get("auto_trim", False))
+        ctk.CTkCheckBox(f_sched, text=self._("Auto SSD trim"), variable=self.auto_trim,
+                        onvalue=True, offvalue=False).pack(anchor="w")
+        
+        interval_frame = ctk.CTkFrame(f_sched, fg_color="transparent")
+        interval_frame.pack(fill="x", pady=5)
+        ctk.CTkLabel(interval_frame, text=self._("Interval (hours):"), font=("Inter", 12)).pack(side="left")
+        self.auto_interval = ctk.IntVar(value=self.config_data.get("automation",{}).get("interval", 24))
+        interval_entry = ctk.CTkEntry(interval_frame, textvariable=self.auto_interval, width=80)
+        interval_entry.pack(side="left", padx=5)
+        
+        self.sched_enabled = ctk.BooleanVar(value=self.config_data.get("schedule",{}).get("enabled", False))
+        ctk.CTkCheckBox(f_sched, text=self._("Enable automation"), variable=self.sched_enabled,
+                        onvalue=True, offvalue=False).pack(anchor="w", pady=(10,0))
 
         btn_apply = ctk.CTkButton(parent, text=self._("Apply"), fg_color=self.acc_color,
                                    command=self.apply_config, width=150)
@@ -714,6 +918,16 @@ class SpeedScan(ctk.CTk):
             if "schedule" not in self.config_data:
                 self.config_data["schedule"] = {}
             self.config_data["schedule"]["enabled"] = self.sched_enabled.get()
+            
+            # Save automation settings
+            if "automation" not in self.config_data:
+                self.config_data["automation"] = {}
+            self.config_data["automation"]["auto_cache"] = self.auto_cache.get()
+            self.config_data["automation"]["auto_swap"] = self.auto_swap.get()
+            self.config_data["automation"]["auto_trim"] = self.auto_trim.get()
+            self.config_data["automation"]["interval"] = self.auto_interval.get()
+            
+            logging.info(f"Saving config with theme: {self.config_data['theme']}")
             self._save_config()
             self.show_toast(self._("Settings saved! Restarting..."), duration=2000)
             self.after(2000, self._restart_app)
@@ -721,13 +935,23 @@ class SpeedScan(ctk.CTk):
             logging.error(f"Error applying settings: {e}")
 
     def _restart_app(self):
+        # Use os.execv to replace the current process with a new one
+        # This is more reliable than subprocess for restarting
         python = sys.executable
-        subprocess.Popen([python, "-m", "core.main"])
-        self.quit()
+        script = os.path.join(os.getcwd(), "run_speedscan.sh")
+        if os.path.exists(script):
+            os.execv(script, [script] + sys.argv[1:])
+        else:
+            # Fallback: try running directly
+            main_py = os.path.join(os.getcwd(), "core", "main.py")
+            if os.path.exists(main_py):
+                os.execv(python, [python, main_py] + sys.argv[1:])
+            else:
+                # Last resort: use subprocess
+                subprocess.Popen([python, "-m", "core.main"])
+                self.quit()
 
     def _fill_about(self, parent):
-        ctk.CTkLabel(parent, text=self._("About SpeedScan"), font=("Inter", 28, "bold"),
-                     text_color=self.acc_color).pack(anchor="center", pady=(0,20))
         card = ctk.CTkFrame(parent, fg_color=self.light_bg, corner_radius=15,
                             border_width=2, border_color=self.acc_color)
         card.pack(fill="both", expand=True, padx=20, pady=10)
@@ -850,15 +1074,50 @@ class SpeedScan(ctk.CTk):
     # Card execution and console management
     # ------------------------------------------------------------------------
     def _show_detail_button(self, tag):
+        # Usa a tag do console (net, opt, drv, sec) para mostrar o botão correto
         btn = self.detail_buttons.get(tag)
         if btn and not btn.winfo_ismapped():
             btn.pack(side="right", anchor="e", padx=10, pady=5)
 
     def run_card_action(self, cmd, tag, is_dns):
+        # tag aqui é a tag do console (net, opt, drv, sec), não do comando
+        print(f"DEBUG run_card_action: cmd={cmd}, tag={tag}, is_dns={is_dns}")
+        
+        # Garantir que consoles_visible tem a chave
+        if tag not in self.consoles_visible:
+            self.consoles_visible[tag] = False
+        
         log = self.logs.get(tag)
+        print(f"DEBUG run_card_action: log={log}, logs keys={list(self.logs.keys())}")
         if not log:
-            return
+            print(f"ERRO: log não encontrado para tag={tag}")
+            # Criar log se não existir (para qualquer tag)
+            if tag in ["opt", "net", "drv", "sec"]:
+                print(f"DEBUG: Criando log para {tag}...")
+                # Obtém o frame correspondente
+                frame_key = {
+                    "opt": "optimization",
+                    "net": "network",
+                    "drv": "hardware",
+                    "sec": "security"
+                }.get(tag, tag)
+                
+                if frame_key in self.frames:
+                    parent = self.frames[frame_key]
+                    from core import ui
+                    btn, new_log = ui.add_console(parent, tag, self.acc_color, self.toggle_console)
+                    self.detail_buttons[tag] = btn
+                    self.logs[tag] = new_log
+                    log = new_log
+                    print(f"DEBUG: Log criado: {log}")
+                else:
+                    print(f"ERRO: Frame {frame_key} não encontrado")
+                    return
+            else:
+                return
         log.delete("1.0", "end")
+        log.insert("end", f"Executando: {cmd}...\n")
+        log.see("end")
         self._btn_shown = False
 
         # Se o console estiver visível, escondê-lo e resetar o botão
@@ -871,6 +1130,7 @@ class SpeedScan(ctk.CTk):
             self.consoles_visible[tag] = False
 
         threading.Thread(target=self._execute_command, args=(cmd, log, tag, is_dns), daemon=True).start()
+
 
     def _execute_command(self, cmd, log, tag, is_dns):
         if is_dns:
@@ -895,124 +1155,228 @@ class SpeedScan(ctk.CTk):
             "cookies": self.action_handler.run_cookie_manager,
             "trim": self.action_handler.run_trim,
             "fix_broken": self.action_handler.run_fix_broken,
-            "ping": self._run_ping,
-            "speedtest": self._run_speedtest,
-            "ethtool": self._run_ethtool,
-            "dhclient": self._run_dhclient,
-            "ports": self._run_ports,
-            "traceroute": self._run_traceroute,
-            "wifi": self._run_wifi,
-            "testdns": self._run_testdns,
-            "lanscan": self._run_lanscan,
-            "lancache": self._run_lancache,
-            "public_ip": self._run_public_ip,
-            "pci": self._run_pci,
-            "update": self._run_update,
-            "usb": self._run_usb,
-            "modules": self._run_modules,
-            "cpu_info": self._run_cpu_info,
-            "firmware": self._run_firmware,
-            "video_drv": self._run_video_drv,
-            "net_drv": self._run_net_drv,
-            "auto_update": self._run_auto_update,
-            "firewall": self._run_firewall,
-            "sec_updates": self._run_sec_updates,
+            "ping": lambda log: self._run_ping(log, tag),
+            "speedtest": lambda log: self._run_speedtest(log, tag),
+            "ethtool": lambda log: self._run_ethtool(log, tag),
+            "dhclient": lambda log: self._run_dhclient(log, tag),
+            "ports": lambda log: self._run_ports(log, tag),
+            "traceroute": lambda log: self._run_traceroute(log, tag),
+            "wifi": lambda log: self._run_wifi(log, tag),
+            "testdns": lambda log: self._run_testdns(log, tag),
+            "lanscan": lambda log: self._run_lanscan(log, tag),
+            "lancache": lambda log: self._run_lancache(log, tag),
+            "public_ip": lambda log: self._run_public_ip(log, tag),
+            "firewall": lambda log: self._run_firewall(log, tag),
+            "sec_updates": lambda log: self._run_sec_updates(log, tag),
+            "pci": lambda log: self._run_pci(log, "drv"),
+            "update": lambda log: self._run_update(log, "drv"),
+            "usb": lambda log: self._run_usb(log, "drv"),
+            "modules": lambda log: self._run_modules(log, "drv"),
+            "cpu_info": lambda log: self._run_cpu_info(log, "drv"),
+            "firmware": lambda log: self._run_firmware(log, "drv"),
+            "video_drv": lambda log: self._run_video_drv(log, "drv"),
+            "net_drv": lambda log: self._run_net_drv(log, "drv"),
+            "auto_update": lambda log: self._run_auto_update(log, "drv"),
         }
         method = action_map.get(cmd)
+        print(f"DEBUG _execute_command: cmd={cmd}, method found: {method is not None}")
         if method:
             try:
                 method(log)
+                log.update()  # Force UI refresh after method execution
             except Exception as e:
                 log.insert("end", self._("Error executing command: {e}\n").format(e=e))
+                log.update()
         else:
             log.insert("end", self._("Unknown command: {cmd}\n").format(cmd=cmd))
+            log.update()
 
     # ------------------------------------------------------------------------
     # Helper command methods
     # ------------------------------------------------------------------------
-    def _run_ping(self, log):
-        self._run_subprocess(["ping", "-c", "4", "google.com"], log, tag="ping")
+    def _run_ping(self, log, tag="net"):
+        print("DEBUG: _run_ping executando...")
+        self._run_subprocess(["ping", "-c", "4", "google.com"], log, tag=tag)
 
-    def _run_speedtest(self, log):
+    def _run_speedtest(self, log, tag="net"):
+        print("DEBUG: _run_speedtest called")
+        log.insert("end", "🌩️ Running speed test...\n")
+        log.see("end")
+        log.update()
         def callback(res):
             log.insert("end", self.speed_tester.format_result(res) + "\n")
+            log.update()
+            # Mostrar botão de detalhes após primeira saída
+            if not self._btn_shown:
+                self._show_detail_button(tag)
+                self._btn_shown = True
         self.speed_tester.run_test(callback)
 
-    def _run_ethtool(self, log):
-        self._run_subprocess(["ethtool", "eth0"], log, tag="ethtool")
+    def _run_ethtool(self, log, tag="net"):
+        log.insert("end", "🕵️ Running network diagnostic...\n")
+        log.see("end")
+        log.update()
+        self._run_subprocess(["ethtool", "eth0"], log, tag=tag)
 
-    def _run_dhclient(self, log):
-        self._run_subprocess(["sudo", "dhclient", "-v"], log, use_sudo=True, tag="dhclient")
+    def _run_dhclient(self, log, tag="net"):
+        log.insert("end", "🔄 Renewing IP address...\n")
+        log.see("end")
+        log.update()
+        self._run_subprocess(["sudo", "dhclient", "-v"], log, use_sudo=True, tag=tag)
 
-    def _run_ports(self, log):
+    def _run_ports(self, log, tag="net"):
+        print("DEBUG: _run_ports called")
+        log.insert("end", "🔓 Scanning open ports...\n")
+        log.see("end")
+        log.update()
         ports = self.security_scanner.scan_open_ports()
         for p in ports:
             log.insert("end", p + "\n")
+        log.update()
 
-    def _run_traceroute(self, log):
-        self._run_subprocess(["traceroute", "google.com"], log, tag="traceroute")
+    def _run_traceroute(self, log, tag="net"):
+        print("DEBUG: _run_traceroute called")
+        log.insert("end", "🌍 Running traceroute...\n")
+        log.see("end")
+        log.update()
+        self._run_subprocess(["traceroute", "google.com"], log, tag=tag)
 
-    def _run_wifi(self, log):
-        self._run_subprocess(["iwconfig"], log, tag="wifi")
+    def _run_wifi(self, log, tag="net"):
+        print("DEBUG: _run_wifi called")
+        log.insert("end", "📶 Getting Wi-Fi info...\n")
+        log.see("end")
+        log.update()
+        self._run_subprocess(["iwconfig"], log, tag=tag)
 
-    def _run_testdns(self, log):
-        self._run_subprocess(["nslookup", "google.com"], log, tag="testdns")
+    def _run_testdns(self, log, tag="net"):
+        print("DEBUG: _run_testdns called")
+        log.insert("end", "🎛️ Testing DNS...\n")
+        log.see("end")
+        log.update()
+        self._run_subprocess(["nslookup", "google.com"], log, tag=tag)
 
-    def _run_lanscan(self, log):
+    def _run_lanscan(self, log, tag="net"):
+        print("DEBUG: _run_lanscan called")
+        log.insert("end", "🌐 Scanning local network...\n")
+        log.see("end")
+        log.update()
         devices = self.lan_scanner.scan_network()
         for d in devices:
             log.insert("end", f"{d['ip']} - {d['mac']} - {d['hostname']} - {d['vendor']}\n")
+        log.update()
 
-    def _run_lancache(self, log):
+    def _run_lancache(self, log, tag="net"):
+        print("DEBUG: _run_lancache called")
+        log.insert("end", "💾 Getting LAN cache status...\n")
+        log.see("end")
+        log.update()
         log.insert("end", self.lan_cache.get_status() + "\n")
+        log.update()
 
-    def _run_public_ip(self, log):
+    def _run_public_ip(self, log, tag="net"):
+        print("DEBUG: _run_public_ip called")
+        log.insert("end", "🌍 Getting public IP...\n")
+        log.see("end")
+        log.update()
         import requests
         try:
             ip = requests.get("https://api.ipify.org", timeout=5).text
             log.insert("end", self._("Public IP: {ip}\n").format(ip=ip))
         except:
             log.insert("end", self._("Error obtaining public IP.\n"))
+        log.update()
 
-    def _run_pci(self, log):
-        self._run_subprocess(["lspci"], log, tag="pci")
+    def _run_pci(self, log, tag="drv"):
+        print("DEBUG: _run_pci called")
+        self._run_subprocess(["lspci"], log, tag=tag)
 
-    def _run_update(self, log):
-        self._run_subprocess(["sudo", "apt", "update"], log, use_sudo=True, tag="update")
+    def _run_update(self, log, tag="drv"):
+        print("DEBUG: _run_update called")
+        self._run_subprocess(["sudo", "apt", "update"], log, use_sudo=True, tag=tag)
 
-    def _run_usb(self, log):
-        self._run_subprocess(["lsusb"], log, tag="usb")
+    def _run_usb(self, log, tag="drv"):
+        print("DEBUG: _run_usb called")
+        self._run_subprocess(["lsusb"], log, tag=tag)
 
-    def _run_modules(self, log):
-        self._run_subprocess(["lsmod"], log, tag="modules")
+    def _run_modules(self, log, tag="drv"):
+        print("DEBUG: _run_modules called")
+        self._run_subprocess(["lsmod"], log, tag=tag)
 
-    def _run_cpu_info(self, log):
+    def _run_cpu_info(self, log, tag="drv"):
+        print("DEBUG: _run_cpu_info called")
         try:
             with open("/proc/cpuinfo") as f:
                 log.insert("end", f.read())
         except:
             log.insert("end", self._("Could not read /proc/cpuinfo.\n"))
+        log.update()
 
-    def _run_firmware(self, log):
-        self._run_subprocess(["dmesg", "|", "grep", "-i", "firmware"], log, shell=True, tag="firmware")
+    def _run_firmware(self, log, tag="drv"):
+        print("DEBUG: _run_firmware called")
+        self._run_subprocess(["dmesg", "|", "grep", "-i", "firmware"], log, shell=True, tag=tag)
 
-    def _run_video_drv(self, log):
-        self._run_subprocess(["lspci", "|", "grep", "-i", "vga"], log, shell=True, tag="video_drv")
+    def _run_video_drv(self, log, tag="drv"):
+        print("DEBUG: _run_video_drv called")
+        # List video devices
+        self._run_subprocess(["lspci", "-k", "-d", "::0300"], log, tag=tag)
+        log.insert("end", "\n--- Driver Status ---\n")
+        # Check if driver is loaded
+        import subprocess
+        try:
+            result = subprocess.run(["lsmod"], capture_output=True, text=True)
+            video_modules = [line.split()[0] for line in result.stdout.split('\n') 
+                           if any(m in line.lower() for m in ['nvidia', 'amd', 'i915', 'radeon', ' nouveau'])]
+            if video_modules:
+                log.insert("end", f"✅ Loaded video modules: {', '.join(video_modules)}\n")
+                # Check for proprietary drivers
+                if 'nvidia' in video_modules:
+                    subprocess.run(["nvidia-smi"], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        log.insert("end", "✅ NVIDIA driver is active\n")
+                    else:
+                        log.insert("end", "⚠️ NVIDIA driver may need update\n")
+            else:
+                log.insert("end", "⚠️ No proprietary video driver detected\n")
+        except Exception as e:
+            log.insert("end", f"Info: {e}\n")
+        log.update()
 
-    def _run_net_drv(self, log):
-        self._run_subprocess(["lspci", "|", "grep", "-i", "network"], log, shell=True, tag="net_drv")
+    def _run_net_drv(self, log, tag="drv"):
+        print("DEBUG: _run_net_drv called")
+        # List network devices
+        self._run_subprocess(["lspci", "-k", "-d", "::0200"], log, tag=tag)
+        log.insert("end", "\n--- Driver Status ---\n")
+        # Check network drivers loaded
+        import subprocess
+        try:
+            result = subprocess.run(["lsmod"], capture_output=True, text=True)
+            net_modules = [line.split()[0] for line in result.stdout.split('\n') 
+                          if any(m in line for m in ['e1000', 'rtl', 'ath', 'iwl', 'brcm', 'mt']) and line.split()]
+            if net_modules:
+                log.insert("end", f"✅ Network drivers loaded: {', '.join(net_modules)}\n")
+            else:
+                log.insert("end", "✅ Using built-in kernel drivers\n")
+        except Exception as e:
+            log.insert("end", f"Info: {e}\n")
+        log.update()
 
-    def _run_auto_update(self, log):
+    def _run_auto_update(self, log, tag="drv"):
+        print("DEBUG: _run_auto_update called")
         log.insert("end", self._("Configuring auto updates (not implemented).\n"))
+        log.update()
 
-    def _run_firewall(self, log):
+    def _run_firewall(self, log, tag="sec"):
+        print("DEBUG: _run_firewall called")
         status = self.security_scanner.check_firewall_status()
         log.insert("end", status)
+        log.update()
 
-    def _run_sec_updates(self, log):
+    def _run_sec_updates(self, log, tag="sec"):
+        print("DEBUG: _run_sec_updates called")
         updates = self.security_scanner.check_security_updates()
         for u in updates:
             log.insert("end", u + "\n")
+        log.update()
 
     def _change_dns(self, dns_ip, log):
         if hasattr(self, "action_mapper"):
@@ -1028,23 +1392,47 @@ class SpeedScan(ctk.CTk):
         try:
             if use_sudo and self.SO == "Linux":
                 if isinstance(cmd, list):
-                    cmd = ["sudo"] + cmd
+                    cmd = ["sudo"] + cmd  # Use sudo instead of pkexec
                 else:
                     cmd = "sudo " + cmd
+            print(f"DEBUG: _run_subprocess executing: {cmd}")
             proc = subprocess.Popen(cmd,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT,
                                     text=True,
                                     bufsize=1,
                                     shell=shell)
-            for line in proc.stdout:
-                if not self._btn_shown:
-                    self._show_detail_button(tag)
-                    self._btn_shown = True
-                log.insert("end", line)
+            # Ler stdout linha por linha com update da UI
+            output_lines = []
+            while True:
+                line = proc.stdout.readline()
+                if not line and proc.poll() is not None:
+                    break
+                if line:
+                    output_lines.append(line)
+                    if not self._btn_shown:
+                        self._show_detail_button(tag)
+                        self._btn_shown = True
+                    log.insert("end", line)
+                    log.see("end")  # Auto-scroll
+                    log.update_idletasks()  # Atualizar UI
             proc.wait()
+            
+            # Se não houve saída, mostrar mensagem
+            if not output_lines:
+                cmd_str = ' '.join(cmd) if isinstance(cmd, list) else cmd
+                # Verificar se o comando existe
+                cmd_to_check = cmd[0] if isinstance(cmd, list) else cmd.split()[0]
+                check = subprocess.run(["which", cmd_to_check], capture_output=True)
+                if check.returncode != 0:
+                    log.insert("end", f"⚠️ Command not found: {cmd_to_check}\n")
+                else:
+                    log.insert("end", f"⚠️ Command executed but no output: {cmd_str}\n")
+            
+            log.update()  # Force UI refresh
         except Exception as e:
             log.insert("end", self._("Error executing command: {e}\n").format(e=e))
+            log.update()
 
     # ------------------------------------------------------------------------
     # Console toggling
@@ -1068,8 +1456,13 @@ class SpeedScan(ctk.CTk):
     # Window management
     # ------------------------------------------------------------------------
     def _monitor_loop(self):
+        # Dashboard auto-update disabled for now - causes widget duplication
+        # Can be re-enabled after fixing the issue
+        update_counter = 0
         while True:
-            time.sleep(3)
+            time.sleep(10)  # Longer interval to reduce overhead
+            # Disabled: causes widget duplication issues
+            pass
 
     def _on_mousewheel(self, event):
         widget = event.widget
@@ -1178,89 +1571,1097 @@ class SpeedScan(ctk.CTk):
     # Dashboard widgets (called by Dashboard class)
     # ------------------------------------------------------------------------
     def widget_hostname(self, frame, tag):
+        # Clear previous content
+        for child in frame.winfo_children():
+            child.destroy()
+        
         import socket
         hostname = socket.gethostname()
-        label = ctk.CTkLabel(frame, text=hostname, font=("Inter", 16))
-        label.pack(expand=True)
+        
+        # Adjust font size based on widget size
+        is_small = tag.startswith("small_")
+        
+        if is_small:
+            # Small widget: icon + hostname
+            icon_label = ctk.CTkLabel(
+                frame,
+                text="💻",
+                font=("Inter", 14)
+            )
+            icon_label.pack(pady=(5, 0))
+            
+            label = ctk.CTkLabel(
+                frame, 
+                text=hostname, 
+                font=("Inter", 12, "bold"),
+                text_color=("gray10", "gray90")
+            )
+            label.pack(expand=True)
+        else:
+            # Big widget
+            label = ctk.CTkLabel(
+                frame, 
+                text=f"💻 {hostname}", 
+                font=("Inter", 18, "bold"),
+                text_color=("gray10", "gray90")
+            )
+            label.pack(expand=True)
 
     def widget_distro(self, frame, tag):
-        text = f"{platform.system()} {platform.release()}"
-        label = ctk.CTkLabel(frame, text=text, font=("Inter", 16))
-        label.pack(expand=True)
+        # Clear previous content
+        for child in frame.winfo_children():
+            child.destroy()
+        
+        is_small = tag.startswith("small_")
+        
+        # Try to get distribution name from os-release
+        distro_name = "Linux"
+        try:
+            with open("/etc/os-release", "r") as f:
+                for line in f:
+                    if line.startswith("PRETTY_NAME="):
+                        full_distro = line.split("=")[1].strip().strip('"')
+                        # Simplify name
+                        if "Arch" in full_distro:
+                            distro_name = "Arch Linux"
+                        elif "Ubuntu" in full_distro:
+                            distro_name = "Ubuntu"
+                        elif "Debian" in full_distro:
+                            distro_name = "Debian"
+                        elif "Fedora" in full_distro:
+                            distro_name = "Fedora"
+                        elif "openSUSE" in full_distro:
+                            distro_name = "openSUSE"
+                        elif "Mint" in full_distro:
+                            distro_name = "Linux Mint"
+                        elif "Manjaro" in full_distro:
+                            distro_name = "Manjaro"
+                        elif "Pop" in full_distro:
+                            distro_name = "Pop!_OS"
+                        else:
+                            distro_name = full_distro.split()[0]
+                        break
+        except:
+            pass
+        
+        if is_small:
+            # Small widget: icon + distro name
+            icon_label = ctk.CTkLabel(
+                frame,
+                text="🐧",
+                font=("Inter", 14)
+            )
+            icon_label.pack(pady=(5, 0))
+            
+            label = ctk.CTkLabel(
+                frame, 
+                text=distro_name, 
+                font=("Inter", 11, "bold"),
+                text_color=("gray10", "gray90")
+            )
+            label.pack(expand=True)
+        else:
+            # Big widget
+            label = ctk.CTkLabel(
+                frame, 
+                text=f"🐧 {distro_name}", 
+                font=("Inter", 16, "bold"),
+                text_color=("gray10", "gray90")
+            )
+            label.pack(expand=True)
 
     def widget_kernel(self, frame, tag):
-        text = platform.version()
-        label = ctk.CTkLabel(frame, text=text, font=("Inter", 16))
-        label.pack(expand=True)
+        # Clear previous content
+        for child in frame.winfo_children():
+            child.destroy()
+        
+        is_small = tag.startswith("small_")
+        
+        full_version = platform.release()
+        
+        # Get main version number (e.g., "6.14")
+        version_parts = full_version.split(".")
+        if len(version_parts) >= 2:
+            main_version = f"{version_parts[0]}.{version_parts[1]}"
+        else:
+            main_version = full_version
+        
+        if is_small:
+            # Small widget: icon + version
+            icon_label = ctk.CTkLabel(
+                frame,
+                text="🐧",
+                font=("Inter", 12)
+            )
+            icon_label.pack(pady=(5, 0))
+            
+            label = ctk.CTkLabel(
+                frame, 
+                text=main_version, 
+                font=("Inter", 12, "bold"),
+                text_color=("gray10", "gray90")
+            )
+            label.pack(expand=True)
+        else:
+            # Big widget: "Kernel Linux X.Y"
+            label = ctk.CTkLabel(
+                frame, 
+                text=f"⚙️ Kernel Linux {main_version}", 
+                font=("Inter", 14, "bold"),
+                text_color=("gray10", "gray90")
+            )
+            label.pack(expand=True)
 
     def widget_uptime(self, frame, tag):
+        # Clear previous content
+        for child in frame.winfo_children():
+            child.destroy()
+        
+        is_small = tag.startswith("small_")
+        
         from datetime import datetime
         boot_time = datetime.fromtimestamp(psutil.boot_time())
         delta = datetime.now() - boot_time
         days = delta.days
         hours, remainder = divmod(delta.seconds, 3600)
         minutes, _ = divmod(remainder, 60)
-        text = f"{days}d {hours}h {minutes}m"
-        label = ctk.CTkLabel(frame, text=text, font=("Inter", 16))
-        label.pack(expand=True)
+        
+        # Format time - don't show "0d" if days = 0
+        if days == 0:
+            # Less than 1 day - show hours or minutes
+            if hours == 0:
+                # Less than 1 hour - show minutes with 1 decimal
+                total_hours = minutes / 60
+                time_text = f"{total_hours:.1f}h"  # e.g., "0.5h"
+            else:
+                time_text = f"{hours}h"
+        else:
+            # More than 1 day
+            time_text = f"{days}d {hours}h"
+        
+        if is_small:
+            # Small widget: animated icon + time
+            # Create container frame
+            container = ctk.CTkFrame(frame, fg_color="transparent")
+            container.pack(expand=True)
+            
+            # Icon label
+            icon_label = ctk.CTkLabel(
+                container,
+                text="⏳",
+                font=("Inter", 12),
+                text_color=("gray10", "gray90")
+            )
+            icon_label.pack(side="left", padx=2)
+            
+            # Time label
+            time_label = ctk.CTkLabel(
+                container, 
+                text=time_text, 
+                font=("Inter", 12, "bold"),
+                text_color=("gray10", "gray90")
+            )
+            time_label.pack(side="left", padx=2)
+            
+            # Store reference for animation
+            frame._uptime_icon = icon_label
+            frame._uptime_anim_counter = 0
+            
+            # Start animation
+            self._animate_uptime(frame)
+        else:
+            # Big widget: static icon + time
+            label = ctk.CTkLabel(
+                frame, 
+                text=f"⏳ {time_text}", 
+                font=("Inter", 18, "bold"),
+                text_color=("gray10", "gray90")
+            )
+            label.pack(expand=True)
+
+    def _animate_uptime(self, frame):
+        """Animate uptime icon between ⏳ and ⌛"""
+        if hasattr(frame, '_uptime_icon') and frame._uptime_icon.winfo_exists():
+            frame._uptime_anim_counter = (frame._uptime_anim_counter + 1) % 2
+            new_icon = "⌛" if frame._uptime_anim_counter == 0 else "⏳"
+            frame._uptime_icon.configure(text=new_icon)
+            # Schedule next update after 1 second
+            frame.after(1000, lambda: self._animate_uptime(frame))
 
     def widget_cpu(self, frame, tag):
+        # Clear previous content
+        for child in frame.winfo_children():
+            child.destroy()
+        
         percent = psutil.cpu_percent(interval=0.1)
-        text = f"{percent}%"
-        label = ctk.CTkLabel(frame, text=text, font=("Inter", 16))
-        label.pack(expand=True)
+        color = get_usage_color(percent)
+        
+        # Check if this is a small widget
+        is_small = tag.startswith("small_")
+        
+        if is_small:
+            # Small widget - icon + percentage
+            icon_label = ctk.CTkLabel(
+                frame,
+                text="🖥️",
+                font=("Inter", 16),
+                text_color=("gray10", "white")
+            )
+            icon_label.pack(pady=(5, 0))
+            
+            label = ctk.CTkLabel(
+                frame, 
+                text=f"{percent}%", 
+                font=("Inter", 20, "bold"),
+                text_color=color
+            )
+            label.pack(expand=True)
+        else:
+            # Big widget - model name + progress bar and details
+            # Get CPU model name
+            try:
+                cpu_model = "CPU"
+                with open("/proc/cpuinfo", "r") as f:
+                    for line in f:
+                        if line.startswith("model name"):
+                            cpu_model = line.split(":")[1].strip()
+                            # Shorten for display
+                            if "Intel" in cpu_model:
+                                # e.g., "Intel i7-1165G7"
+                                parts = cpu_model.split()
+                                for p in parts:
+                                    if p.startswith("i") and "-" in p:
+                                        cpu_model = "Intel " + p
+                                        break
+                            elif "AMD" in cpu_model:
+                                parts = cpu_model.split()
+                                if len(parts) >= 4:
+                                    cpu_model = " ".join(parts[:4])
+                            break
+            except:
+                cpu_model = "CPU"
+            
+            # Model name label
+            model_label = ctk.CTkLabel(
+                frame,
+                text=cpu_model,
+                font=("Inter", 11),
+                text_color=("gray40", "gray70")
+            )
+            model_label.pack(pady=(5, 0))
+            
+            # Progress bar
+            progress = ctk.CTkProgressBar(frame, orientation="horizontal")
+            progress.set(percent / 100)
+            progress.configure(
+                progress_color=color,
+                fg_color="#3B3B3B",
+                height=20
+            )
+            progress.pack(fill="x", padx=10, pady=(5, 5))
+            
+            # Percentage label
+            label = ctk.CTkLabel(
+                frame, 
+                text=f"{percent}%", 
+                font=("Inter", 28, "bold"),
+                text_color=color
+            )
+            label.pack(expand=True)
+            
+            # Status text
+            status = "Normal" if percent <= 60 else "Alto" if percent <= 85 else "Crítico"
+            status_label = ctk.CTkLabel(
+                frame,
+                text=status,
+                font=("Inter", 12),
+                text_color=color
+            )
+            status_label.pack(pady=(0, 10))
 
     def widget_ram(self, frame, tag):
+        # Clear previous content
+        for child in frame.winfo_children():
+            child.destroy()
+        
         mem = psutil.virtual_memory()
-        text = f"{mem.percent}% ({mem.used // (1024**3)} GB / {mem.total // (1024**3)} GB)"
-        label = ctk.CTkLabel(frame, text=text, font=("Inter", 16))
-        label.pack(expand=True)
+        percent = mem.percent
+        color = get_usage_color(percent)
+        is_small = tag.startswith("small_")
+        
+        if is_small:
+            # Small widget - simple percentage display
+            label = ctk.CTkLabel(
+                frame, 
+                text=f"{percent}%", 
+                font=("Inter", 24, "bold"),
+                text_color=color
+            )
+            label.pack(expand=True)
+        else:
+            # Big widget - progress bar and details
+            # Progress bar
+            progress = ctk.CTkProgressBar(frame, orientation="horizontal")
+            progress.set(percent / 100)
+            progress.configure(
+                progress_color=color,
+                fg_color="#3B3B3B",
+                height=20
+            )
+            progress.pack(fill="x", padx=10, pady=(10, 5))
+            
+            # Percentage label
+            label = ctk.CTkLabel(
+                frame, 
+                text=f"{percent}%", 
+                font=("Inter", 28, "bold"),
+                text_color=color
+            )
+            label.pack(expand=True)
+            
+            # Memory details
+            used_gb = mem.used // (1024**3)
+            total_gb = mem.total // (1024**3)
+            details_label = ctk.CTkLabel(
+                frame,
+                text=f"{used_gb} GB / {total_gb} GB",
+                font=("Inter", 12),
+                text_color=("gray40", "gray70")
+            )
+            details_label.pack(pady=(0, 10))
 
     def widget_gpu(self, frame, tag):
+        # Clear previous content
+        for child in frame.winfo_children():
+            child.destroy()
+        
+        is_small = tag.startswith("small_")
+        
+        # GPU name mapping from device IDs (Intel GPUs)
+        GPU_NAME_MAP = {
+            # Intel GPUs (vendor 8086)
+            "8086:0106": "Intel HD Graphics 2000",
+            "8086:010a": "Intel HD Graphics 2000",
+            "8086:0116": "Intel HD Graphics 3000",
+            "8086:0126": "Intel HD Graphics 3000",
+            "8086:0152": "Intel HD Graphics 4000",
+            "8086:0156": "Intel HD Graphics 4000",
+            "8086:0166": "Intel HD Graphics 4000",
+            "8086:0172": "Intel HD Graphics 4000",
+            "8086:041e": "Intel HD Graphics 4600",
+            "8086:0416": "Intel HD Graphics 4400",
+            "8086:0426": "Intel HD Graphics 5000",
+            "8086:042b": "Intel Iris Graphics 5100",
+            "8086:042e": "Intel HD Graphics 5000",
+            "8086:0a16": "Intel HD Graphics 4400",
+            "8086:0a26": "Intel HD Graphics 5000",
+            "8086:0a2e": "Intel Iris Pro Graphics 5200",
+            "8086:0d22": "Intel Iris Pro Graphics 5200",
+            "8086:0f31": "Intel HD Graphics 4000",
+            "8086:0f30": "Intel HD Graphics 4000",
+            "8086:0f32": "Intel HD Graphics 4000",
+            "8086:0f33": "Intel HD Graphics 4000",
+            "8086:5912": "Intel UHD Graphics 620",
+            "8086:5917": "Intel UHD Graphics 620",
+            "8086:5916": "Intel HD Graphics 620",
+            "8086:591b": "Intel HD Graphics 620",
+            "8086:591e": "Intel HD Graphics 615",
+            "8086:5926": "Intel Iris Plus Graphics 640",
+            "8086:5927": "Intel Iris Plus Graphics 650",
+            "8086:593b": "Intel UHD Graphics 620",
+            "8086:5a85": "Intel UHD Graphics 617",
+            "8086:5a84": "Intel HD Graphics 615",
+            "8086:87ca": "Intel Iris Xe Graphics",
+            "8086:8a70": "Intel UHD Graphics",
+            "8086:8a71": "Intel UHD Graphics",
+            "8086:8a74": "Intel Iris Xe Graphics G7",
+            "8086:9a49": "Intel UHD Graphics Xe G4",
+            "8086:9a60": "Intel UHD Graphics Xe G4",
+            "8086:9a70": "Intel Iris Xe Graphics",
+            # NVIDIA GPUs
+            "10de:0a": "NVIDIA GeForce 210",
+            "10de:0df": "NVIDIA GeForce GT 430",
+            "10de:0f": "NVIDIA GeForce GT 220",
+            "10de:11": "NVIDIA GeForce GT 240",
+            "10de:12": "NVIDIA GeForce GTS 250",
+            "10de:1b": "NVIDIA GeForce GTX 460",
+            "10de:1c": "NVIDIA GeForce GTX 460 SE",
+            "10de:1d": "NVIDIA GeForce GTX 460",
+            "10de:1e": "NVIDIA GeForce GTX 470",
+            "10de:1f": "NVIDIA GeForce GTX 480",
+            "10de:5": "NVIDIA GeForce 8800 GTS",
+            "10de:6": "NVIDIA GeForce 8800 GT",
+            "10de:8": "NVIDIA GeForce 9800 GT",
+            "10de:9": "NVIDIA GeForce 9800 GX2",
+            "10de:a": "NVIDIA GeForce 8800 GS",
+            "10de:dc": "NVIDIA GeForce GT 630",
+            "10de:dd": "NVIDIA GeForce GT 630",
+            "10de:de": "NVIDIA GeForce GT 640",
+            "10de:e0": "NVIDIA GeForce GT 640",
+            "10de:e1": "NVIDIA GeForce GT 640",
+            "10de:104": "NVIDIA GeForce GTX 650",
+            "10de:105": "NVIDIA GeForce GT 640",
+            "10de:106": "NVIDIA GeForce GTX 660",
+            "10de:107": "NVIDIA GeForce GTX 660 Ti",
+            "10de:108": "NVIDIA GeForce GTX 670",
+            "10de:109": "NVIDIA GeForce GTX 680",
+            "10de:10": "NVIDIA GeForce 9800 GT",
+            "10de:110": "NVIDIA GeForce GTX 690",
+            "10de:118": "NVIDIA GeForce GTX 770",
+            "10de:119": "NVIDIA GeForce GTX 780",
+            "10de:11a": "NVIDIA GeForce GTX 780 Ti",
+            "10de:11b": "NVIDIA GeForce GTX 970",
+            "10de:11c": "NVIDIA GeForce GTX 980",
+            "10de:11d": "NVIDIA GeForce GTX 980 Ti",
+            "10de:120": "NVIDIA GeForce GTX 1050",
+            "10de:121": "NVIDIA GeForce GTX 1050 Ti",
+            "10de:128": "NVIDIA GeForce GTX 1060",
+            "10de:139": "NVIDIA GeForce GTX 1650",
+            "10de:13": "NVIDIA GeForce GTX 460",
+            "10de:140": "NVIDIA GeForce GTX 1660",
+            "10de:143": "NVIDIA GeForce GTX 1660 Ti",
+            "10de:150": "NVIDIA GeForce RTX 2060",
+            "10de:153": "NVIDIA GeForce RTX 2060 Super",
+            "10de:154": "NVIDIA GeForce RTX 2070",
+            "10de:155": "NVIDIA GeForce RTX 2070 Super",
+            "10de:156": "NVIDIA GeForce RTX 2080",
+            "10de:157": "NVIDIA GeForce RTX 2080 Super",
+            "10de:158": "NVIDIA GeForce RTX 2080 Ti",
+            "10de:1b80": "NVIDIA GeForce GTX 1080",
+            "10de:1b81": "NVIDIA GeForce GTX 1080 Ti",
+            "10de:1c": "NVIDIA GeForce GTX 1080",
+            "10de:1d": "NVIDIA GeForce GTX 1080",
+            "10de:22": "NVIDIA GeForce 7300 LE",
+            "10de:23": "NVIDIA GeForce 7300 SE",
+            "10de:24": "NVIDIA GeForce 7350 LE",
+            "10de:25": "NVIDIA GeForce 7600 GT",
+            "10de:26": "NVIDIA GeForce 7600 GS",
+            "10de:27": "NVIDIA GeForce 7300 GT",
+            "10de:28": "NVIDIA GeForce 7900 GTX",
+            "10de:29": "NVIDIA GeForce 7900 GTO",
+            "10de:2a": "NVIDIA GeForce 7950 GX2",
+            "10de:2b": "NVIDIA GeForce 7950 GT",
+            "10de:30": "NVIDIA GeForce 8200",
+            "10de:31": "NVIDIA GeForce 8300 GS",
+            "10de:32": "NVIDIA GeForce 8400 GS",
+            "10de:33": "NVIDIA GeForce 8400 GS",
+            "10de:35": "NVIDIA GeForce 9300 GS",
+            "10de:3e": "NVIDIA GeForce 9500 GT",
+            "10de:40": "NVIDIA GeForce GT 120",
+            "10de:41": "NVIDIA GeForce GT 130",
+            "10de:42": "NVIDIA GeForce GT 140",
+            "10de:4": "NVIDIA GeForce 7950 GX2",
+            "10de:42": "NVIDIA GeForce GTS 150",
+            "10de:5": "NVIDIA GeForce 7800 GTX",
+            "10de:61": "NVIDIA GeForce GTX 750",
+            "10de:62": "NVIDIA GeForce GTX 750 Ti",
+            "10de:63": "NVIDIA GeForce GTX 760",
+            "10de:64": "NVIDIA GeForce GTX 760",
+            "10de:65": "NVIDIA GeForce GTX 770",
+            "10de:66": "NVIDIA GeForce GTX 780",
+            "10de:67": "NVIDIA GeForce GTX 780 Ti",
+            "10de:68": "NVIDIA GeForce GTX 970",
+            "10de:69": "NVIDIA GeForce GTX 960",
+            "10de:70": "NVIDIA GeForce GTX 980",
+            "10de:71": "NVIDIA GeForce GTX 980 Ti",
+            "10de:72": "NVIDIA GeForce GTX 980M",
+            "10de:73": "NVIDIA GeForce GTX 970M",
+            "10de:74": "NVIDIA GeForce GTX 960M",
+            "10de:75": "NVIDIA GeForce GTX 950M",
+            "10de:76": "NVIDIA GeForce GTX 880M",
+            "10de:77": "NVIDIA GeForce GTX 870M",
+            "10de:78": "NVIDIA GeForce GTX 860M",
+            "10de:79": "NVIDIA GeForce GTX 850M",
+            "10de:80": "NVIDIA GeForce GTX 970M",
+            "10de:81": "NVIDIA GeForce GTX 960M",
+            "10de:82": "NVIDIA GeForce GTX 950M",
+            "10de:83": "NVIDIA GeForce 940M",
+            "10de:84": "NVIDIA GeForce 930M",
+            "10de:85": "NVIDIA GeForce 920M",
+            "10de:86": "NVIDIA GeForce GTX 1080M",
+            "10de:87": "NVIDIA GeForce GTX 1070M",
+            "10de:88": "NVIDIA GeForce GTX 1060M",
+            "10de:89": "NVIDIA GeForce GTX 1050M",
+            "10de:90": "NVIDIA GeForce GTX 1050 Ti",
+            # AMD GPUs
+            "1002:4369": "AMD Radeon HD 4250",
+            "1002:4370": "AMD Radeon HD 4200",
+            "1002:4372": "AMD Radeon HD 4290",
+            "1002:4373": "AMD Radeon HD 4250",
+            "1002:6779": "AMD Radeon HD 6900",
+            "1002:6738": "AMD Radeon HD 6850",
+            "1002:6739": "AMD Radeon HD 6870",
+            "1002:6740": "AMD Radeon HD 6850",
+            "1002:6741": "AMD Radeon HD 6870",
+            "1002:6760": "AMD Radeon HD 6570",
+            "1002:6761": "AMD Radeon HD 6670",
+            "1002:6770": "AMD Radeon HD 7770",
+            "1002:6771": "AMD Radeon HD 7750",
+            "1002:6780": "AMD Radeon HD 7870",
+            "1002:6784": "AMD Radeon HD 7850",
+            "1002:6798": "AMD Radeon HD 7970",
+            "1002:6799": "AMD Radeon HD 7950",
+            "1002:67b1": "AMD Radeon R9 390",
+            "1002:67b8": "AMD Radeon R9 380",
+            "1002:67c4": "AMD Radeon RX 5700",
+            "1002:67c7": "AMD Radeon RX 5700 XT",
+            "1002:67df": "AMD Radeon RX 580",
+            "1002:67e0": "AMD Radeon RX 570",
+            "1002:67e3": "AMD Radeon RX 550",
+            "1002:6806": "AMD Radeon HD 6450",
+            "1002:6808": "AMD Radeon HD 6570",
+            "1002:6818": "AMD Radeon R9 280",
+            "1002:6819": "AMD Radeon R9 280X",
+            "1002:6820": "AMD Radeon R9 285",
+            "1002:6821": "AMD Radeon R9 380",
+            "1002:6822": "AMD Radeon R9 390X",
+            "1002:6823": "AMD Radeon R9 390",
+            "1002:6825": "AMD Radeon RX 460",
+            "1002:6827": "AMD Radeon RX 470",
+            "1002:6828": "AMD Radeon RX 480",
+            "1002:6835": "AMD Radeon R7 370",
+            "1002:6837": "AMD Radeon R7 360",
+            "1002:687f": "AMD Radeon Vega 64",
+            "1002:6880": "AMD Radeon Vega 56",
+            "1002:69a0": "AMD Radeon RX 6600",
+            "1002:69a1": "AMD Radeon RX 6600 XT",
+            "1002:73a5": "AMD Radeon Pro WX 7100",
+            "1002:73a8": "AMD Radeon Pro WX 9100",
+            "1002:7401": "AMD Radeon Pro 450",
+            "1002:7403": "AMD Radeon Pro 455",
+            "1002:740f": "AMD Radeon Pro 460",
+        }
+        
+        gpu_text = "N/A"
+        
+        # First try to get device ID using lspci -n
         try:
-            result = subprocess.run(["lspci", "|", "grep", "-i", "vga"], capture_output=True, text=True, shell=True)
-            text = result.stdout.strip().split("\n")[0][:50] if result.stdout else "N/A"
+            result = subprocess.run(["lspci", "-n"], capture_output=True, text=True)
+            device_id = None
+            for line in result.stdout.split("\n"):
+                if "vga" in line.lower() or "display" in line.lower():
+                    # Extract vendor:device (e.g., "8086:0166")
+                    parts = line.split()
+                    if parts:
+                        device_id = parts[0]
+                        break
+            
+            # Try to map device ID to name
+            if device_id and device_id in GPU_NAME_MAP:
+                gpu_text = GPU_NAME_MAP[device_id]
         except:
-            text = "N/A"
-        label = ctk.CTkLabel(frame, text=text, font=("Inter", 16))
-        label.pack(expand=True)
-
-    def widget_disks(self, frame, tag):
-        disk = psutil.disk_usage("/")
-        text = f"{disk.percent}% ({disk.used // (1024**3)} GB / {disk.total // (1024**3)} GB)"
-        label = ctk.CTkLabel(frame, text=text, font=("Inter", 16))
-        label.pack(expand=True)
+            pass
+        
+        # Fallback to parsing lspci output
+        if gpu_text == "N/A":
+            try:
+                result = subprocess.run(["lspci"], capture_output=True, text=True)
+                gpu_line = ""
+                for line in result.stdout.split("\n"):
+                    if "vga" in line.lower() or "display" in line.lower():
+                        gpu_line = line
+                        break
+                if not gpu_line:
+                    gpu_line = result.stdout.strip().split("\n")[0] if result.stdout else ""
+            except:
+                gpu_line = ""
+            
+            # Parse GPU name
+            if gpu_line:
+                text = ""
+                if ":" in gpu_line:
+                    parts = gpu_line.split(":")
+                    for part in parts:
+                        part_lower = part.lower()
+                        if "intel" in part_lower or "nvidia" in part_lower or "amd" in part_lower or "radeon" in part_lower or "geforce" in part_lower:
+                            text = part.strip()
+                            break
+                    if not text and len(parts) >= 2:
+                        text = parts[-1].strip()
+                else:
+                    text = gpu_line.strip()
+                
+                # Clean up
+                text = text.replace("VGA compatible controller", "").replace("3D controller", "").strip()
+                
+                text_lower = text.lower()
+                if "intel" in text_lower and "core" in text_lower:
+                    if "hd graphics" in text_lower:
+                        idx = text_lower.find("hd graphics")
+                        model = text[idx:idx+30].strip()
+                        if "(" in model:
+                            model = model.split("(")[0].strip()
+                        text = "Intel " + model
+                    elif "iris" in text_lower:
+                        idx = text_lower.find("iris")
+                        model = text[idx:idx+30].strip()
+                        if "(" in model:
+                            model = model.split("(")[0].strip()
+                        text = "Intel " + model
+                    elif "uhd" in text_lower:
+                        text = "Intel UHD Graphics"
+                    else:
+                        text = text.replace("Intel Corporation", "Intel").strip()
+                        if len(text) > 40:
+                            text = text[:40].strip()
+                
+                gpu_text = text
+        
+        # Use full text for big widget, truncated for small
+        if is_small:
+            # Small: truncate to ~15 chars
+            if len(gpu_text) > 15:
+                # Try to show a shorter version
+                if "Intel" in gpu_text:
+                    # "Intel HD Graphics 4000" -> "Intel HD 4000"
+                    gpu_short = gpu_text.replace("Graphics", "").strip()
+                    if len(gpu_short) > 15:
+                        gpu_text = gpu_text[:15] + "..."
+                    else:
+                        gpu_text = gpu_short
+                else:
+                    gpu_text = gpu_text[:15] + "..."
+        else:
+            # Big: show full name but limit to reasonable length
+            gpu_text = gpu_text[:50] if len(gpu_text) > 50 else gpu_text
+        
+        if is_small:
+            # Small widget: icon + short name
+            icon_label = ctk.CTkLabel(
+                frame,
+                text="🎮",
+                font=("Inter", 14)
+            )
+            icon_label.pack(pady=(5, 0))
+            
+            label = ctk.CTkLabel(
+                frame, 
+                text=gpu_text, 
+                font=("Inter", 9, "bold"),
+                text_color=("gray10", "gray90")
+            )
+            label.pack(expand=True)
+        else:
+            # Big widget
+            label = ctk.CTkLabel(
+                frame, 
+                text=f"🎮 {gpu_text}", 
+                font=("Inter", 14, "bold"),
+                text_color=("gray10", "gray90")
+            )
+            label.pack(expand=True)
 
     def widget_battery(self, frame, tag):
+        # Clear previous content
+        for child in frame.winfo_children():
+            child.destroy()
+        
+        is_small = tag.startswith("small_")
         battery = psutil.sensors_battery()
+        
         if battery:
-            percent = battery.percent
-            plugged = self._("Charging") if battery.power_plugged else self._("Discharging")
-            text = f"{percent}% ({plugged})"
+            percent = int(battery.percent)
+            color = get_battery_color(percent)
+            plugged = battery.power_plugged
+            
+            # Format percentage - max 6 chars
+            if percent == 100:
+                percent_str = "100%"
+            elif percent >= 10:
+                percent_str = f"{percent}%"
+            else:
+                percent_str = f"{percent}%"
+            
+            if is_small:
+                icon = "🔌" if plugged else "🔋"
+                label = ctk.CTkLabel(
+                    frame, 
+                    text=f"{icon} {percent_str}", 
+                    font=("Inter", 18, "bold"),
+                    text_color=color
+                )
+                label.pack(expand=True)
+            else:
+                icon = "🔌" if plugged else "🔋"
+                icon_label = ctk.CTkLabel(
+                    frame,
+                    text=icon,
+                    font=("Inter", 40)
+                )
+                icon_label.pack(pady=(10, 5))
+                
+                progress = ctk.CTkProgressBar(frame, orientation="horizontal")
+                progress.set(percent / 100)
+                progress.configure(
+                    progress_color=color,
+                    fg_color="#3B3B3B",
+                    height=20
+                )
+                progress.pack(fill="x", padx=20, pady=5)
+                
+                label = ctk.CTkLabel(
+                    frame, 
+                    text=percent_str, 
+                    font=("Inter", 28, "bold"),
+                    text_color=color
+                )
+                label.pack(expand=True)
         else:
-            text = self._("No battery")
-        label = ctk.CTkLabel(frame, text=text, font=("Inter", 16))
-        label.pack(expand=True)
+            # No battery
+            label = ctk.CTkLabel(
+                frame, 
+                text="N/A", 
+                font=("Inter", 18, "bold"),
+                text_color=("gray10", "gray90")
+            )
+            label.pack(expand=True)
+
+
+    def widget_disks(self, frame, tag):
+        # Clear previous content
+        for child in frame.winfo_children():
+            child.destroy()
+        
+        is_small = tag.startswith("small_")
+        
+        # Try common mount points directly with disk_usage
+        mount_points = ['/', '/home', '/var', '/opt', '/data', '/boot']
+        disk_info = []
+        
+        for mp in mount_points:
+            try:
+                usage = psutil.disk_usage(mp)
+                if usage.total > 0:
+                    disk_info.append({
+                        'mount': mp,
+                        'percent': int(usage.percent),
+                        'used': usage.used // (1024**3),
+                        'total': usage.total // (1024**3)
+                    })
+            except:
+                pass
+        
+        # If no mount points found, try partitions
+        if not disk_info:
+            partitions = psutil.disk_partitions()
+            for partition in partitions[:5]:
+                try:
+                    usage = psutil.disk_usage(partition.mountpoint)
+                    if usage.total > 0:
+                        disk_info.append({
+                            'mount': partition.mountpoint,
+                            'percent': int(usage.percent),
+                            'used': usage.used // (1024**3),
+                            'total': usage.total // (1024**3)
+                        })
+                except:
+                    pass
+        
+        if is_small:
+            # Small widget - show root and home summary
+            icon_label = ctk.CTkLabel(
+                frame,
+                text="💾",
+                font=("Inter", 14)
+            )
+            icon_label.pack(pady=(5, 0))
+            
+            if disk_info:
+                # Build summary text
+                summary_parts = []
+                for disk in disk_info[:2]:  # Show up to 2 partitions
+                    mount = disk['mount']
+                    percent = disk['percent']
+                    if mount == '/':
+                        summary_parts.append(f"Root {percent}%")
+                    elif mount == '/home':
+                        summary_parts.append(f"Home {percent}%")
+                    else:
+                        # Shorten mount point
+                        short_mount = mount.replace("/", "")
+                        if len(short_mount) > 4:
+                            short_mount = short_mount[:4]
+                        summary_parts.append(f"{short_mount} {percent}%")
+                
+                summary_text = ", ".join(summary_parts)
+                # Truncate if too long
+                if len(summary_text) > 18:
+                    summary_text = summary_text[:18] + ".."
+                
+                # Show the main percentage prominently
+                main_percent = disk_info[0]['percent']
+                
+                label = ctk.CTkLabel(
+                    frame, 
+                    text=f"{main_percent}%", 
+                    font=("Inter", 20, "bold"),
+                    text_color=get_usage_color(main_percent)
+                )
+                label.pack(expand=True)
+                
+                # Show summary below
+                if len(summary_parts) > 1:
+                    summary_label = ctk.CTkLabel(
+                        frame,
+                        text=summary_text,
+                        font=("Inter", 8),
+                        text_color=("gray40", "gray70")
+                    )
+                    summary_label.pack(pady=(0, 5))
+            else:
+                label = ctk.CTkLabel(frame, text="N/A", font=("Inter", 20, "bold"))
+                label.pack(expand=True)
+        else:
+            # Big widget - show root and home
+            if not disk_info:
+                text = self._("No disks found")
+                label = ctk.CTkLabel(frame, text=text, font=("Inter", 14), wraplength=200)
+                label.pack(expand=True)
+            else:
+                for disk in disk_info[:4]:
+                    percent = disk['percent']
+                    color = get_usage_color(percent)
+                    
+                    # Friendly name
+                    if disk['mount'] == '/':
+                        mount_name = "System (/)"
+                    elif disk['mount'] == '/home':
+                        mount_name = "Home (/home)"
+                    else:
+                        mount_name = disk['mount']
+                    
+                    mount_label = ctk.CTkLabel(
+                        frame,
+                        text=f"💾 {mount_name}",
+                        font=("Inter", 11, "bold"),
+                        text_color=("gray10", "gray90")
+                    )
+                    mount_label.pack(anchor="w", padx=10, pady=(8, 2))
+                    
+                    progress = ctk.CTkProgressBar(frame, orientation="horizontal")
+                    progress.set(percent / 100)
+                    progress.configure(
+                        progress_color=color,
+                        fg_color="#3B3B3B",
+                        height=12
+                    )
+                    progress.pack(fill="x", padx=10, pady=(0, 2))
+                    
+                    usage_label = ctk.CTkLabel(
+                        frame,
+                        text=f"{percent}% ({disk['used']}GB / {disk['total']}GB)",
+                        font=("Inter", 10),
+                        text_color=color
+                    )
+                    usage_label.pack(anchor="w", padx=10, pady=(0, 5))
+
+
+        # Clear previous content
+        for child in frame.winfo_children():
+            child.destroy()
+        
+        is_small = tag.startswith("small_")
+        battery = psutil.sensors_battery()
+        
+        if battery:
+            percent = int(battery.percent)  # Convert to int to remove decimals
+            color = get_battery_color(percent)
+            plugged = battery.power_plugged
+            
+            # Format percentage - max 6 chars (e.g., "99%" or "100%")
+            if percent == 100:
+                percent_str = "100%"
+            elif percent >= 10:
+                percent_str = f"{percent}%"
+            else:
+                percent_str = f"{percent}%"  # e.g., "9%"
+            
+            if is_small:
+                # Small widget - simple percentage display
+                icon = "🔌" if plugged else "🔋"
+                label = ctk.CTkLabel(
+                    frame, 
+                    text=f"{icon} {percent_str}", 
+                    font=("Inter", 18, "bold"),
+                    text_color=color
+                )
+                label.pack(expand=True)
+            else:
+                # Big widget - progress bar and details
+                # Icon
+                icon = "🔌" if plugged else "🔋"
+                icon_label = ctk.CTkLabel(
+                    frame,
+                    text=icon,
+                    font=("Inter", 40)
+                )
+                icon_label.pack(pady=(10, 5))
+                
+                # Progress bar
+                progress = ctk.CTkProgressBar(frame, orientation="horizontal")
+                progress.set(percent / 100)
+                progress.configure(
+                    progress_color=color,
+                    fg_color="#3B3B3B",
+                    height=20
+                )
+                progress.pack(fill="x", padx=20, pady=5)
+                
+                # Percentage label
+                label = ctk.CTkLabel(
+                    frame, 
+                    text=percent_str, 
+                    font=("Inter", 28, "bold"),
+                    text_color=color
+                )
+                label.pack(expand=True)
+                
+                # Status
+                status = self._("Charging") if plugged else self._("Discharging")
+                status_label = ctk.CTkLabel(
+                    frame,
+                    text=status,
+                    font=("Inter", 12),
+                    text_color=("gray40", "gray70")
+                )
+                status_label.pack(pady=(0, 10))
+        else:
+            # No battery
+            label = ctk.CTkLabel(
+                frame, 
+                text=self._("No battery"), 
+                font=("Inter", 16),
+                text_color=("gray40", "gray70")
+            )
+            label.pack(expand=True)
 
     def widget_temps(self, frame, tag):
+        # Clear previous content
+        for child in frame.winfo_children():
+            child.destroy()
+        
+        is_small = tag.startswith("small_")
         temps = psutil.sensors_temperatures()
+        
+        # Get the first available temperature
+        temp_value = None
         if temps:
             for name, entries in temps.items():
                 if entries:
-                    text = f"{entries[0].current}°C"
+                    temp_value = entries[0].current
                     break
+        
+        if temp_value is not None:
+            color = get_temp_color(temp_value)
+            icon = get_temp_icon(temp_value)
+            
+            if is_small:
+                # Small widget - icon and temperature
+                label = ctk.CTkLabel(
+                    frame, 
+                    text=f"{icon} {temp_value}°C", 
+                    font=("Inter", 20, "bold"),
+                    text_color=color
+                )
+                label.pack(expand=True)
             else:
-                text = "N/A"
+                # Big widget - icon, temperature, and status
+                # Icon
+                icon_label = ctk.CTkLabel(
+                    frame,
+                    text=icon,
+                    font=("Inter", 50)
+                )
+                icon_label.pack(pady=(10, 5))
+                
+                # Temperature label
+                label = ctk.CTkLabel(
+                    frame, 
+                    text=f"{temp_value}°C", 
+                    font=("Inter", 32, "bold"),
+                    text_color=color
+                )
+                label.pack(expand=True)
+                
+                # Status
+                if temp_value < 30:
+                    status = "Frio"
+                elif temp_value <= 50:
+                    status = "Normal"
+                elif temp_value <= 70:
+                    status = "Morno"
+                else:
+                    status = "Quente"
+                
+                status_label = ctk.CTkLabel(
+                    frame,
+                    text=status,
+                    font=("Inter", 14),
+                    text_color=color
+                )
+                status_label.pack(pady=(0, 10))
         else:
-            text = "N/A"
-        label = ctk.CTkLabel(frame, text=text, font=("Inter", 16))
-        label.pack(expand=True)
+            # No temperature data
+            label = ctk.CTkLabel(
+                frame, 
+                text="N/A", 
+                font=("Inter", 16),
+                text_color=("gray40", "gray70")
+            )
+            label.pack(expand=True)
 
     def widget_health(self, frame, tag):
+        # Clear previous content
+        for child in frame.winfo_children():
+            child.destroy()
+        
+        is_small = tag.startswith("small_")
+        
         health = self.health_monitor.calculate_health_score()
-        text = str(health["score"])
-        label = ctk.CTkLabel(frame, text=text, font=("Inter", 16))
-        label.pack(expand=True)
+        score = health["score"]
+        
+        # Get color based on health score
+        if score >= 80:
+            color = COLOR_SUCCESS
+            status_text = "Bom"
+        elif score >= 50:
+            color = COLOR_WARNING
+            status_text = "Regular"
+        else:
+            color = COLOR_DANGER
+            status_text = "Ruim"
+        
+        font_size = 20 if is_small else 28
+        
+        # Icon based on health
+        icon = "❤️" if score >= 80 else "⚠️" if score >= 50 else "🚨"
+        
+        if is_small:
+            # Small widget: icon + percentage
+            label = ctk.CTkLabel(
+                frame, 
+                text=f"{icon} {score}%", 
+                font=("Inter", font_size, "bold"),
+                text_color=color
+            )
+            label.pack(expand=True)
+        else:
+            # Big widget: icon + percentage + status text
+            label = ctk.CTkLabel(
+                frame, 
+                text=f"{icon} {score}%", 
+                font=("Inter", font_size, "bold"),
+                text_color=color
+            )
+            label.pack(pady=(10, 5))
+            
+            status_label = ctk.CTkLabel(
+                frame,
+                text=status_text,
+                font=("Inter", 16, "bold"),
+                text_color=color
+            )
+            status_label.pack(pady=(0, 10))
 
     def widget_realtime_chart(self, frame, tag):
         from core.dashboard import RealTimeChartWidget
@@ -1269,6 +2670,296 @@ class SpeedScan(ctk.CTk):
             self._charts = []
         self._charts.append(chart)
 
+    # =========================================================================
+    # Dashboard Widget Data Getters
+    # =========================================================================
+    
+    def get_widget_cpu(self):
+        """Get CPU data for dashboard widget."""
+        import platform
+        # Get CPU model
+        model = "CPU"
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        model = line.split(":")[1].strip()
+                        # Shorten
+                        if "Intel" in model:
+                            parts = model.split()
+                            for p in parts:
+                                if p.startswith("i") and "-" in p:
+                                    model = "Intel " + p
+                                    break
+                        elif "AMD" in model:
+                            parts = model.split()
+                            if len(parts) >= 4:
+                                model = " ".join(parts[:4])
+                        break
+        except:
+            pass
+        
+        # Get usage
+        percent = int(psutil.cpu_percent(interval=0.1))
+        
+        return {
+            "model": model,
+            "percent": percent,
+        }
+    
+    def get_widget_ram(self):
+        """Get RAM data for dashboard widget."""
+        mem = psutil.virtual_memory()
+        percent = int(mem.percent)
+        used_gb = mem.used / (1024**3)
+        total_gb = mem.total / (1024**3)
+        
+        return {
+            "percent": percent,
+            "used_gb": used_gb,
+            "total_gb": total_gb,
+        }
+    
+    def get_widget_disks(self):
+        """Get disk data for dashboard widget."""
+        partitions = []
+        
+        # Try common mount points
+        mount_points = ['/', '/home']
+        
+        for mp in mount_points:
+            try:
+                usage = psutil.disk_usage(mp)
+                if usage.total > 0:
+                    if mp == '/':
+                        name = "System (/)"
+                    elif mp == '/home':
+                        name = "Home (/home)"
+                    else:
+                        name = mp
+                    partitions.append({
+                        "name": name,
+                        "mount": mp,
+                        "percent": int(usage.percent),
+                        "used_gb": usage.used // (1024**3),
+                        "total_gb": usage.total // (1024**3),
+                    })
+            except:
+                pass
+        
+        return {"partitions": partitions}
+    
+    def get_widget_battery(self):
+        """Get battery data for dashboard widget."""
+        battery = psutil.sensors_battery()
+        if battery:
+            return {
+                "percent": int(battery.percent),
+                "plugged": battery.power_plugged,
+            }
+        return {"percent": 0, "plugged": False}
+    
+    def get_widget_gpu(self):
+        """Get GPU data for dashboard widget."""
+        # Try lspci
+        gpu_name = "N/A"
+        try:
+            result = subprocess.run(["lspci"], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if "vga" in line.lower() or "display" in line.lower():
+                    # Extract name after colon
+                    if ":" in line:
+                        gpu_name = line.split(":", 1)[1].strip()
+                    # Clean up
+                    gpu_name = gpu_name.replace("VGA compatible controller", "").strip()
+                    gpu_name = gpu_name.replace("3D controller", "").strip()
+                    break
+        except:
+            pass
+        
+        return {"name": gpu_name}
+    
+    def get_widget_temps(self):
+        """Get temperature data for dashboard widget."""
+        temp = 0
+        try:
+            temps = psutil.sensors_temperatures()
+            # Get CPU temp
+            for name, entries in temps.items():
+                if "cpu" in name.lower() or "k10" in name.lower():
+                    for entry in entries:
+                        if hasattr(entry, 'current') and entry.current:
+                            temp = int(entry.current)
+                            break
+                    if temp:
+                        break
+        except:
+            pass
+        
+        return {"temp": temp}
+    
+    def get_widget_uptime(self):
+        """Get uptime data for dashboard widget."""
+        from datetime import datetime
+        boot_time = datetime.fromtimestamp(psutil.boot_time())
+        delta = datetime.now() - boot_time
+        days = delta.days
+        hours, remainder = divmod(delta.seconds, 3600)
+        
+        if days == 0:
+            if hours == 0:
+                text = f"{delta.seconds // 60}m"
+            else:
+                text = f"{hours}h"
+        else:
+            text = f"{days}d {hours}h"
+        
+        return {"text": text}
+    
+    def get_widget_kernel(self):
+        """Get kernel data for dashboard widget."""
+        version = platform.uname().release
+        # Get just X.Y
+        parts = version.split(".")
+        if len(parts) >= 2:
+            version = f"{parts[0]}.{parts[1]}"
+        
+        return {"version": version}
+    
+    def get_widget_distro(self):
+        """Get distribution data for dashboard widget."""
+        name = "Linux"
+        try:
+            with open("/etc/os-release", "r") as f:
+                for line in f:
+                    if line.startswith("PRETTY_NAME="):
+                        name = line.split("=")[1].strip().strip('"')
+                        break
+        except:
+            pass
+        
+        return {"name": name}
+    
+    def get_widget_hostname(self):
+        """Get hostname data for dashboard widget."""
+        import socket
+        return {"hostname": socket.gethostname()}
+    
+    def get_widget_health(self):
+        """Get health score for dashboard widget."""
+        # Calculate based on CPU, RAM, disk
+        try:
+            cpu = psutil.cpu_percent(interval=0.1)
+            ram = psutil.virtual_memory().percent
+            
+            # Get disk usage
+            disk = 0
+            try:
+                disk = psutil.disk_usage('/').percent
+            except:
+                pass
+            
+            # Weighted average
+            health = 100 - ((cpu * 0.3) + (ram * 0.3) + (disk * 0.4))
+            health = max(0, min(100, health))
+            
+            return {"score": int(health)}
+        except:
+            return {"score": 0}
+
+
+        from core.dashboard import RealTimeChartWidget
+        chart = RealTimeChartWidget(frame, tag)
+        if not hasattr(self, "_charts"):
+            self._charts = []
+        self._charts.append(chart)
+
 if __name__ == "__main__":
-    app = SpeedScan()
-    app.mainloop()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "--test":
+        # Test mode - run all cards from command line
+        print("=" * 50)
+        print("SPEEDSCAN TEST MODE")
+        print("=" * 50)
+        # Create minimal app instance for testing
+        class TestRunner:
+            def __init__(self):
+                self.SO = "Linux"
+                from core.actions import CommandRunner, ActionHandler, ActionMapper
+                self.runner = CommandRunner(self.SO)
+                self.action_handler = ActionHandler(self)
+                self.action_mapper = ActionMapper(self.SO, self.runner, False)
+                
+                # Mock the _() function
+                def _(s): return s
+                self._ = _
+                
+                # Import other modules needed
+                from core.hardware import HardwareInfo
+                from core.health_score import HealthScore
+                from core.security_scanner import SecurityScanner
+                from core.lan_scanner import LANScanner
+                from core.lan_cache import LANCacheManager
+                from core.browser_cleaner import BrowserCleaner
+                from core.speed_test import SpeedTester
+                
+                self.hw = HardwareInfo(self.SO, self.runner)
+                self.health_monitor = HealthScore()
+                self.security_scanner = SecurityScanner(self.SO)
+                self.lan_scanner = LANScanner()
+                self.lan_cache = LANCacheManager(self.SO)
+                self.browser_cleaner = BrowserCleaner()
+                self.speed_tester = SpeedTester()
+            
+            def run_test(self, test_name, func, *args):
+                print(f"\n--- Testing: {test_name} ---")
+                try:
+                    # Create a StringIO to capture output
+                    import io
+                    from unittest.mock import MagicMock
+                    log = MagicMock()
+                    log_lines = []
+                    def mock_insert(end, text):
+                        log_lines.append(text)
+                    log.insert = mock_insert
+                    log.delete = lambda *a: None
+                    log.update = lambda: None
+                    
+                    func(log, *args)
+                    
+                    if log_lines:
+                        for line in log_lines:
+                            print(f"  OUTPUT: {line.strip()}")
+                    else:
+                        print("  (no output)")
+                except Exception as e:
+                    print(f"  ERROR: {e}")
+        
+        runner = TestRunner()
+        
+        # Test all optimization cards
+        print("\n=== OPTIMIZATION CARDS ===")
+        runner.run_test("cache", runner.action_handler.run_cache_clean)
+        runner.run_test("swap", runner.action_handler.run_swap_reset)
+        runner.run_test("check", runner.action_handler.run_fs_check)
+        runner.run_test("turbo", runner.action_handler.run_turbo_mode)
+        runner.run_test("browsers", runner.action_handler.run_browser_clean)
+        
+        # Test network cards
+        print("\n=== NETWORK CARDS ===")
+        # These need the actual main.py methods
+        # We'll test what we can without GUI
+        
+        print("\n=== DRIVER CARDS ===")
+        
+        print("\n=== SECURITY CARDS ===")
+        runner.run_test("ports", runner.security_scanner.scan_open_ports)
+        runner.run_test("firewall", runner.security_scanner.check_firewall_status)
+        runner.run_test("sec_updates", runner.security_scanner.check_security_updates)
+        
+        print("\n" + "=" * 50)
+        print("TEST COMPLETE")
+        print("=" * 50)
+    else:
+        app = SpeedScan()
+        app.mainloop()
