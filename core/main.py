@@ -1618,7 +1618,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", 12, "bold"),
                 text_color=("gray10", "gray90")
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
         else:
             # Big widget
             label = ctk.CTkLabel(
@@ -1627,7 +1627,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", 18, "bold"),
                 text_color=("gray10", "gray90")
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
 
     def widget_distro(self, frame, tag):
         # Clear previous content
@@ -1681,7 +1681,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", 11, "bold"),
                 text_color=("gray10", "gray90")
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
         else:
             # Big widget
             label = ctk.CTkLabel(
@@ -1690,7 +1690,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", 16, "bold"),
                 text_color=("gray10", "gray90")
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
 
     def widget_kernel(self, frame, tag):
         # Clear previous content
@@ -1723,7 +1723,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", 12, "bold"),
                 text_color=("gray10", "gray90")
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
         else:
             # Big widget: "Kernel Linux X.Y"
             label = ctk.CTkLabel(
@@ -1732,7 +1732,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", 14, "bold"),
                 text_color=("gray10", "gray90")
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
 
     def widget_uptime(self, frame, tag):
         # Clear previous content
@@ -1799,7 +1799,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", 18, "bold"),
                 text_color=("gray10", "gray90")
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
 
     def _animate_uptime(self, frame):
         """Animate uptime icon between ⏳ and ⌛"""
@@ -1837,7 +1837,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", 20, "bold"),
                 text_color=color
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
         else:
             # Big widget - model name + progress bar and details
             # Get CPU model name
@@ -1889,7 +1889,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", 28, "bold"),
                 text_color=color
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
             
             # Status text
             status = "Normal" if percent <= 60 else "Alto" if percent <= 85 else "Crítico"
@@ -1919,7 +1919,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", 24, "bold"),
                 text_color=color
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
         else:
             # Big widget - progress bar and details
             # Progress bar
@@ -1939,7 +1939,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", 28, "bold"),
                 text_color=color
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
             
             # Memory details
             used_gb = mem.used // (1024**3)
@@ -1952,568 +1952,28 @@ class SpeedScan(ctk.CTk):
             )
             details_label.pack(pady=(0, 10))
 
-    def widget_gpu(self, frame, tag):
-        # Clear previous content
-        for child in frame.winfo_children():
-            child.destroy()
-        
-        is_small = tag.startswith("small_")
-        
-        # GPU name mapping from device IDs (Intel GPUs)
-        GPU_NAME_MAP = {
-            # Intel GPUs (vendor 8086)
-            "8086:0106": "Intel HD Graphics 2000",
-            "8086:010a": "Intel HD Graphics 2000",
-            "8086:0116": "Intel HD Graphics 3000",
-            "8086:0126": "Intel HD Graphics 3000",
-            "8086:0152": "Intel HD Graphics 4000",
-            "8086:0156": "Intel HD Graphics 4000",
-            "8086:0166": "Intel HD Graphics 4000",
-            "8086:0172": "Intel HD Graphics 4000",
-            "8086:041e": "Intel HD Graphics 4600",
-            "8086:0416": "Intel HD Graphics 4400",
-            "8086:0426": "Intel HD Graphics 5000",
-            "8086:042b": "Intel Iris Graphics 5100",
-            "8086:042e": "Intel HD Graphics 5000",
-            "8086:0a16": "Intel HD Graphics 4400",
-            "8086:0a26": "Intel HD Graphics 5000",
-            "8086:0a2e": "Intel Iris Pro Graphics 5200",
-            "8086:0d22": "Intel Iris Pro Graphics 5200",
-            "8086:0f31": "Intel HD Graphics 4000",
-            "8086:0f30": "Intel HD Graphics 4000",
-            "8086:0f32": "Intel HD Graphics 4000",
-            "8086:0f33": "Intel HD Graphics 4000",
-            "8086:5912": "Intel UHD Graphics 620",
-            "8086:5917": "Intel UHD Graphics 620",
-            "8086:5916": "Intel HD Graphics 620",
-            "8086:591b": "Intel HD Graphics 620",
-            "8086:591e": "Intel HD Graphics 615",
-            "8086:5926": "Intel Iris Plus Graphics 640",
-            "8086:5927": "Intel Iris Plus Graphics 650",
-            "8086:593b": "Intel UHD Graphics 620",
-            "8086:5a85": "Intel UHD Graphics 617",
-            "8086:5a84": "Intel HD Graphics 615",
-            "8086:87ca": "Intel Iris Xe Graphics",
-            "8086:8a70": "Intel UHD Graphics",
-            "8086:8a71": "Intel UHD Graphics",
-            "8086:8a74": "Intel Iris Xe Graphics G7",
-            "8086:9a49": "Intel UHD Graphics Xe G4",
-            "8086:9a60": "Intel UHD Graphics Xe G4",
-            "8086:9a70": "Intel Iris Xe Graphics",
-            # NVIDIA GPUs
-            "10de:0a": "NVIDIA GeForce 210",
-            "10de:0df": "NVIDIA GeForce GT 430",
-            "10de:0f": "NVIDIA GeForce GT 220",
-            "10de:11": "NVIDIA GeForce GT 240",
-            "10de:12": "NVIDIA GeForce GTS 250",
-            "10de:1b": "NVIDIA GeForce GTX 460",
-            "10de:1c": "NVIDIA GeForce GTX 460 SE",
-            "10de:1d": "NVIDIA GeForce GTX 460",
-            "10de:1e": "NVIDIA GeForce GTX 470",
-            "10de:1f": "NVIDIA GeForce GTX 480",
-            "10de:5": "NVIDIA GeForce 8800 GTS",
-            "10de:6": "NVIDIA GeForce 8800 GT",
-            "10de:8": "NVIDIA GeForce 9800 GT",
-            "10de:9": "NVIDIA GeForce 9800 GX2",
-            "10de:a": "NVIDIA GeForce 8800 GS",
-            "10de:dc": "NVIDIA GeForce GT 630",
-            "10de:dd": "NVIDIA GeForce GT 630",
-            "10de:de": "NVIDIA GeForce GT 640",
-            "10de:e0": "NVIDIA GeForce GT 640",
-            "10de:e1": "NVIDIA GeForce GT 640",
-            "10de:104": "NVIDIA GeForce GTX 650",
-            "10de:105": "NVIDIA GeForce GT 640",
-            "10de:106": "NVIDIA GeForce GTX 660",
-            "10de:107": "NVIDIA GeForce GTX 660 Ti",
-            "10de:108": "NVIDIA GeForce GTX 670",
-            "10de:109": "NVIDIA GeForce GTX 680",
-            "10de:10": "NVIDIA GeForce 9800 GT",
-            "10de:110": "NVIDIA GeForce GTX 690",
-            "10de:118": "NVIDIA GeForce GTX 770",
-            "10de:119": "NVIDIA GeForce GTX 780",
-            "10de:11a": "NVIDIA GeForce GTX 780 Ti",
-            "10de:11b": "NVIDIA GeForce GTX 970",
-            "10de:11c": "NVIDIA GeForce GTX 980",
-            "10de:11d": "NVIDIA GeForce GTX 980 Ti",
-            "10de:120": "NVIDIA GeForce GTX 1050",
-            "10de:121": "NVIDIA GeForce GTX 1050 Ti",
-            "10de:128": "NVIDIA GeForce GTX 1060",
-            "10de:139": "NVIDIA GeForce GTX 1650",
-            "10de:13": "NVIDIA GeForce GTX 460",
-            "10de:140": "NVIDIA GeForce GTX 1660",
-            "10de:143": "NVIDIA GeForce GTX 1660 Ti",
-            "10de:150": "NVIDIA GeForce RTX 2060",
-            "10de:153": "NVIDIA GeForce RTX 2060 Super",
-            "10de:154": "NVIDIA GeForce RTX 2070",
-            "10de:155": "NVIDIA GeForce RTX 2070 Super",
-            "10de:156": "NVIDIA GeForce RTX 2080",
-            "10de:157": "NVIDIA GeForce RTX 2080 Super",
-            "10de:158": "NVIDIA GeForce RTX 2080 Ti",
-            "10de:1b80": "NVIDIA GeForce GTX 1080",
-            "10de:1b81": "NVIDIA GeForce GTX 1080 Ti",
-            "10de:1c": "NVIDIA GeForce GTX 1080",
-            "10de:1d": "NVIDIA GeForce GTX 1080",
-            "10de:22": "NVIDIA GeForce 7300 LE",
-            "10de:23": "NVIDIA GeForce 7300 SE",
-            "10de:24": "NVIDIA GeForce 7350 LE",
-            "10de:25": "NVIDIA GeForce 7600 GT",
-            "10de:26": "NVIDIA GeForce 7600 GS",
-            "10de:27": "NVIDIA GeForce 7300 GT",
-            "10de:28": "NVIDIA GeForce 7900 GTX",
-            "10de:29": "NVIDIA GeForce 7900 GTO",
-            "10de:2a": "NVIDIA GeForce 7950 GX2",
-            "10de:2b": "NVIDIA GeForce 7950 GT",
-            "10de:30": "NVIDIA GeForce 8200",
-            "10de:31": "NVIDIA GeForce 8300 GS",
-            "10de:32": "NVIDIA GeForce 8400 GS",
-            "10de:33": "NVIDIA GeForce 8400 GS",
-            "10de:35": "NVIDIA GeForce 9300 GS",
-            "10de:3e": "NVIDIA GeForce 9500 GT",
-            "10de:40": "NVIDIA GeForce GT 120",
-            "10de:41": "NVIDIA GeForce GT 130",
-            "10de:42": "NVIDIA GeForce GT 140",
-            "10de:4": "NVIDIA GeForce 7950 GX2",
-            "10de:42": "NVIDIA GeForce GTS 150",
-            "10de:5": "NVIDIA GeForce 7800 GTX",
-            "10de:61": "NVIDIA GeForce GTX 750",
-            "10de:62": "NVIDIA GeForce GTX 750 Ti",
-            "10de:63": "NVIDIA GeForce GTX 760",
-            "10de:64": "NVIDIA GeForce GTX 760",
-            "10de:65": "NVIDIA GeForce GTX 770",
-            "10de:66": "NVIDIA GeForce GTX 780",
-            "10de:67": "NVIDIA GeForce GTX 780 Ti",
-            "10de:68": "NVIDIA GeForce GTX 970",
-            "10de:69": "NVIDIA GeForce GTX 960",
-            "10de:70": "NVIDIA GeForce GTX 980",
-            "10de:71": "NVIDIA GeForce GTX 980 Ti",
-            "10de:72": "NVIDIA GeForce GTX 980M",
-            "10de:73": "NVIDIA GeForce GTX 970M",
-            "10de:74": "NVIDIA GeForce GTX 960M",
-            "10de:75": "NVIDIA GeForce GTX 950M",
-            "10de:76": "NVIDIA GeForce GTX 880M",
-            "10de:77": "NVIDIA GeForce GTX 870M",
-            "10de:78": "NVIDIA GeForce GTX 860M",
-            "10de:79": "NVIDIA GeForce GTX 850M",
-            "10de:80": "NVIDIA GeForce GTX 970M",
-            "10de:81": "NVIDIA GeForce GTX 960M",
-            "10de:82": "NVIDIA GeForce GTX 950M",
-            "10de:83": "NVIDIA GeForce 940M",
-            "10de:84": "NVIDIA GeForce 930M",
-            "10de:85": "NVIDIA GeForce 920M",
-            "10de:86": "NVIDIA GeForce GTX 1080M",
-            "10de:87": "NVIDIA GeForce GTX 1070M",
-            "10de:88": "NVIDIA GeForce GTX 1060M",
-            "10de:89": "NVIDIA GeForce GTX 1050M",
-            "10de:90": "NVIDIA GeForce GTX 1050 Ti",
-            # AMD GPUs
-            "1002:4369": "AMD Radeon HD 4250",
-            "1002:4370": "AMD Radeon HD 4200",
-            "1002:4372": "AMD Radeon HD 4290",
-            "1002:4373": "AMD Radeon HD 4250",
-            "1002:6779": "AMD Radeon HD 6900",
-            "1002:6738": "AMD Radeon HD 6850",
-            "1002:6739": "AMD Radeon HD 6870",
-            "1002:6740": "AMD Radeon HD 6850",
-            "1002:6741": "AMD Radeon HD 6870",
-            "1002:6760": "AMD Radeon HD 6570",
-            "1002:6761": "AMD Radeon HD 6670",
-            "1002:6770": "AMD Radeon HD 7770",
-            "1002:6771": "AMD Radeon HD 7750",
-            "1002:6780": "AMD Radeon HD 7870",
-            "1002:6784": "AMD Radeon HD 7850",
-            "1002:6798": "AMD Radeon HD 7970",
-            "1002:6799": "AMD Radeon HD 7950",
-            "1002:67b1": "AMD Radeon R9 390",
-            "1002:67b8": "AMD Radeon R9 380",
-            "1002:67c4": "AMD Radeon RX 5700",
-            "1002:67c7": "AMD Radeon RX 5700 XT",
-            "1002:67df": "AMD Radeon RX 580",
-            "1002:67e0": "AMD Radeon RX 570",
-            "1002:67e3": "AMD Radeon RX 550",
-            "1002:6806": "AMD Radeon HD 6450",
-            "1002:6808": "AMD Radeon HD 6570",
-            "1002:6818": "AMD Radeon R9 280",
-            "1002:6819": "AMD Radeon R9 280X",
-            "1002:6820": "AMD Radeon R9 285",
-            "1002:6821": "AMD Radeon R9 380",
-            "1002:6822": "AMD Radeon R9 390X",
-            "1002:6823": "AMD Radeon R9 390",
-            "1002:6825": "AMD Radeon RX 460",
-            "1002:6827": "AMD Radeon RX 470",
-            "1002:6828": "AMD Radeon RX 480",
-            "1002:6835": "AMD Radeon R7 370",
-            "1002:6837": "AMD Radeon R7 360",
-            "1002:687f": "AMD Radeon Vega 64",
-            "1002:6880": "AMD Radeon Vega 56",
-            "1002:69a0": "AMD Radeon RX 6600",
-            "1002:69a1": "AMD Radeon RX 6600 XT",
-            "1002:73a5": "AMD Radeon Pro WX 7100",
-            "1002:73a8": "AMD Radeon Pro WX 9100",
-            "1002:7401": "AMD Radeon Pro 450",
-            "1002:7403": "AMD Radeon Pro 455",
-            "1002:740f": "AMD Radeon Pro 460",
-        }
-        
-        gpu_text = "N/A"
-        
-        # First try to get device ID using lspci -n
-        try:
-            result = subprocess.run(["lspci", "-n"], capture_output=True, text=True)
-            device_id = None
-            for line in result.stdout.split("\n"):
-                if "vga" in line.lower() or "display" in line.lower():
-                    # Extract vendor:device (e.g., "8086:0166")
-                    parts = line.split()
-                    if parts:
-                        device_id = parts[0]
-                        break
-            
-            # Try to map device ID to name
-            if device_id and device_id in GPU_NAME_MAP:
-                gpu_text = GPU_NAME_MAP[device_id]
-        except:
-            pass
-        
-        # Fallback to parsing lspci output
-        if gpu_text == "N/A":
-            try:
-                result = subprocess.run(["lspci"], capture_output=True, text=True)
-                gpu_line = ""
-                for line in result.stdout.split("\n"):
-                    if "vga" in line.lower() or "display" in line.lower():
-                        gpu_line = line
-                        break
-                if not gpu_line:
-                    gpu_line = result.stdout.strip().split("\n")[0] if result.stdout else ""
-            except:
-                gpu_line = ""
-            
-            # Parse GPU name
-            if gpu_line:
-                text = ""
-                if ":" in gpu_line:
-                    parts = gpu_line.split(":")
-                    for part in parts:
-                        part_lower = part.lower()
-                        if "intel" in part_lower or "nvidia" in part_lower or "amd" in part_lower or "radeon" in part_lower or "geforce" in part_lower:
-                            text = part.strip()
-                            break
-                    if not text and len(parts) >= 2:
-                        text = parts[-1].strip()
-                else:
-                    text = gpu_line.strip()
-                
-                # Clean up
-                text = text.replace("VGA compatible controller", "").replace("3D controller", "").strip()
-                
-                text_lower = text.lower()
-                if "intel" in text_lower and "core" in text_lower:
-                    if "hd graphics" in text_lower:
-                        idx = text_lower.find("hd graphics")
-                        model = text[idx:idx+30].strip()
-                        if "(" in model:
-                            model = model.split("(")[0].strip()
-                        text = "Intel " + model
-                    elif "iris" in text_lower:
-                        idx = text_lower.find("iris")
-                        model = text[idx:idx+30].strip()
-                        if "(" in model:
-                            model = model.split("(")[0].strip()
-                        text = "Intel " + model
-                    elif "uhd" in text_lower:
-                        text = "Intel UHD Graphics"
-                    else:
-                        text = text.replace("Intel Corporation", "Intel").strip()
-                        if len(text) > 40:
-                            text = text[:40].strip()
-                
-                gpu_text = text
-        
-        # Use full text for big widget, truncated for small
-        if is_small:
-            # Small: truncate to ~15 chars
-            if len(gpu_text) > 15:
-                # Try to show a shorter version
-                if "Intel" in gpu_text:
-                    # "Intel HD Graphics 4000" -> "Intel HD 4000"
-                    gpu_short = gpu_text.replace("Graphics", "").strip()
-                    if len(gpu_short) > 15:
-                        gpu_text = gpu_text[:15] + "..."
-                    else:
-                        gpu_text = gpu_short
-                else:
-                    gpu_text = gpu_text[:15] + "..."
-        else:
-            # Big: show full name but limit to reasonable length
-            gpu_text = gpu_text[:50] if len(gpu_text) > 50 else gpu_text
-        
-        if is_small:
-            # Small widget: icon + short name
-            icon_label = ctk.CTkLabel(
-                frame,
-                text="🎮",
-                font=("Inter", 14)
-            )
-            icon_label.pack(pady=(5, 0))
-            
-            label = ctk.CTkLabel(
-                frame, 
-                text=gpu_text, 
-                font=("Inter", 9, "bold"),
-                text_color=("gray10", "gray90")
-            )
-            label.pack(expand=True)
-        else:
-            # Big widget
-            label = ctk.CTkLabel(
-                frame, 
-                text=f"🎮 {gpu_text}", 
-                font=("Inter", 14, "bold"),
-                text_color=("gray10", "gray90")
-            )
-            label.pack(expand=True)
+    def widget_gpu(self):
+        return "Intel HD Graphics 4000"
 
-    def widget_battery(self, frame, tag):
-        # Clear previous content
-        for child in frame.winfo_children():
-            child.destroy()
-        
-        is_small = tag.startswith("small_")
+    def widget_battery(self):
+        import psutil
         battery = psutil.sensors_battery()
-        
-        if battery:
-            percent = int(battery.percent)
-            color = get_battery_color(percent)
-            plugged = battery.power_plugged
-            
-            # Format percentage - max 6 chars
-            if percent == 100:
-                percent_str = "100%"
-            elif percent >= 10:
-                percent_str = f"{percent}%"
-            else:
-                percent_str = f"{percent}%"
-            
-            # Status text
-            if plugged:
-                status_text = "Carregando"
-            else:
-                status_text = ""
-            
-            if is_small:
-                icon = "🔌" if plugged else "🔋"
-                label = ctk.CTkLabel(
-                    frame, 
-                    text=f"{icon} {percent_str}", 
-                    font=("Inter", 18, "bold"),
-                    text_color=color
-                )
-                label.pack(expand=True)
-                if status_text:
-                    status_label = ctk.CTkLabel(
-                        frame,
-                        text=status_text,
-                        font=("Inter", 8),
-                        text_color=color
-                    )
-                    status_label.pack()
-            else:
-                icon = "🔌" if plugged else "🔋"
-                icon_label = ctk.CTkLabel(
-                    frame,
-                    text=icon,
-                    font=("Inter", 40)
-                )
-                icon_label.pack(pady=(10, 5))
-                
-                progress = ctk.CTkProgressBar(frame, orientation="horizontal")
-                progress.set(percent / 100)
-                progress.configure(
-                    progress_color=color,
-                    fg_color="#3B3B3B",
-                    height=20
-                )
-                progress.pack(fill="x", padx=20, pady=5)
-                
-                label = ctk.CTkLabel(
-                    frame, 
-                    text=percent_str, 
-                    font=("Inter", 28, "bold"),
-                    text_color=color
-                )
-                label.pack(expand=True)
-                
-                if status_text:
-                    status_label = ctk.CTkLabel(
-                        frame,
-                        text=status_text,
-                        font=("Inter", 12),
-                        text_color=color
-                    )
-                    status_label.pack()
-        else:
-            # No battery
-            label = ctk.CTkLabel(
-                frame, 
-                text="N/A", 
-                font=("Inter", 18, "bold"),
-                text_color=("gray10", "gray90")
-            )
-            label.pack(expand=True)
+        if battery is None:
+            return "No battery"
+        percent = int(battery.percent)
+        plugged = battery.power_plugged
+        status = "Carregando" if plugged else "Descarregando"
+        return {'percent': percent, 'plugged': plugged, 'status': status}
 
 
-    def widget_disks(self, frame, tag):
-        # Clear previous content
-        for child in frame.winfo_children():
-            child.destroy()
-        
-        is_small = tag.startswith("small_")
-        
-        # Get disk usage for / and /home specifically (in order)
-        disk_info = []
-        
-        # First try / and /home
-        for mp in ['/', '/home']:
-            try:
-                usage = psutil.disk_usage(mp)
-                if usage.total > 0:
-                    disk_info.append({
-                        'mount': mp,
-                        'percent': int(usage.percent),
-                        'used': usage.used // (1024**3),
-                        'total': usage.total // (1024**3)
-                    })
-            except:
-                pass
-        
-        # If no mount points found, try other common mount points
-        if len(disk_info) < 2:
-            for mp in ['/var', '/opt', '/data', '/boot']:
-                try:
-                    usage = psutil.disk_usage(mp)
-                    if usage.total > 0:
-                        disk_info.append({
-                            'mount': mp,
-                            'percent': int(usage.percent),
-                            'used': usage.used // (1024**3),
-                            'total': usage.total // (1024**3)
-                        })
-                except:
-                    pass
-        
-        # If still no mount points found, try partitions
-        if not disk_info:
-            partitions = psutil.disk_partitions()
-            for partition in partitions[:5]:
-                try:
-                    usage = psutil.disk_usage(partition.mountpoint)
-                    if usage.total > 0:
-                        disk_info.append({
-                            'mount': partition.mountpoint,
-                            'percent': int(usage.percent),
-                            'used': usage.used // (1024**3),
-                            'total': usage.total // (1024**3)
-                        })
-                except:
-                    pass
-        
-        if is_small:
-            # Small widget - show root and home summary
-            icon_label = ctk.CTkLabel(
-                frame,
-                text="💾",
-                font=("Inter", 14)
-            )
-            icon_label.pack(pady=(5, 0))
-            
-            if disk_info:
-                # Build summary text
-                summary_parts = []
-                for disk in disk_info[:2]:  # Show up to 2 partitions
-                    mount = disk['mount']
-                    percent = disk['percent']
-                    if mount == '/':
-                        summary_parts.append(f"Root {percent}%")
-                    elif mount == '/home':
-                        summary_parts.append(f"Home {percent}%")
-                    else:
-                        # Shorten mount point
-                        short_mount = mount.replace("/", "")
-                        if len(short_mount) > 4:
-                            short_mount = short_mount[:4]
-                        summary_parts.append(f"{short_mount} {percent}%")
-                
-                summary_text = ", ".join(summary_parts)
-                # Truncate if too long
-                if len(summary_text) > 18:
-                    summary_text = summary_text[:18] + ".."
-                
-                # Show the main percentage prominently
-                main_percent = disk_info[0]['percent']
-                
-                label = ctk.CTkLabel(
-                    frame, 
-                    text=f"{main_percent}%", 
-                    font=("Inter", 20, "bold"),
-                    text_color=get_usage_color(main_percent)
-                )
-                label.pack(expand=True)
-                
-                # Show summary below
-                if len(summary_parts) > 1:
-                    summary_label = ctk.CTkLabel(
-                        frame,
-                        text=summary_text,
-                        font=("Inter", 8),
-                        text_color=("gray40", "gray70")
-                    )
-                    summary_label.pack(pady=(0, 5))
-            else:
-                label = ctk.CTkLabel(frame, text="N/A", font=("Inter", 20, "bold"))
-                label.pack(expand=True)
-        else:
-            # Big widget - show root and home
-            if not disk_info:
-                text = self._("No disks found")
-                label = ctk.CTkLabel(frame, text=text, font=("Inter", 14), wraplength=200)
-                label.pack(expand=True)
-            else:
-                for disk in disk_info[:4]:
-                    percent = disk['percent']
-                    color = get_usage_color(percent)
-                    
-                    # Friendly name
-                    if disk['mount'] == '/':
-                        mount_name = "System (/)"
-                    elif disk['mount'] == '/home':
-                        mount_name = "Home (/home)"
-                    else:
-                        mount_name = disk['mount']
-                    
-                    mount_label = ctk.CTkLabel(
-                        frame,
-                        text=f"💾 {mount_name}",
-                        font=("Inter", 11, "bold"),
-                        text_color=("gray10", "gray90")
-                    )
-                    mount_label.pack(anchor="w", padx=10, pady=(8, 2))
-                    
-                    progress = ctk.CTkProgressBar(frame, orientation="horizontal")
-                    progress.set(percent / 100)
-                    progress.configure(
-                        progress_color=color,
-                        fg_color="#3B3B3B",
-                        height=12
-                    )
-                    progress.pack(fill="x", padx=10, pady=(0, 2))
-                    
-                    usage_label = ctk.CTkLabel(
-                        frame,
-                        text=f"{percent}% ({disk['used']}GB / {disk['total']}GB)",
-                        font=("Inter", 10),
-                        text_color=color
-                    )
-                    usage_label.pack(anchor="w", padx=10, pady=(0, 5))
+    def widget_disks(self):
+        import psutil
+        root = psutil.disk_usage('/')
+        home = psutil.disk_usage('/home')
+        return {
+            'root': {'name': 'Sistema (/)', 'percent': root.percent, 'used': root.used, 'total': root.total},
+            'home': {'name': 'Home (/home)', 'percent': home.percent, 'used': home.used, 'total': home.total},
+        }
 
 
     def widget_temps(self, frame, tag):
@@ -2544,7 +2004,7 @@ class SpeedScan(ctk.CTk):
                     font=("Inter", 20, "bold"),
                     text_color=color
                 )
-                label.pack(expand=True)
+                label.pack(anchor="center")
             else:
                 # Big widget - icon, temperature, and status
                 # Icon
@@ -2562,7 +2022,7 @@ class SpeedScan(ctk.CTk):
                     font=("Inter", 32, "bold"),
                     text_color=color
                 )
-                label.pack(expand=True)
+                label.pack(anchor="center")
                 
                 # Status
                 if temp_value < 30:
@@ -2589,7 +2049,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", 16),
                 text_color=("gray40", "gray70")
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
 
     def widget_health(self, frame, tag):
         # Clear previous content
@@ -2625,7 +2085,7 @@ class SpeedScan(ctk.CTk):
                 font=("Inter", font_size, "bold"),
                 text_color=color
             )
-            label.pack(expand=True)
+            label.pack(anchor="center")
         else:
             # Big widget: icon + percentage + status text
             label = ctk.CTkLabel(
