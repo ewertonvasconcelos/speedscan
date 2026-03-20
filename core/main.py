@@ -2346,11 +2346,11 @@ class SpeedScan(ctk.CTk):
         
         is_small = tag.startswith("small_")
         
-        # Try common mount points directly with disk_usage
-        mount_points = ['/', '/home', '/var', '/opt', '/data', '/boot']
+        # Get disk usage for / and /home specifically (in order)
         disk_info = []
         
-        for mp in mount_points:
+        # First try / and /home
+        for mp in ['/', '/home']:
             try:
                 usage = psutil.disk_usage(mp)
                 if usage.total > 0:
@@ -2363,7 +2363,22 @@ class SpeedScan(ctk.CTk):
             except:
                 pass
         
-        # If no mount points found, try partitions
+        # If no mount points found, try other common mount points
+        if len(disk_info) < 2:
+            for mp in ['/var', '/opt', '/data', '/boot']:
+                try:
+                    usage = psutil.disk_usage(mp)
+                    if usage.total > 0:
+                        disk_info.append({
+                            'mount': mp,
+                            'percent': int(usage.percent),
+                            'used': usage.used // (1024**3),
+                            'total': usage.total // (1024**3)
+                        })
+                except:
+                    pass
+        
+        # If still no mount points found, try partitions
         if not disk_info:
             partitions = psutil.disk_partitions()
             for partition in partitions[:5]:

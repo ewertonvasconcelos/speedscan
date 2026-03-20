@@ -119,7 +119,10 @@ class SlotWidget(ctk.CTkFrame):
         if self.content_frame:
             self.content_frame.destroy()
         self.content_frame = ctk.CTkFrame(self, fg_color="transparent")
+        # Center content
         self.content_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        self.content_frame.grid_columnconfigure(0, weight=1)
+        self.content_frame.grid_rowconfigure(0, weight=1)
 
         callback_name = self.widget_type["callback"]
         callback = getattr(self.app, callback_name)
