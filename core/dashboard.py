@@ -103,9 +103,11 @@ class SlotWidget(ctk.CTkFrame):
         self.pack_propagate(False)
         self.configure(height=200)
 
+        # Use widget_title method for proper title
+        widget_name = app_instance.widget_title(widget_type)
         self.title_label = ctk.CTkLabel(
             self,
-            text=widget_type["name"],
+            text=widget_name,
             font=("Inter", 14, "bold"),
             text_color=app_instance.acc_color,
         )
@@ -125,7 +127,8 @@ class SlotWidget(ctk.CTkFrame):
 
     def set_widget_type(self, new_type):
         self.widget_type = new_type
-        self.title_label.configure(text=new_type["name"])
+        widget_name = self.app.widget_title(new_type)
+        self.title_label.configure(text=widget_name)
         self.update_content()
 
 

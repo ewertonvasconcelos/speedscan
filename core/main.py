@@ -1574,12 +1574,15 @@ class SpeedScan(ctk.CTk):
     def widget_title(self, widget_type):
         """Get title for a widget type."""
         titles = {
+            "cpu": "CPU",
+            "ram": "Memória RAM",
+            "disks": "Discos",
             "battery": "Bateria",
             "gpu": "GPU",
-            "temperatures": "Temperaturas",
+            "temps": "Temperaturas",
             "uptime": "Uptime",
             "kernel": "Kernel",
-            "distribution": "Distribuição",
+            "distro": "Distribuição",
             "hostname": "Hostname",
             "health": "Saúde",
         }
