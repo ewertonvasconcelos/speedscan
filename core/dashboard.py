@@ -66,7 +66,7 @@ DASHBOARD_CONFIG = Path.home() / ".speedscan_dashboard.json"
 # Widgets for big slots (top row)
 BIG_WIDGETS = [
     {"id": "cpu", "name": "CPU", "callback": "widget_cpu"},
-    {"id": "ram", "name": "Memória RAM", "callback": "widget_ram"},
+    {"id": "ram", "name": "RAM", "callback": "widget_ram"},
     {"id": "disks", "name": "Discos", "callback": "widget_disks"},
 ]
 
