@@ -186,6 +186,7 @@ class Dashboard(ctk.CTkFrame):
         self.app = app_instance
         self.slots = []
         self.small_widgets = []
+        self._available_widgets = list(SMALL_WIDGETS)  # Track available small widgets
 
         self.configure(fg_color="transparent")
 
@@ -245,10 +246,16 @@ class Dashboard(ctk.CTkFrame):
         # Clear existing
         for child in self.small_scroll.winfo_children():
             child.destroy()
-        self.small_widgets = []
+        
+        # Initialize small widgets list if empty (first time)
+        if not hasattr(self, '_available_widgets') or not self._available_widgets:
+            self._available_widgets = list(SMALL_WIDGETS)
+        
+        # Use the available widgets list for creating the grid
+        widget_list = self._available_widgets
         
         # Create widgets in 4-column grid
-        for idx, wtype in enumerate(SMALL_WIDGETS):
+        for idx, wtype in enumerate(widget_list):
             row = idx // 4
             col = idx % 4
             
@@ -264,6 +271,10 @@ class Dashboard(ctk.CTkFrame):
 
     def _on_small_click(self, widget_type):
         """Handle small widget click - rotate with big widgets."""
+        # Initialize available widgets list if needed
+        if not hasattr(self, '_available_widgets'):
+            self._available_widgets = list(SMALL_WIDGETS)
+        
         # Get current big widgets
         big_0 = self.slots[0].widget_type if hasattr(self.slots[0], 'widget_type') else None
         big_1 = self.slots[1].widget_type if hasattr(self.slots[1], 'widget_type') else None
@@ -276,16 +287,14 @@ class Dashboard(ctk.CTkFrame):
         if big_1:
             self._create_big_widget(2, big_1)
         
-        # Remove the clicked widget from small list and add big_2 to the end
-        # This ensures no duplicates and proper rotation
-        if widget_type in self.small_widgets:
-            self.small_widgets.remove(widget_type)
+        # Remove the clicked widget from available list
+        if widget_type in self._available_widgets:
+            self._available_widgets.remove(widget_type)
         
-        # If there was a widget in slot 2, add it to the end of small widgets
+        # If there was a widget in slot 2, add it to the end of available widgets
         if big_2:
-            # Check if big_2 is not already in small_widgets to avoid duplicates
-            if big_2 not in self.small_widgets:
-                self.small_widgets.append(big_2)
+            if big_2 not in self._available_widgets:
+                self._available_widgets.append(big_2)
         
         # Recreate small widgets grid
         self._create_small_widgets()
