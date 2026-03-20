@@ -63,19 +63,27 @@ def get_battery_color(percent):
 
 DASHBOARD_CONFIG = Path.home() / ".speedscan_dashboard.json"
 
-WIDGET_TYPES = [
-    {"id": "hostname", "name": "Hostname", "callback": "widget_hostname"},
-    {"id": "distro", "name": "Distribuição", "callback": "widget_distro"},
-    {"id": "kernel", "name": "Kernel", "callback": "widget_kernel"},
-    {"id": "uptime", "name": "Uptime", "callback": "widget_uptime"},
+# Widgets for big slots (top row)
+BIG_WIDGETS = [
     {"id": "cpu", "name": "CPU", "callback": "widget_cpu"},
     {"id": "ram", "name": "Memória RAM", "callback": "widget_ram"},
-    {"id": "gpu", "name": "GPU", "callback": "widget_gpu"},
     {"id": "disks", "name": "Discos", "callback": "widget_disks"},
+]
+
+# Widgets for small grid (bottom)
+SMALL_WIDGETS = [
     {"id": "battery", "name": "Bateria", "callback": "widget_battery"},
+    {"id": "gpu", "name": "GPU", "callback": "widget_gpu"},
     {"id": "temps", "name": "Temperaturas", "callback": "widget_temps"},
+    {"id": "uptime", "name": "Uptime", "callback": "widget_uptime"},
+    {"id": "kernel", "name": "Kernel", "callback": "widget_kernel"},
+    {"id": "distro", "name": "Distribuição", "callback": "widget_distro"},
+    {"id": "hostname", "name": "Hostname", "callback": "widget_hostname"},
     {"id": "health", "name": "Saúde", "callback": "widget_health"},
 ]
+
+# All widget types combined
+WIDGET_TYPES = BIG_WIDGETS + SMALL_WIDGETS
 
 
 class SlotWidget(ctk.CTkFrame):
@@ -121,169 +129,176 @@ class SlotWidget(ctk.CTkFrame):
         self.update_content()
 
 
+class SmallWidget(ctk.CTkFrame):
+    """Small widget for the grid (180x120)."""
+    
+    def __init__(self, parent, widget_type, app_instance, on_click=None, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.widget_type = widget_type
+        self.app = app_instance
+        self.on_click = on_click
+        self.configure(
+            fg_color=app_instance.bg_color,
+            corner_radius=10,
+            border_width=1,
+            border_color=app_instance.acc_color,
+            width=180,
+            height=120,
+            cursor="hand2",
+        )
+        self.grid_propagate(False)
+        
+        # Title
+        self.title_label = ctk.CTkLabel(
+            self,
+            text=widget_type["name"],
+            font=("Inter", 10, "bold"),
+            text_color=app_instance.acc_color,
+        )
+        self.title_label.grid(row=0, column=0, pady=(5, 0), sticky="n")
+        
+        # Content frame
+        self.content_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.content_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=2)
+        
+        self.grid_rowconfigure(1, weight=1)
+        
+        # Bind click
+        if on_click:
+            self.bind("<Button-1>", lambda e: on_click(self.widget_type))
+        
+        self.update_content()
+    
+    def update_content(self):
+        """Update widget content."""
+        for child in self.content_frame.winfo_children():
+            child.destroy()
+        
+        callback_name = self.widget_type["callback"]
+        callback = getattr(self.app, callback_name)
+        callback(self.content_frame, "small_" + self.widget_type["id"])
+
+
 class Dashboard(ctk.CTkFrame):
     def __init__(self, parent, app_instance, **kwargs):
         super().__init__(parent, **kwargs)
         self.app = app_instance
         self.slots = []
-        self.available_widgets = []
+        self.small_widgets = []
 
         self.configure(fg_color="transparent")
 
         self._build_ui()
-        self.load_state()
+        self._create_big_widgets()
+        self._create_small_widgets()
 
     def _build_ui(self):
+        # Big widgets frame (top row)
         slots_frame = ctk.CTkFrame(self, fg_color="transparent")
-        slots_frame.pack(fill="x", padx=10)
+        slots_frame.pack(fill="x", padx=10, pady=10)
+        
+        slots_frame.grid_columnconfigure(0, weight=1)
+        slots_frame.grid_columnconfigure(1, weight=1)
+        slots_frame.grid_columnconfigure(2, weight=1)
 
         for i in range(3):
             slot_frame = ctk.CTkFrame(slots_frame, fg_color="transparent")
-            slot_frame.pack(side="left", fill="both", expand=True, padx=5)
+            slot_frame.grid(row=0, column=i, padx=5, pady=5, sticky="nsew")
             self.slots.append(slot_frame)
 
+        # Small widgets label
         available_label = ctk.CTkLabel(
             self,
-            text="Widgets disponíveis:",
+            text="Widgets",
             font=("Inter", 14, "bold"),
             text_color=self.app.acc_color,
         )
-        available_label.pack(anchor="center", pady=(20, 10))
+        available_label.pack(anchor="w", padx=15, pady=(10, 5))
 
-        self.available_container = ctk.CTkFrame(self, fg_color="transparent")
-        self.available_container.pack(anchor="center", pady=5)
+        # Scrollable frame for small widgets (4 columns grid)
+        self.small_scroll = ctk.CTkScrollableFrame(
+            self,
+            fg_color="transparent",
+            label_text="",
+            scrollbar_button_color=self.app.acc_color,
+            scrollbar_button_hover_color=self.app.acc_color,
+        )
+        self.small_scroll.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # Configure 4 columns
+        for i in range(4):
+            self.small_scroll.grid_columnconfigure(i, weight=1, uniform="col")
 
-        self.row1_frame = ctk.CTkFrame(self.available_container, fg_color="transparent")
-        self.row1_frame.pack(pady=3)
-
-        self.row2_frame = ctk.CTkFrame(self.available_container, fg_color="transparent")
-        self.row2_frame.pack(pady=3)
-
-    def load_state(self):
-        if DASHBOARD_CONFIG.exists():
-            try:
-                with open(DASHBOARD_CONFIG) as f:
-                    data = json.load(f)
-                    slot_ids = data.get("slots", [])
-                    available_ids = data.get("available", [])
-            except Exception as e:
-                logging.error(f"Error loading dashboard configuration: {e}")
-                slot_ids = []
-                available_ids = []
-        else:
-            slot_ids = []
-            available_ids = []
-
-        if not slot_ids:
-            slot_ids = ["hostname", "distro", "uptime"]
-            available_ids = [w["id"] for w in WIDGET_TYPES if w["id"] not in slot_ids]
-
-        def find_widget(wid):
-            for w in WIDGET_TYPES:
-                if w["id"] == wid:
-                    return w
-            return WIDGET_TYPES[0]
-
-        slot_widgets = [find_widget(wid) for wid in slot_ids]
-        available_widgets = []
-        for wid in available_ids:
-            w = find_widget(wid)
-            if w not in slot_widgets:
-                available_widgets.append(w)
-        for w in WIDGET_TYPES:
-            if w not in slot_widgets and w not in available_widgets:
-                available_widgets.append(w)
-
-        self.available_widgets = available_widgets
-
-        for i, slot_frame in enumerate(self.slots):
-            if i < len(slot_widgets):
-                widget_type = slot_widgets[i]
-            else:
-                widget_type = WIDGET_TYPES[0]
+    def _create_big_widgets(self):
+        """Create the 3 big widget slots."""
+        for i in range(3):
+            widget_type = BIG_WIDGETS[i]
             slot_widget = SlotWidget(
-                slot_frame, i, widget_type, self.app, fg_color=self.app.bg_color
+                self.slots[i], i, widget_type, self.app, fg_color=self.app.bg_color
             )
             slot_widget.pack(fill="both", expand=True)
             self.slots[i] = slot_widget
 
-        self._update_available_buttons()
-        self.save_state()
+    def _create_small_widgets(self):
+        """Create small widgets in a 4-column grid."""
+        # Clear existing
+        for child in self.small_scroll.winfo_children():
+            child.destroy()
+        self.small_widgets = []
+        
+        # Create widgets in 4-column grid
+        for idx, wtype in enumerate(SMALL_WIDGETS):
+            row = idx // 4
+            col = idx % 4
+            
+            widget = SmallWidget(
+                self.small_scroll,
+                wtype,
+                self.app,
+                on_click=self._on_small_click,
+                fg_color=self.app.bg_color
+            )
+            widget.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+            self.small_widgets.append(widget)
+
+    def _on_small_click(self, widget_type):
+        """Handle small widget click - rotate with big widgets."""
+        # Get current big widgets
+        big_0 = self.slots[0].widget_type if hasattr(self.slots[0], 'widget_type') else None
+        big_1 = self.slots[1].widget_type if hasattr(self.slots[1], 'widget_type') else None
+        big_2 = self.slots[2].widget_type if hasattr(self.slots[2], 'widget_type') else None
+        
+        # Rotate: clicked goes to slot 0, slot 0->1, slot 1->2, slot 2->available
+        self._create_big_widget(0, widget_type)
+        if big_0:
+            self._create_big_widget(1, big_0)
+        if big_1:
+            self._create_big_widget(2, big_1)
+        
+        # Recreate small widgets (the clicked one goes up, big_2 goes down to small)
+        self._create_small_widgets()
+    
+    def _create_big_widget(self, index, widget_type):
+        """Create/update a big widget at the given index."""
+        # Clear the slot
+        for child in self.slots[index].winfo_children():
+            child.destroy()
+        
+        slot_widget = SlotWidget(
+            self.slots[index], index, widget_type, self.app, fg_color=self.app.bg_color
+        )
+        slot_widget.pack(fill="both", expand=True)
+        self.slots[index] = slot_widget
+
+    # Legacy methods for compatibility
+    def load_state(self):
+        pass
 
     def save_state(self):
-        data = {
-            "slots": [slot.widget_type["id"] for slot in self.slots],
-            "available": [w["id"] for w in self.available_widgets],
-        }
-        with open(DASHBOARD_CONFIG, "w") as f:
-            json.dump(data, f, indent=2)
+        pass
 
     def _update_available_buttons(self):
-        for child in self.row1_frame.winfo_children():
-            child.destroy()
-        for child in self.row2_frame.winfo_children():
-            child.destroy()
-
-        total = len(self.available_widgets)
-        if total >= 8:
-            first_half = self.available_widgets[:4]
-            second_half = self.available_widgets[4:8]
-        else:
-            half = (total + 1) // 2
-            first_half = self.available_widgets[:half]
-            second_half = self.available_widgets[half:]
-
-        for widget in first_half:
-            btn = ctk.CTkButton(
-                self.row1_frame,
-                text=f"➕ {widget['name']}",
-                fg_color=self.app.acc_color,
-                height=40,
-                corner_radius=8,
-                command=lambda w=widget: self.add_to_slot(w),
-                cursor="hand2",
-            )
-            btn.pack(side="left", padx=8, pady=5)
-
-        for widget in second_half:
-            btn = ctk.CTkButton(
-                self.row2_frame,
-                text=f"➕ {widget['name']}",
-                fg_color=self.app.acc_color,
-                height=40,
-                corner_radius=8,
-                command=lambda w=widget: self.add_to_slot(w),
-                cursor="hand2",
-            )
-            btn.pack(side="left", padx=8, pady=5)
-
-        self.row1_frame.pack_configure(anchor="center")
-        self.row2_frame.pack_configure(anchor="center")
+        pass
 
     def add_to_slot(self, widget):
-        current_slots = [slot.widget_type for slot in self.slots]
-
-        new_slot0 = widget
-        new_slot1 = current_slots[0]
-        new_slot2 = current_slots[1]
-        removed = current_slots[2]
-
-        self.slots[0].set_widget_type(new_slot0)
-        self.slots[1].set_widget_type(new_slot1)
-        self.slots[2].set_widget_type(new_slot2)
-
-        if widget in self.available_widgets:
-            self.available_widgets.remove(widget)
-        if removed not in [s.widget_type for s in self.slots]:
-            self.available_widgets.append(removed)
-
-        seen = set()
-        unique = []
-        for w in self.available_widgets:
-            if w["id"] not in seen:
-                seen.add(w["id"])
-                unique.append(w)
-        self.available_widgets = unique
-
-        self._update_available_buttons()
-        self.save_state()
+        pass
