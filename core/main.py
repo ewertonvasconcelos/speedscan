@@ -1677,7 +1677,7 @@ class SpeedScan(ctk.CTk):
         
         is_small = tag.startswith("small_")
         
-        full_version = platform.release()
+        full_version = platform.release().split("-")[0]
         
         # Get main version number (e.g., "6.14")
         version_parts = full_version.split(".")
