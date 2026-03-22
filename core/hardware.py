@@ -57,3 +57,52 @@ class HardwareInfo:
         except:
             pass
         return "Unknown"
+
+    def get_driver_info(self):
+        """Get driver information and version checks"""
+        info = {}
+        
+        if self.so == "Linux":
+            # GPU drivers
+            try:
+                out = subprocess.run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"], 
+                                  capture_output=True, text=True)
+                if out.returncode == 0:
+                    info["nvidia_driver"] = out.stdout.strip()
+                    info["nvidia_update"] = self._check_nvidia_update(out.stdout.strip())
+            except:
+                pass
+            
+            try:
+                out = subprocess.run(["amdgpu-pro", "--version"], capture_output=True, text=True)
+                if out.returncode == 0:
+                    info["amd_driver"] = out.stdout.strip()
+            except:
+                pass
+            
+            # Intel drivers usually come with kernel
+            info["intel_driver"] = f"Kernel {platform.release().split('-')[0]}"
+            
+            # Network drivers
+            try:
+                out = subprocess.run(["lspci", "-nn"], capture_output=True, text=True)
+                network_drivers = []
+                for line in out.stdout.splitlines():
+                    if "Network controller" in line or "Ethernet" in line:
+                        network_drivers.append(line.strip())
+                info["network_drivers"] = network_drivers
+            except:
+                pass
+                
+        return info
+    
+    def _check_nvidia_update(self, current_version):
+        """Check if NVIDIA driver has updates available"""
+        # Simplified check - in real implementation would query NVIDIA servers
+        latest_known = "550.90"  # This would be fetched from NVIDIA API
+        try:
+            current_parts = [int(x) for x in current_version.split('.')]
+            latest_parts = [int(x) for x in latest_known.split('.')]
+            return latest_parts > current_parts
+        except:
+            return False

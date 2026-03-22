@@ -164,15 +164,35 @@ class ActionMapper:
                 "Windows": "netsh wlan show interfaces",
                 "Darwin": "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I"
             },
-            "testdns": {
-                "Linux": "nslookup google.com",
-                "Windows": "nslookup google.com",
-                "Darwin": "nslookup google.com"
+            "1.1.1.1": {
+                "Linux": "echo 'nameserver 1.1.1.1' | sudo tee /etc/resolv.conf",
+                "Windows": "netsh interface ip set dns name='Ethernet' static 1.1.1.1",
+                "Darwin": "networksetup -setdnsservers Wi-Fi 1.1.1.1"
+            },
+            "8.8.8.8": {
+                "Linux": "echo 'nameserver 8.8.8.8' | sudo tee /etc/resolv.conf",
+                "Windows": "netsh interface ip set dns name='Ethernet' static 8.8.8.8",
+                "Darwin": "networksetup -setdnsservers Wi-Fi 8.8.8.8"
+            },
+            "94.140.14.14": {
+                "Linux": "echo 'nameserver 94.140.14.14' | sudo tee /etc/resolv.conf",
+                "Windows": "netsh interface ip set dns name='Ethernet' static 94.140.14.14",
+                "Darwin": "networksetup -setdnsservers Wi-Fi 94.140.14.14"
+            },
+            "auto": {
+                "Linux": "sudo dhclient -r && sudo dhclient",
+                "Windows": "netsh interface ip set dns name='Ethernet' dhcp",
+                "Darwin": "networksetup -setdnsservers Wi-Fi DHCP"
             },
             "ping": {
                 "Linux": "ping -c 4 google.com",
                 "Windows": "ping -n 4 google.com",
                 "Darwin": "ping -c 4 google.com"
+            },
+            "speedtest": {
+                "Linux": "speedtest-cli --simple",
+                "Windows": "echo Speedtest not available on Windows",
+                "Darwin": "echo Speedtest not available on macOS"
             },
             "services": {
                 "Linux": "systemctl list-units --type=service --state=running --no-pager",
@@ -189,10 +209,15 @@ class ActionMapper:
                 "Windows": "echo TRIM is not applicable on Windows (automatically handled)",
                 "Darwin": "sudo trimforce enable"
             },
-            "fix_broken": {
-                "Linux": "sudo apt --fix-broken install",
-                "Windows": "echo Not applicable on Windows",
-                "Darwin": "echo Not applicable on macOS"
+            "browsers": {
+                "Linux": "echo 'Browser cleanup implemented in BrowserCleaner module'",
+                "Windows": "echo 'Browser cleanup implemented in WindowsCleaner module'",
+                "Darwin": "echo 'Browser cleanup implemented in BrowserCleaner module'"
+            },
+            "cookies": {
+                "Linux": "echo 'Cookie management implemented in CookieManager module'",
+                "Windows": "echo 'Cookie management implemented in CookieManager module'",
+                "Darwin": "echo 'Cookie management implemented in CookieManager module'"
             },
             "public_ip": {
                 "Linux": "curl -s ifconfig.me",
@@ -425,6 +450,14 @@ class ActionHandler:
             return
         self._run_linux_command(["sudo", "apt", "--fix-broken", "install"], log, use_sudo=True)
         log.insert("end", "✅ Repair completed.\n")
+    def run_speedtest(self, log):
+        log.delete("1.0", "end")
+        log.insert("end", "📊 Running speed test...\n")
+        log.update()
+        if self.app.SO != "Linux":
+            log.insert("end", "⚠️ Speedtest only available on Linux.\n")
+            return
+        self._run_linux_command(["speedtest-cli", "--simple"], log, use_sudo=False)
     def special_command(self, cmd, log):
         if cmd == "video_drv":
             log.insert("end", "Detecting GPU...\nFunctionality under development.\n")
