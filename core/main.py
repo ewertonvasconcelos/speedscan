@@ -768,19 +768,20 @@ class SpeedScan(ctk.CTk):
         ax2 = fig.add_subplot(312)
         ax3 = fig.add_subplot(313)
 
-        ax1.plot(times, cpus, label="CPU %", color="#ff6b6b", linewidth=1.5)
-        ax1.set_ylabel("CPU %"); ax1.set_ylim(0,100); ax1.legend(); ax1.grid(True, linestyle="--", alpha=0.6)
+        ax1.plot(times, cpus, label=self._("CPU %"), color="#ff6b6b", linewidth=1.5)
+        ax1.set_ylabel(self._("CPU %")); ax1.set_ylim(0,100); ax1.legend(); ax1.grid(True, linestyle="--", alpha=0.6)
 
-        ax2.plot(times, mems, label="RAM %", color="#4ecdc4", linewidth=1.5)
-        ax2.set_ylabel("RAM %"); ax2.set_ylim(0,100); ax2.legend(); ax2.grid(True, linestyle="--", alpha=0.6)
+        ax2.plot(times, mems, label=self._("RAM %"), color="#4ecdc4", linewidth=1.5)
+        ax2.set_ylabel(self._("RAM %")); ax2.set_ylim(0,100); ax2.legend(); ax2.grid(True, linestyle="--", alpha=0.6)
 
-        ax3.plot(times, disks, label="Disk %", color="#ffe66d", linewidth=1.5)
+        ax3.plot(times, disks, label=self._("Disk %"), color="#ffe66d", linewidth=1.5)
         ax3.set_xlabel(self._("Time (hours from now)"));
-        ax3.set_ylabel("Disk %"); ax3.set_ylim(0,100); ax3.legend(); ax3.grid(True, linestyle="--", alpha=0.6)
+        ax3.set_ylabel(self._("Disk %")); ax3.set_ylim(0,100); ax3.legend(); ax3.grid(True, linestyle="--", alpha=0.6)
 
         fig.tight_layout()
         canvas = FigureCanvasTkAgg(fig, master=self.graph_frame)
         canvas.draw()
+        # Remover barra de rolagem desnecessária
         canvas.get_tk_widget().pack(fill="both", expand=True)
 
     def _update_ai_suggestions(self):
