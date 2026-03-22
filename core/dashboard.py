@@ -116,6 +116,7 @@ class SlotWidget(ctk.CTkFrame):
         self.update_content()
 
     def update_content(self):
+        """Update widget content."""
         if self.content_frame:
             self.content_frame.destroy()
         self.content_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -126,7 +127,148 @@ class SlotWidget(ctk.CTkFrame):
 
         callback_name = self.widget_type["callback"]
         callback = getattr(self.app, callback_name)
-        callback(self.content_frame, f"slot_{self.slot_index}")
+        
+        # Get data from widget method (no parameters)
+        data = callback()
+        
+        # Build UI based on widget type and data
+        self._build_widget_ui(data)
+
+    def _build_widget_ui(self, data):
+        """Build UI based on widget type and data."""
+        widget_id = self.widget_type["id"]
+        
+        if widget_id == "disks":
+            self._build_disks_ui(data)
+        elif widget_id == "gpu":
+            self._build_gpu_ui(data)
+        elif widget_id == "battery":
+            self._build_battery_ui(data)
+        elif widget_id == "cpu":
+            self._build_cpu_ui(data)
+        elif widget_id == "ram":
+            self._build_ram_ui(data)
+        elif widget_id == "hostname":
+            self._build_hostname_ui(data)
+        elif widget_id == "distro":
+            self._build_distro_ui(data)
+        elif widget_id == "kernel":
+            self._build_kernel_ui(data)
+        elif widget_id == "temps":
+            self._build_temps_ui(data)
+        else:
+            # Default: show data as text
+            label = ctk.CTkLabel(self.content_frame, text=str(data), 
+                                font=("Inter", 12), text_color=self.app.text_color)
+            label.pack(anchor="center", expand=True)
+    
+    def _build_disks_ui(self, data):
+        """Build disks UI from data."""
+        if not data:
+            label = ctk.CTkLabel(self.content_frame, text="N/A", 
+                                font=("Inter", 16, "bold"), text_color=self.app.text_color)
+            label.pack(anchor="center", expand=True)
+            return
+        
+        # Show root and home usage
+        for key, disk_data in data.items():
+            percent = disk_data['percent']
+            used_gb = disk_data['used'] // (1024**3)
+            total_gb = disk_data['total'] // (1024**3)
+            
+            # Disk name
+            name_label = ctk.CTkLabel(self.content_frame, text=f"💾 {disk_data['name']}", 
+                                    font=("Inter", 11, "bold"), text_color=self.app.acc_color)
+            name_label.pack(anchor="w", padx=10, pady=(8, 2))
+            
+            # Progress bar
+            progress = ctk.CTkProgressBar(self.content_frame, orientation="horizontal")
+            progress.set(percent / 100)
+            progress.configure(
+                progress_color=self._get_usage_color(percent),
+                fg_color="#3B3B3B",
+                height=12
+            )
+            progress.pack(fill="x", padx=10, pady=(0, 2))
+            
+            # Usage text
+            usage_label = ctk.CTkLabel(self.content_frame, 
+                                    text=f"{percent}% ({used_gb}GB / {total_gb}GB)",
+                                    font=("Inter", 10), text_color=self._get_usage_color(percent))
+            usage_label.pack(anchor="w", padx=10, pady=(0, 5))
+    
+    def _build_gpu_ui(self, data):
+        """Build GPU UI from data."""
+        label = ctk.CTkLabel(self.content_frame, text=f"🎮 {data}", 
+                            font=("Inter", 16, "bold"), text_color=self.app.acc_color)
+        label.pack(anchor="center", expand=True)
+    
+    def _build_battery_ui(self, data):
+        """Build battery UI from data."""
+        if isinstance(data, str):  # "No battery"
+            label = ctk.CTkLabel(self.content_frame, text="🔋 N/A", 
+                                font=("Inter", 16, "bold"), text_color=self.app.text_color)
+            label.pack(anchor="center", expand=True)
+            return
+        
+        percent = data['percent']
+        plugged = data['plugged']
+        status = data['status']
+        icon = "🔌" if plugged else "🔋"
+        
+        # Icon and percentage
+        icon_label = ctk.CTkLabel(self.content_frame, text=f"{icon} {percent}%", 
+                                 font=("Inter", 20, "bold"), 
+                                 text_color=self._get_battery_color(percent))
+        icon_label.pack(anchor="center", expand=True)
+        
+        # Status
+        status_label = ctk.CTkLabel(self.content_frame, text=status, 
+                                   font=("Inter", 10), 
+                                   text_color=self._get_battery_color(percent))
+        status_label.pack(anchor="center", pady=(0, 5))
+    
+    def _get_usage_color(self, percent):
+        """Get color based on usage percentage."""
+        if percent >= 90:
+            return "#ff4757"
+        elif percent >= 75:
+            return "#ffa502"
+        elif percent >= 50:
+            return "#ffd32c"
+        else:
+            return "#26de81"
+    
+    def _get_battery_color(self, percent):
+        """Get color based on battery percentage."""
+        if percent <= 20:
+            return "#ff4757"
+        elif percent <= 50:
+            return "#ffa502"
+        else:
+            return "#26de81"
+    
+    def _get_temp_color(self, temp):
+        """Get color based on temperature."""
+        if temp >= 80:
+            return "#ff4757"
+        elif temp >= 70:
+            return "#ffa502"
+        elif temp >= 60:
+            return "#ffd32c"
+        else:
+            return "#26de81"
+    
+    def _get_temp_icon(self, temp):
+        """Get icon based on temperature."""
+        if temp >= 80:
+            return "🔥"
+        elif temp >= 70:
+            return "♨️"
+        elif temp >= 60:
+            return "🌡️"
+        else:
+            return "❄️"
 
     def set_widget_type(self, new_type):
         self.widget_type = new_type
@@ -183,7 +325,156 @@ class SmallWidget(ctk.CTkFrame):
         
         callback_name = self.widget_type["callback"]
         callback = getattr(self.app, callback_name)
-        callback(self.content_frame, "small_" + self.widget_type["id"])
+        
+        # Get data from widget method (no parameters)
+        data = callback()
+        
+        # Build small UI based on widget type and data
+        self._build_small_widget_ui(data)
+    
+    def _build_small_widget_ui(self, data):
+        """Build small widget UI based on widget type and data."""
+        widget_id = self.widget_type["id"]
+        
+        if widget_id == "disks":
+            self._build_small_disks_ui(data)
+        elif widget_id == "gpu":
+            self._build_small_gpu_ui(data)
+        elif widget_id == "battery":
+            self._build_small_battery_ui(data)
+        elif widget_id == "cpu":
+            self._build_small_cpu_ui(data)
+        elif widget_id == "ram":
+            self._build_small_ram_ui(data)
+        elif widget_id == "hostname":
+            self._build_small_hostname_ui(data)
+        elif widget_id == "distro":
+            self._build_small_distro_ui(data)
+        elif widget_id == "kernel":
+            self._build_small_kernel_ui(data)
+        elif widget_id == "temps":
+            self._build_small_temps_ui(data)
+        else:
+            # Default: show data as text
+            label = ctk.CTkLabel(self.content_frame, text=str(data), 
+                                font=("Inter", 10), text_color=self.app.text_color)
+            label.pack(anchor="center", expand=True)
+    
+    def _build_small_disks_ui(self, data):
+        """Build small disks UI from data."""
+        if not data:
+            label = ctk.CTkLabel(self.content_frame, text="💾 N/A", 
+                                font=("Inter", 14, "bold"), text_color=self.app.text_color)
+            label.pack(anchor="center", expand=True)
+            return
+        
+        # Show main disk percentage
+        main_percent = data['root']['percent']
+        color = self._get_usage_color(main_percent)
+        
+        label = ctk.CTkLabel(self.content_frame, text=f"💾 {main_percent}%", 
+                            font=("Inter", 14, "bold"), text_color=color)
+        label.pack(anchor="center", expand=True)
+    
+    def _build_small_gpu_ui(self, data):
+        """Build small GPU UI from data."""
+        label = ctk.CTkLabel(self.content_frame, text="🎮 GPU", 
+                            font=("Inter", 14, "bold"), text_color=self.app.acc_color)
+        label.pack(anchor="center", expand=True)
+    
+    def _build_small_battery_ui(self, data):
+        """Build small battery UI from data."""
+        if isinstance(data, str):  # "No battery"
+            label = ctk.CTkLabel(self.content_frame, text="🔋 N/A", 
+                                font=("Inter", 14, "bold"), text_color=self.app.text_color)
+            label.pack(anchor="center", expand=True)
+            return
+        
+        percent = data['percent']
+        plugged = data['plugged']
+        icon = "🔌" if plugged else "🔋"
+        color = self._get_battery_color(percent)
+        
+        label = ctk.CTkLabel(self.content_frame, text=f"{icon} {percent}%", 
+                            font=("Inter", 14, "bold"), text_color=color)
+        label.pack(anchor="center", expand=True)
+    
+    def _build_small_hostname_ui(self, data):
+        """Build small hostname UI from data."""
+        label = ctk.CTkLabel(self.content_frame, text=f"🖥️ {data}", 
+                            font=("Inter", 14, "bold"), text_color=self.app.acc_color)
+        label.pack(anchor="center", expand=True)
+    
+    def _build_small_distro_ui(self, data):
+        """Build small distro UI from data."""
+        label = ctk.CTkLabel(self.content_frame, text=f"🐧 {data}", 
+                            font=("Inter", 14, "bold"), text_color=self.app.acc_color)
+        label.pack(anchor="center", expand=True)
+    
+    def _build_small_kernel_ui(self, data):
+        """Build small kernel UI from data."""
+        label = ctk.CTkLabel(self.content_frame, text=f"⚙️ {data}", 
+                            font=("Inter", 14, "bold"), text_color=self.app.acc_color)
+        label.pack(anchor="center", expand=True)
+    
+    def _build_small_cpu_ui(self, data):
+        """Build small CPU UI from data."""
+        if isinstance(data, dict):
+            percent = data.get('percent', 0)
+            color = self._get_usage_color(percent)
+            label = ctk.CTkLabel(self.content_frame, text=f"🔥 {percent}%", 
+                                font=("Inter", 14, "bold"), text_color=color)
+        else:
+            label = ctk.CTkLabel(self.content_frame, text=f"🔥 {data}", 
+                                font=("Inter", 14, "bold"), text_color=self.app.acc_color)
+        label.pack(anchor="center", expand=True)
+    
+    def _build_small_ram_ui(self, data):
+        """Build small RAM UI from data."""
+        if isinstance(data, dict):
+            percent = data.get('percent', 0)
+            color = self._get_usage_color(percent)
+            label = ctk.CTkLabel(self.content_frame, text=f"💾 {percent}%", 
+                                font=("Inter", 14, "bold"), text_color=color)
+        else:
+            label = ctk.CTkLabel(self.content_frame, text=f"💾 {data}", 
+                                font=("Inter", 14, "bold"), text_color=self.app.acc_color)
+        label.pack(anchor="center", expand=True)
+    
+    def _build_small_temps_ui(self, data):
+        """Build small temperature UI from data."""
+        if isinstance(data, dict):
+            temp = data.get('temp', 0)
+            color = self._get_temp_color(temp)
+            icon = self._get_temp_icon(temp)
+            label = ctk.CTkLabel(self.content_frame, text=f"{icon} {temp}°C", 
+                                font=("Inter", 14, "bold"), text_color=color)
+        else:
+            label = ctk.CTkLabel(self.content_frame, text=f"🌡️ {data}", 
+                                font=("Inter", 14, "bold"), text_color=self.app.acc_color)
+        label.pack(anchor="center", expand=True)
+    
+    def _get_temp_color(self, temp):
+        """Get color based on temperature."""
+        if temp >= 80:
+            return "#ff4757"
+        elif temp >= 70:
+            return "#ffa502"
+        elif temp >= 60:
+            return "#ffd32c"
+        else:
+            return "#26de81"
+    
+    def _get_temp_icon(self, temp):
+        """Get icon based on temperature."""
+        if temp >= 80:
+            return "🔥"
+        elif temp >= 70:
+            return "♨️"
+        elif temp >= 60:
+            return "🌡️"
+        else:
+            return "❄️"
 
 
 class Dashboard(ctk.CTkFrame):
