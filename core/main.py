@@ -829,7 +829,8 @@ class SpeedScan(ctk.CTk):
         lang_values = list(config.LANGUAGES.values())
         self.lang_var = ctk.StringVar(value=config.LANGUAGES.get(self.config_data.get("language","pt_BR"), "Português Brasileiro"))
         ctk.CTkOptionMenu(f_lang, values=lang_values, variable=self.lang_var, width=200,
-                          fg_color=self.bg_color, button_color=self.acc_color, button_hover_color=self.light_bg).pack(anchor="w", pady=2)
+                          fg_color=self.bg_color, button_color=self.acc_color, button_hover_color=self.light_bg,
+                          border_width=1, border_color=self.acc_color).pack(anchor="w", pady=2)
 
         f_scale = ctk.CTkFrame(parent, fg_color="transparent")
         f_scale.pack(fill="x", pady=5)
@@ -849,7 +850,8 @@ class SpeedScan(ctk.CTk):
         display = theme_display_map.get(current_theme, "Still")
         self.theme_var.set(display)
         ctk.CTkOptionMenu(f_theme, values=theme_names, variable=self.theme_var, width=200,
-                          fg_color=self.bg_color, button_color=self.acc_color, button_hover_color=self.light_bg).pack(anchor="w", pady=2)
+                          fg_color=self.bg_color, button_color=self.acc_color, button_hover_color=self.light_bg,
+                          border_width=1, border_color=self.acc_color).pack(anchor="w", pady=2)
 
         f_tab = ctk.CTkFrame(parent, fg_color="transparent")
         f_tab.pack(fill="x", pady=5)
@@ -1194,23 +1196,105 @@ class SpeedScan(ctk.CTk):
     # ------------------------------------------------------------------------
     # Helper command methods
     # ------------------------------------------------------------------------
-    def _run_ping(self, log, tag="net"):
-        print("DEBUG: _run_ping executando...")
-        self._run_subprocess(["ping", "-c", "4", "google.com"], log, tag=tag)
+    def _run_speedtest(self, log, tag):
+        self.action_handler.run_speedtest(log)
 
-    def _run_speedtest(self, log, tag="net"):
-        print("DEBUG: _run_speedtest called")
-        log.insert("end", "🌩️ Running speed test...\n")
+    def _run_ping(self, log, tag):
+        log.insert("end", "🏓 Pinging google.com...\n")
         log.see("end")
         log.update()
+        
         def callback(res):
-            log.insert("end", self.speed_tester.format_result(res) + "\n")
-            log.update()
-            # Mostrar botão de detalhes após primeira saída
-            if not self._btn_shown:
-                self._show_detail_button(tag)
-                self._btn_shown = True
-        self.speed_tester.run_test(callback)
+            if res and res.returncode == 0:
+                output_lines = []
+                for line in res.stdout.splitlines():
+                    if "time=" in line:
+                        time_ms = line.split("time=")[1].split()[0]
+                        log.insert("end", f"📶 Ping: {time_ms}ms\n")
+                        break
+                log.update()
+                if not self._btn_shown:
+                    self._show_detail_button(tag)
+                    self._btn_shown = True
+            elif res:
+                log.insert("end", "❌ Ping failed\n")
+                log.update()
+        
+        self._run_subprocess(["ping", "-c", "4", "google.com"], log, tag=tag, callback=callback)
+
+    def _run_testdns(self, log, tag):
+        log.insert("end", "🔍 Testing DNS resolution...\n")
+        log.see("end")
+        log.update()
+        self._run_subprocess(["nslookup", "google.com"], log, tag=tag)
+
+    def _run_change_dns(self, dns_ip, log):
+        cmd = self.action_mapper.dns_command(dns_ip)
+        log.insert("end", f"🌐 Changing DNS to {dns_ip}...\n")
+        log.see("end")
+        log.update()
+        self._run_subprocess(cmd.split() if isinstance(cmd, str) else cmd, log, use_sudo=True, tag="net")
+
+    def _run_firewall(self, log, tag):
+        log.insert("end", "🛡️ Checking firewall status...\n")
+        log.see("end")
+        log.update()
+        self._run_subprocess(["sudo", "ufw", "status"], log, tag=tag)
+
+    def _run_sec_updates(self, log, tag):
+        log.insert("end", "📦 Checking for security updates...\n")
+        log.see("end")
+        log.update()
+        self._run_subprocess(["sudo", "apt", "update"], log, tag=tag)
+
+    def _run_video_drv(self, log, tag):
+        log.insert("end", "🖥️ Checking video drivers...\n")
+        log.see("end")
+        log.update()
+        
+        driver_info = self.hw.get_driver_info()
+        
+        if driver_info.get("nvidia_driver"):
+            log.insert("end", f"🟢 NVIDIA Driver: {driver_info['nvidia_driver']}\n")
+            if driver_info.get("nvidia_update"):
+                log.insert("end", "⚠️ Update available! Check NVIDIA website.\n")
+            else:
+                log.insert("end", "✅ Driver is up to date.\n")
+        elif driver_info.get("amd_driver"):
+            log.insert("end", f"🔴 AMD Driver: {driver_info['amd_driver']}\n")
+            log.insert("end", "💡 Check AMD website for updates.\n")
+        else:
+            log.insert("end", f"🟢 Intel/Other: {driver_info.get('intel_driver', 'Unknown')}\n")
+            log.insert("end", "💡 Updates come with kernel updates.\n")
+        
+        log.update()
+
+    def _run_net_drv(self, log, tag):
+        log.insert("end", "🌐 Checking network drivers...\n")
+        log.see("end")
+        log.update()
+        
+        driver_info = self.hw.get_driver_info()
+        
+        if driver_info.get("network_drivers"):
+            log.insert("end", "📡 Network Controllers:\n")
+            for driver in driver_info["network_drivers"][:5]:
+                log.insert("end", f"  {driver}\n")
+        else:
+            log.insert("end", "❌ No network drivers found.\n")
+        
+        log.update()
+
+    def _run_auto_update(self, log, tag):
+        log.insert("end", "🔄 Configuring automatic updates...\n")
+        log.see("end")
+        log.update()
+        
+        log.insert("end", "⚠️ Auto-update configuration varies by distribution.\n")
+        log.insert("end", "💡 For Ubuntu/Debian: sudo dpkg-reconfigure -plow unattended-upgrades\n")
+        log.insert("end", "💡 For Fedora: sudo dnf install dnf-automatic\n")
+        log.insert("end", "💡 For Arch: sudo pacman -S pacman-contrib\n")
+        log.update()
 
     def _run_ethtool(self, log, tag="net"):
         log.insert("end", "🕵️ Running network diagnostic...\n")
