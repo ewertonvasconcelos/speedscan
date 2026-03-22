@@ -819,31 +819,32 @@ class SpeedScan(ctk.CTk):
     def _fill_settings(self, parent):
         f_user = ctk.CTkFrame(parent, fg_color="transparent")
         f_user.pack(fill="x", pady=5)
-        ctk.CTkLabel(f_user, text=self._("Username:"), font=("Inter", 12)).pack(anchor="w")
+        ctk.CTkLabel(f_user, text=self._("Username:"), font=("Inter", 12)).pack(anchor="center")
         self.entry_user = ctk.CTkEntry(f_user, placeholder_text=self._("Your name"), width=200)
-        self.entry_user.pack(anchor="w", pady=2)
+        self.entry_user.pack(anchor="center", pady=2)
         self.entry_user.insert(0, self.config_data.get("username",""))
 
         f_lang = ctk.CTkFrame(parent, fg_color="transparent")
         f_lang.pack(fill="x", pady=5)
-        ctk.CTkLabel(f_lang, text=self._("Language:"), font=("Inter", 12)).pack(anchor="w")
+        ctk.CTkLabel(f_lang, text=self._("Language:"), font=("Inter", 12)).pack(anchor="center")
         lang_values = list(config.LANGUAGES.values())
         self.lang_var = ctk.StringVar(value=config.LANGUAGES.get(self.config_data.get("language","pt_BR"), "Português Brasileiro"))
         ctk.CTkOptionMenu(f_lang, values=lang_values, variable=self.lang_var, width=200,
                           fg_color=self.bg_color, button_color=self.acc_color, button_hover_color=self.light_bg,
-                          border_width=1, border_color=self.acc_color).pack(anchor="w", pady=2)
+                          border_width=1, border_color=self.acc_color).pack(anchor="center", pady=2)
 
         f_scale = ctk.CTkFrame(parent, fg_color="transparent")
         f_scale.pack(fill="x", pady=5)
-        ctk.CTkLabel(f_scale, text=self._("UI Scale:"), font=("Inter", 12)).pack(anchor="w")
+        ctk.CTkLabel(f_scale, text=self._("UI Scale:"), font=("Inter", 12)).pack(anchor="center")
         scale_values = list(config.SCALES.values())
         self.scale_var = ctk.StringVar(value=config.SCALES.get(self.config_data.get("ui_scale","auto"), "Auto"))
         ctk.CTkOptionMenu(f_scale, values=scale_values, variable=self.scale_var, width=200,
-                          fg_color=self.bg_color, button_color=self.acc_color, button_hover_color=self.light_bg).pack(anchor="w", pady=2)
+                          fg_color=self.bg_color, button_color=self.acc_color, button_hover_color=self.light_bg,
+                          border_width=1, border_color=self.acc_color).pack(anchor="center", pady=2)
 
         f_theme = ctk.CTkFrame(parent, fg_color="transparent")
         f_theme.pack(fill="x", pady=5)
-        ctk.CTkLabel(f_theme, text=self._("Theme:"), font=("Inter", 12)).pack(anchor="w")
+        ctk.CTkLabel(f_theme, text=self._("Theme:"), font=("Inter", 12)).pack(anchor="center")
         theme_names = ["Still", "Tecno", "Snow"]
         self.theme_var = ctk.StringVar(value=theme_names[0])
         current_theme = self.config_data.get("theme","default")
@@ -852,55 +853,55 @@ class SpeedScan(ctk.CTk):
         self.theme_var.set(display)
         ctk.CTkOptionMenu(f_theme, values=theme_names, variable=self.theme_var, width=200,
                           fg_color=self.bg_color, button_color=self.acc_color, button_hover_color=self.light_bg,
-                          border_width=1, border_color=self.acc_color).pack(anchor="w", pady=2)
+                          border_width=1, border_color=self.acc_color).pack(anchor="center", pady=2)
 
         f_tab = ctk.CTkFrame(parent, fg_color="transparent")
         f_tab.pack(fill="x", pady=5)
         self.tab_var = ctk.BooleanVar(value=self.config_data.get("open_file_in_tab", False))
         ctk.CTkCheckBox(f_tab, text=self._("Open files in new tab"), variable=self.tab_var,
-                        onvalue=True, offvalue=False).pack(anchor="w")
+                        onvalue=True, offvalue=False).pack(anchor="center")
 
         f_level = ctk.CTkFrame(parent, fg_color="transparent")
         f_level.pack(fill="x", pady=5)
-        ctk.CTkLabel(f_level, text=self._("Expert level:"), font=("Inter", 12)).pack(anchor="w")
+        ctk.CTkLabel(f_level, text=self._("Expert level:"), font=("Inter", 12)).pack(anchor="center")
         self.level_var = ctk.IntVar(value=self.config_data.get("expert_level",1))
         r1 = ctk.CTkRadioButton(f_level, text=self._("Beginner"), variable=self.level_var, value=1, cursor="hand2")
-        r1.pack(anchor="w", pady=2)
+        r1.pack(anchor="center", pady=2)
         r2 = ctk.CTkRadioButton(f_level, text=self._("Intermediate"), variable=self.level_var, value=2, cursor="hand2")
-        r2.pack(anchor="w", pady=2)
+        r2.pack(anchor="center", pady=2)
         r3 = ctk.CTkRadioButton(f_level, text=self._("Advanced"), variable=self.level_var, value=3, cursor="hand2")
-        r3.pack(anchor="w", pady=2)
+        r3.pack(anchor="center", pady=2)
 
         f_sched = ctk.CTkFrame(parent, fg_color="transparent")
         f_sched.pack(fill="x", pady=10)
-        ctk.CTkLabel(f_sched, text=self._("Automation:"), font=("Inter", 14, "bold"), text_color=self.acc_color).pack(anchor="w", pady=(0,5))
+        ctk.CTkLabel(f_sched, text=self._("Automation:"), font=("Inter", 14, "bold"), text_color=self.acc_color).pack(anchor="center", pady=(0,5))
         
         self.auto_cache = ctk.BooleanVar(value=self.config_data.get("automation",{}).get("auto_cache", False))
         ctk.CTkCheckBox(f_sched, text=self._("Auto cache cleanup"), variable=self.auto_cache,
-                        onvalue=True, offvalue=False).pack(anchor="w")
+                        onvalue=True, offvalue=False).pack(anchor="center")
         
         self.auto_swap = ctk.BooleanVar(value=self.config_data.get("automation",{}).get("auto_swap", False))
         ctk.CTkCheckBox(f_sched, text=self._("Auto swap reset"), variable=self.auto_swap,
-                        onvalue=True, offvalue=False).pack(anchor="w")
+                        onvalue=True, offvalue=False).pack(anchor="center")
         
         self.auto_trim = ctk.BooleanVar(value=self.config_data.get("automation",{}).get("auto_trim", False))
         ctk.CTkCheckBox(f_sched, text=self._("Auto SSD trim"), variable=self.auto_trim,
-                        onvalue=True, offvalue=False).pack(anchor="w")
+                        onvalue=True, offvalue=False).pack(anchor="center")
         
         interval_frame = ctk.CTkFrame(f_sched, fg_color="transparent")
         interval_frame.pack(fill="x", pady=5)
-        ctk.CTkLabel(interval_frame, text=self._("Interval (hours):"), font=("Inter", 12)).pack(side="left")
+        ctk.CTkLabel(interval_frame, text=self._("Interval (hours):"), font=("Inter", 12)).pack(side="left", padx=(100,5))
         self.auto_interval = ctk.IntVar(value=self.config_data.get("automation",{}).get("interval", 24))
         interval_entry = ctk.CTkEntry(interval_frame, textvariable=self.auto_interval, width=80)
         interval_entry.pack(side="left", padx=5)
         
         self.sched_enabled = ctk.BooleanVar(value=self.config_data.get("schedule",{}).get("enabled", False))
         ctk.CTkCheckBox(f_sched, text=self._("Enable automation"), variable=self.sched_enabled,
-                        onvalue=True, offvalue=False).pack(anchor="w", pady=(10,0))
+                        onvalue=True, offvalue=False).pack(anchor="center", pady=(10,0))
 
         btn_apply = ctk.CTkButton(parent, text=self._("Apply"), fg_color=self.acc_color,
                                    command=self.apply_config, width=150)
-        btn_apply.pack(pady=20)
+        btn_apply.pack(anchor="center", pady=20)
 
     def apply_config(self):
         try:
