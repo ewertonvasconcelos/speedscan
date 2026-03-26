@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=SpeedScan
+Comment=System monitoring tool
+Exec=SpeedScan-Linux
+Icon=speedscan
+Categories=System;Monitor;

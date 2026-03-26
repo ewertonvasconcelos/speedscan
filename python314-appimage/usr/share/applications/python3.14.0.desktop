@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=python3.14.0
+Exec=python3.14
+Comment=A Python 3.14 runtime
+Icon=python
+Categories=Development;
+Terminal=true

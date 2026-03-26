@@ -1,0 +1,35 @@
+CORREÇÕES NECESSÁRIAS PARA O DASHBOARD.PY:
+
+1. PROBLEMA IDENTIFICADO:
+- TypeError: SpeedScan.widget_disks() takes 1 positional argument but 3 were given
+- Causa: dashboard.py linha 129 chama callback(self.content_frame, f'slot_{self.slot_index}')
+- Mas os métodos widget_* em main.py agora retornam dados, não recebem parâmetros
+
+2. SOLUÇÃO IMPLEMENTADA:
+- Modificar update_content() para chamar callback() sem parâmetros
+- Obter dados: data = callback()
+- Construir UI baseada nos dados retornados
+- Implementar _build_widget_ui() para cada tipo de widget
+
+3. ESTRUTURA CORRETA:
+- SlotWidget.update_content() chama métodos sem parâmetros
+- SmallWidget.update_content() chama métodos sem parâmetros  
+- Construção de UI baseada em dados (dicionários ou strings)
+- Centralização com pack(anchor='center')
+
+4. WIDGETS IMPLEMENTADOS:
+- disks: mostra root/home com barras de progresso
+- gpu: mostra nome da GPU
+- battery: mostra percentual, ícone e status
+- cpu, ram, hostname, distro, kernel, temps: interfaces genéricas
+
+5. TRATAMENTO DE ERROS:
+- Try/catch para capturar exceções
+- Verificação de tipos (isinstance)
+- Valores padrão para dados ausentes
+
+O arquivo dashboard.py precisa ser substituído pela versão corrigida que:
+- Remove os parâmetros extras das chamadas de callback
+- Implementa a construção de UI baseada nos dados retornados
+- Mantém a centralização dos elementos
+- Lida corretamente com os diferentes tipos de dados

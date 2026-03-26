@@ -1,0 +1,40 @@
+name: speedscan
+version: '1.0.0'
+summary: System monitoring tool
+description: |
+  SpeedScan is a comprehensive system monitoring tool that displays
+  real-time information about CPU, RAM, disk usage, battery, and more.
+
+grade: stable
+confinement: strict
+base: core22
+
+apps:
+  speedscan:
+    command: bin/speedscan
+    plugs:
+      - home
+      - network
+      - system-observe
+      - hardware-observe
+      - mount-observe
+
+parts:
+  speedscan:
+    plugin: python
+    source: .
+    python-packages:
+      - customtkinter
+      - psutil
+      - matplotlib
+      - requests
+      - speedtest-cli
+      - pillow
+    stage-packages:
+      - python3-tk
+
+  launcher:
+    plugin: dump
+    source: .
+    organize:
+      launch.sh: bin/speedscan

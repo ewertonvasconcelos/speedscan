@@ -1,0 +1,39 @@
+{
+    "app-id": "org.speedscan.SpeedScan",
+    "runtime": "org.freedesktop.Platform",
+    "runtime-version": "22.08",
+    "sdk": "org.freedesktop.Sdk",
+    "command": "speedscan",
+    "finish-args": [
+        "--share=ipc",
+        "--socket=x11",
+        "--device=dri",
+        "--filesystem=host:ro",
+        "--system-talk=true"
+    ],
+    "modules": [
+        {
+            "name": "python3",
+            "buildsystem": "simple",
+            "build-commands": [
+                "pip3 install --no-deps --prefix=/app customtkinter psutil matplotlib requests speedtest-cli pillow"
+            ]
+        },
+        {
+            "name": "speedscan",
+            "buildsystem": "simple",
+            "sources": [
+                {
+                    "type": "dir",
+                    "path": ".."
+                }
+            ],
+            "build-commands": [
+                "pip3 install --no-deps --prefix=/app .",
+                "install -Dm644 packaging/org.speedscan.SpeedScan.desktop /app/share/applications/org.speedscan.SpeedScan.desktop",
+                "install -Dm644 packaging/org.speedscan.SpeedScan.metainfo.xml /app/share/metainfo/org.speedscan.SpeedScan.metainfo.xml",
+                "install -Dm644 assets/icon.png /app/share/icons/hicolor/256x256/apps/org.speedscan.SpeedScan.png"
+            ]
+        }
+    ]
+}

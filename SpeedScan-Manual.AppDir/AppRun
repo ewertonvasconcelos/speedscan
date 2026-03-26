@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# SpeedScan AppImage Launcher
+HERE="$(dirname "$(readlink -f "${0}")")"
+
+# Verificar se o Python está disponível
+if ! command -v python3 &> /dev/null; then
+    echo "Erro: Python 3 não encontrado no sistema."
+    echo "Por favor, instale o Python 3 e o tkinter:"
+    echo "  sudo apt-get install python3 python3-tk"
+    exit 1
+fi
+
+# Verificar se o tkinter está disponível
+if ! python3 -c "import tkinter" 2>/dev/null; then
+    echo "Erro: tkinter não encontrado."
+    echo "Por favor, instale o tkinter:"
+    echo "  sudo apt-get install python3-tk"
+    exit 1
+fi
+
+# Configurar variáveis de ambiente
+export PYTHONPATH="${HERE}:${PYTHONPATH}"
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+
+# Executar o SpeedScan
+cd "${HERE}"
+python3 run_speedscan.py

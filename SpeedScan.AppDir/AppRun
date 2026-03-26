@@ -1,0 +1,22 @@
+#!/bin/bash
+# AppRun com Python do sistema
+
+# Detectar diretório do AppImage
+if [ -z "$APPDIR" ]; then
+    export APPDIR="$(dirname "$(readlink -f "$0")")"
+fi
+
+# Usar Python do sistema
+PYTHON_BIN=$(which python3)
+
+# Configurar ambiente
+export PYTHONPATH="$APPDIR/usr/share/speedscan:$APPDIR/usr/share/speedscan/core"
+
+# Verificar Python
+if [ ! -f "$PYTHON_BIN" ]; then
+    echo "Erro: Python do sistema não encontrado"
+    exit 1
+fi
+
+# Executar SpeedScan
+exec "$PYTHON_BIN" -m core.main

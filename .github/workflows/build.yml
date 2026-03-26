@@ -1,0 +1,148 @@
+name: Build SpeedScan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: appimage
+            script: packaging/build_appimage.sh
+          - name: deb
+            script: packaging/build_deb_rpm.sh
+          - name: snap
+            script: packaging/build_snap.sh
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-tk python3-dev
+        pip install customtkinter psutil matplotlib requests speedtest-cli pillow
+    
+    - name: Build ${{ matrix.name }}
+      run: |
+        chmod +x ${{ matrix.script }}
+        ${{ matrix.script }}
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: speedscan-${{ matrix.name }}
+        path: dist/
+
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        pip install customtkinter psutil matplotlib requests speedtest-cli pillow pyinstaller
+    
+    - name: Build Windows EXE
+      run: |
+        pyinstaller --onefile --windowed --name SpeedScan-Windows --add-data "assets;assets" core/main.py
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: speedscan-windows
+        path: dist/
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        pip install customtkinter psutil matplotlib requests speedtest-cli pillow pyinstaller create-dmg
+    
+    - name: Build macOS DMG
+      run: |
+        pyinstaller --onefile --windowed --name SpeedScan-macOS --add-data "assets:assets" core/main.py
+        create-dmg dist/SpeedScan-macOS.app dist/SpeedScan-macOS.dmg
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: speedscan-macos
+        path: dist/
+
+  build-android:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install buildozer
+      run: |
+        pip install buildozer
+        sudo apt-get update
+        sudo apt-get install -y build-essential git python3 python3-dev
+        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O commandlinetools.zip
+        unzip commandlinetools.zip
+        export ANDROID_SDK_ROOT=$PWD/cmdline-tools
+        export PATH=$PATH:$ANDROID_SDK_ROOT/bin
+        echo "y" | sdkmanager --sdk_root=${ANDROID_SDK_ROOT} "platforms;android-31"
+        echo "y" | sdkmanager --sdk_root=${ANDROID_SDK_ROOT} "build-tools;31.0.0"
+    
+    - name: Build Android APK
+      run: |
+        chmod +x packaging/build_android.sh
+        packaging/build_android.sh
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: speedscan-android
+        path: dist/
+
+  release:
+    if: github.event_name == 'release'
+    needs: [build-linux, build-windows, build-macos, build-android]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/download-artifact@v3
+    
+    - name: Upload Release Assets
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          speedscan-*/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
