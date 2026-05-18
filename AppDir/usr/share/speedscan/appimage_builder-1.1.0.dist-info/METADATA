@@ -1,0 +1,65 @@
+Metadata-Version: 2.1
+Name: appimage-builder
+Version: 1.1.0
+Summary: Recipe based AppImage creation meta-tool
+Home-page: https://github.com/AppImageCrafters/appimage-builder
+Author: Alexis Lopez Zubieta
+Author-email: contact@azubieta.net
+License: MIT
+Project-URL: Bug Tracker, https://github.com/AppImageCrafters/appimage-builder/issues
+Project-URL: Documentation, https://appimage-builder.readthedocs.io
+Project-URL: Source Code, https://github.com/AppImageCrafters/appimage-builder
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pyyaml (>=5)
+Requires-Dist: docker
+Requires-Dist: requests
+Requires-Dist: schema
+Requires-Dist: packaging
+Requires-Dist: questionary
+Requires-Dist: emrichen
+Requires-Dist: ruamel.yaml
+Requires-Dist: roam
+Requires-Dist: urllib3
+Requires-Dist: lief
+Requires-Dist: python-gnupg
+
+# appimage-builder
+
+*GNU/Linux packaging made easy!* ™
+
+## What is it?
+
+It's a tool for packing applications along with all of its dependencies using the
+system package manager to obtain binaries and resolve dependencies. It creates a 
+**self-sufficient** and **portable** bundle using the [AppImage](https://appimage.org)
+format.
+
+Features:
+- Real GNU/Linux packaging (no more distro packaging)
+- Simple recipes
+- Simple workflow
+- Backward and forward compatibility
+- One binary, many target systems.
+
+
+## Useful links
+
+- [Installation](https://appimage-builder.readthedocs.io/en/latest/intro/install.html)
+- [Getting help](https://appimage-builder.readthedocs.io/en/latest/index.html#getting-help)
+- [Tutorial](https://appimage-builder.readthedocs.io/en/latest/intro/tutorial.html)
+- [Documentation](https://appimage-builder.readthedocs.io)
+
+
+## Projects using appimage-builder
+
+[![Zeal](https://raw.githubusercontent.com/zealdocs/zeal/master/assets/freedesktop/128-apps-zeal.png)](https://github.com/zealdocs/zeal/)
+[![Kstars](https://invent.kde.org/education/kstars/-/raw/master/logo.png)](https://invent.kde.org/education/kstars)
+[![Glimpse](https://raw.githubusercontent.com/glimpse-editor/Glimpse/dev-g210/icons/Color/128/glimpse-icon.png)](https://github.com/glimpse-editor/Glimpse)
+[![MystiQ](https://raw.githubusercontent.com/swl-x/MystiQ/master/icons/mystiq_128x128.png)](https://github.com/swl-x/MystiQ)
+[![MAUI](https://invent.kde.org/uploads/-/system/group/avatar/1557/avatar.png?width=64)](https://invent.kde.org/maui)
+

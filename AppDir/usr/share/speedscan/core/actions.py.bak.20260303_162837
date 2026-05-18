@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+# core/actions.py
+# =============================================================================
+#   ███████╗██████╗ ███████╗███████╗██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
+#   ██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
+#   ███████╗██████╔╝█████╗  █████╗  ██║  ██║█████╗  ██║     ███████║██╔██╗ ██║
+#   ╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║██╔══╝  ██║     ██╔══██║██║╚██╗██║
+#   ███████║██║     ███████╗███████╗██████╔╝███████╗╚██████╗██║  ██║██║ ╚████║
+#   ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
+# =============================================================================
+# Mapeamento de comandos para diferentes sistemas operacionais
+# Versão 0.3.0-beta
+# =============================================================================
+
+import subprocess
+import os
+import tkinter as tk
+from tkinter import simpledialog
+
+class CommandRunner:
+    def __init__(self, so):
+        self.so = so
+
+    def run(self, cmd, use_sudo=False, parent=None):
+        try:
+            if use_sudo and self.so == "Linux":
+                if isinstance(cmd, list):
+                    cmd = ["pkexec"] + cmd
+                else:
+                    cmd = f"pkexec {cmd}"
+            elif use_sudo and self.so == "Windows":
+                if isinstance(cmd, list):
+                    cmd = ["runas", "/user:Administrator"] + cmd
+                else:
+                    cmd = f"runas /user:Administrator {cmd}"
+            elif use_sudo and self.so == "Darwin":
+                if isinstance(cmd, list):
+                    cmd_str = " ".join(cmd)
+                else:
+                    cmd_str = cmd
+                script = f'do shell script "{cmd_str}" with administrator privileges'
+                cmd = ["osascript", "-e", script]
+
+            if isinstance(cmd, list):
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            else:
+                proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            return proc
+        except Exception as e:
+            print(f"Erro ao executar comando: {e}")
+            return None
+
+class ActionMapper:
+    def __init__(self, so, runner, turbo_active=False):
+        self.so = so
+        self.runner = runner
+        self.turbo_active = turbo_active
+
+    def get_command(self, action):
+        commands = {
+            "cache": {
+                "Linux": "sudo du -sh /var/cache/apt/archives && sudo apt-get clean",
+                "Windows": "cleanmgr /sagerun:1",
+                "Darwin": "sudo du -sh ~/Library/Caches && sudo rm -rf ~/Library/Caches/*"
+            },
+            "swap": {
+                "Linux": "sudo swapoff -a && sudo swapon -a",
+                "Windows": "echo Swap reset não aplicável no Windows",
+                "Darwin": "sudo purge"
+            },
+            "check": {
+                "Linux": "sudo fsck -A -R -y",
+                "Windows": "chkdsk /f",
+                "Darwin": "sudo fsck -fy"
+            },
+            "turbo": {
+                "Linux": "echo Modo Turbo ativado (ajustes de performance)",
+                "Windows": "powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+                "Darwin": "sudo nvram boot-args=\"keepsyms=1 debug=0x144\""
+            },
+            "steam": {
+                "Linux": "steam",
+                "Windows": "start steam://",
+                "Darwin": "open -a Steam"
+            },
+            "lutris": {
+                "Linux": "lutris",
+                "Windows": "lutris",
+                "Darwin": "lutris"
+            },
+            "heroic": {
+                "Linux": "heroic",
+                "Windows": "heroic",
+                "Darwin": "heroic"
+            },
+            "bottles": {
+                "Linux": "bottles",
+                "Windows": "bottles",
+                "Darwin": "bottles"
+            },
+            "wine": {
+                "Linux": "wine --version",
+                "Windows": "wine --version",
+                "Darwin": "wine --version"
+            },
+            "mangohud": {
+                "Linux": "mangohud",
+                "Windows": "echo MangoHud não disponível no Windows",
+                "Darwin": "echo MangoHud não disponível no macOS"
+            },
+            "goverlay": {
+                "Linux": "goverlay",
+                "Windows": "echo GOverlay não disponível no Windows",
+                "Darwin": "echo GOverlay não disponível no macOS"
+            },
+            "dolphin": {
+                "Linux": "dolphin-emu",
+                "Windows": "start dolphin",
+                "Darwin": "open -a Dolphin"
+            },
+            "pci": {
+                "Linux": "lspci",
+                "Windows": "wmic path win32_pnpentity get /format:list",
+                "Darwin": "system_profiler SPHardwareDataType"
+            },
+            "update": {
+                "Linux": "sudo apt update && sudo apt upgrade -y",
+                "Windows": "wuauclt /detectnow /updatenow",
+                "Darwin": "softwareupdate -i -a"
+            },
+            "usb": {
+                "Linux": "lsusb",
+                "Windows": "wmic path win32_usbcontrollerdevice get /format:list",
+                "Darwin": "system_profiler SPUSBDataType"
+            },
+            "modules": {
+                "Linux": "lsmod",
+                "Windows": "driverquery",
+                "Darwin": "kextstat"
+            },
+            "cpu_info": {
+                "Linux": "lscpu",
+                "Windows": "wmic cpu get",
+                "Darwin": "sysctl -a | grep machdep.cpu"
+            },
+            "firmware": {
+                "Linux": "sudo dmesg | grep -i firmware",
+                "Windows": "wmic bios get",
+                "Darwin": "system_profiler SPFirmwareDataType"
+            },
+            "ethtool": {
+                "Linux": "sudo ethtool eth0",
+                "Windows": "ipconfig /all",
+                "Darwin": "ifconfig"
+            },
+            "dhclient": {
+                "Linux": "sudo dhclient -v",
+                "Windows": "ipconfig /renew",
+                "Darwin": "sudo dhclient"
+            },
+            "ports": {
+                "Linux": "sudo netstat -tulpn",
+                "Windows": "netstat -an",
+                "Darwin": "sudo lsof -i -P | grep LISTEN"
+            },
+            "traceroute": {
+                "Linux": "traceroute google.com",
+                "Windows": "tracert google.com",
+                "Darwin": "traceroute google.com"
+            },
+            "wifi": {
+                "Linux": "iwconfig",
+                "Windows": "netsh wlan show interfaces",
+                "Darwin": "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I"
+            },
+            "testdns": {
+                "Linux": "nslookup google.com",
+                "Windows": "nslookup google.com",
+                "Darwin": "nslookup google.com"
+            },
+            "ping": {
+                "Linux": "ping -c 4 google.com",
+                "Windows": "ping -n 4 google.com",
+                "Darwin": "ping -c 4 google.com"
+            },
+            "services": {
+                "Linux": "systemctl list-units --type=service --state=running --no-pager",
+                "Windows": "sc query | findstr /C:\"SERVICE_NAME\" /C:\"STATE\"",
+                "Darwin": "launchctl list"
+            },
+            "logs": {
+                "Linux": "journalctl -p 3 -b --no-pager | head -20",
+                "Windows": "Get-EventLog -LogName System -EntryType Error -Newest 20 | Format-Table -AutoSize",
+                "Darwin": "log show --predicate 'eventMessage contains \"error\"' --last 1h | head -20"
+            },
+        }
+        if action in commands:
+            return commands[action].get(self.so, "Comando não suportado neste SO")
+        return None
+
+    def dns_command(self, dns_ip):
+        if self.so == "Linux":
+            return f"echo 'nameserver {dns_ip}' | sudo tee /etc/resolv.conf"
+        elif self.so == "Windows":
+            return f"netsh interface ip set dns name='Ethernet' static {dns_ip}"
+        elif self.so == "Darwin":
+            return f"networksetup -setdnsservers Wi-Fi {dns_ip}"
+        return None

@@ -1,0 +1,40 @@
+version: 1
+script:
+  - rm -rf AppDir | true
+  - mkdir -p AppDir/usr/bin AppDir/usr/share/speedscan
+  - cp -r core/ assets/ AppDir/usr/share/speedscan/
+  - cp -r venv/lib64/python3.13/site-packages/* AppDir/usr/share/speedscan/ 2>/dev/null || true
+  - cp -r venv/lib/python3.13/site-packages/* AppDir/usr/share/speedscan/ 2>/dev/null || true
+  - echo '#!/bin/bash' > AppDir/AppRun
+  - echo 'HERE="$(dirname "$(readlink -f "$0")")"' >> AppDir/AppRun
+  - echo 'export PYTHONPATH="$HERE/usr/share/speedscan"' >> AppDir/AppRun
+  - echo 'cd "$HERE/usr/share/speedscan"' >> AppDir/AppRun
+  - echo 'python3 -m core.main' >> AppDir/AppRun
+  - chmod +x AppDir/AppRun
+AppDir:
+  path: ./AppDir
+  app_info:
+    id: io.github.ewertonvasconcelos.speedscan
+    name: SpeedScan
+    icon: speedscan
+    version: 1.0.0
+    exec: AppRun
+  apt:
+    arch: [amd64]
+    sources:
+      - sourceline: 'deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse'
+    include:
+      - python3
+      - python3-tk
+      - libx11-6
+      - libxext6
+  files:
+    include:
+      - /usr/lib/x86_64-linux-gnu/libtk8.6.so
+      - /usr/lib/x86_64-linux-gnu/libtcl8.6.so
+  runtime:
+    env:
+      PYTHONPATH: '/usr/share/speedscan'
+AppImage:
+  arch: x86_64
+  update-information: none

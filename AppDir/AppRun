@@ -1,0 +1,5 @@
+#!/bin/bash
+HERE="$(dirname "$(readlink -f "$0")")"
+export PYTHONPATH="$HERE/usr/share/speedscan"
+cd "$HERE/usr/share/speedscan"
+python3 -m core.main
