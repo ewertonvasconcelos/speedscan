@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+<<<<<<< HEAD
 echo "⚡ SpeedScan Automated Installer v1.0"
 echo "======================================"
 
@@ -82,19 +83,68 @@ echo "[5/5] Integrating to desktop environment..."
 mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps
 cp ~/projects/speedscan/assets/icon.png ~/.local/share/icons/hicolor/256x256/apps/speedscan.png 2>/dev/null || true
 
+=======
+echo "⚡ SpeedScan Installer v1.0"
+echo "=================================="
+
+PROJECT_DIR="$HOME/projects/speedscan"
+CONTAINER_NAME="speedscan-runtime"
+
+echo "[1/6] Detecting system..."
+if ! command -v distrobox &>/dev/null; then
+    echo "[!] Error: distrobox not found. Install first from https://distrobox.pratella.eu/"
+    exit 1
+fi
+
+echo "[2/6] Ensuring project directory exists..."
+mkdir -p $PROJECT_DIR
+cd $PROJECT_DIR
+
+echo "[3/6] Creating/updating container..."
+if distrobox list | grep -q "$CONTAINER_NAME"; then
+    echo "[-] Container exists, skipping creation"
+else
+    distrobox create \
+        --name "$CONTAINER_NAME" \
+        --image fedora:39 \
+        --volume "$PROJECT_DIR":"/home/user/projects/speedscan":rw \
+        --additional-packages "python3-pip python3-tkinter git gcc gtk3-devel cairo-devel pango-devel mesa-libGL"
+fi
+
+echo "[4/6] Installing Python dependencies..."
+distrobox enter "$CONTAINER_NAME" -- bash -c "pip install customtkinter matplotlib psutil requests numpy pytest black isort flake8 --quiet --break-system-packages" 2>/dev/null || \
+    distrobox enter "$CONTAINER_NAME" -- pip install customtkinter matplotlib psutil requests numpy pytest black isort flake8 --quiet
+
+echo "[5/6] Setting up CLI wrapper..."
+mkdir -p ~/.local/bin
+cat > ~/.local/bin/speedscan << WRAPEOF
+#!/bin/bash
+exec /usr/bin/distrobox enter speedscan-runtime -- python3 /home/user/projects/speedscan/core/main.py "\$@"
+WRAPEOF
+chmod +x ~/.local/bin/speedscan
+
+echo "[6/6] Desktop integration..."
+mkdir -p ~/.local/share/applications
+>>>>>>> 7473532 (fix: restore core files and update installer script)
 cat > ~/.local/share/applications/com.github.ewertonvasconcelos.speedscan.desktop << DESKEOF
 [Desktop Entry]
 Type=Application
 Name=SpeedScan
 Comment=Modern system diagnostic tool
+<<<<<<< HEAD
 Exec=/usr/local/bin/speedscan
 Icon=speedscan
+=======
+Exec=/home/$(whoami)/.local/bin/speedscan
+Icon=utilities-system-monitor
+>>>>>>> 7473532 (fix: restore core files and update installer script)
 Terminal=false
 Categories=System;Performance;Utility;
 StartupNotify=true
 DESKEOF
 
 echo ""
+<<<<<<< HEAD
 echo "✅ Installation Complete!"
 echo ""
 echo "Quick Start Guide:"
@@ -104,3 +154,9 @@ echo "  Development: Edit ~/projects/speedscan/"
 echo "  Updates: cd ~/projects/speedscan && git pull"
 echo ""
 echo "Uninstall: rm ~/.local/bin/speedscan ~/.local/share/applications/*.desktop && distrobox rm speedscan-runtime"
+=======
+echo "✅ Done!"
+echo "Usage: speedscan (CLI) or find 'SpeedScan' in menu"
+echo "Update: cd \$PROJECT_DIR && git pull && speedscan"
+echo "Uninstall: rm ~/.local/bin/speedscan ~/.local/share/applications/*.desktop && distrobox rm $CONTAINER_NAME"
+>>>>>>> 7473532 (fix: restore core files and update installer script)
