@@ -1,40 +1,26 @@
-speedscan-venv/
-venv/
+# Wheel cache
+wheels/
+
+# Python compiled
 __pycache__/
-*.pyc
-logs/
-*.log
-*.db
-.speedscan_conf
-.speedscan_dashboard.json
-dist/
-build/
-*.spec
-*.exe
-*.dmg
-*.deb
-*.rpm
-*.AppImage
+*.py[cod]
+*$py.class
 
-# Artefatos de build
-dist/
-build/
-*.spec
-*.db
-*.log
-*.deb
-*.rpm
-*.exe
-*.dmg
-*.AppImage
+# Virtual environments
+.venv/
+venv/
 
-# Scripts temporários
-fix_*.py
-debug_*.py
-temp_*.py
+# Builds
+build/
+dist/
+*.AppImage
+build-flatpak-sh*
+
+# Teste/temporarios
+cli.py
+core/arquivo.txt
 *.bak
-*.b64
-*.patch
-parte_*
-.coverage
-report.html
+.gitignore
+IDEA/
+.vscode/
+.idea/

@@ -1,0 +1,46 @@
+app-id: com.github.ewertonvasconcelos.speedscan
+runtime: org.kde.Platform
+runtime-version: '6.7'
+sdk: org.kde.Sdk
+command: speedscan
+
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=home
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - '*.la'
+  - "*.pyc"
+
+modules:
+  - name: python3-packages
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-index --find-links=/run/build/python3-packages/wheels --prefix=/app customtkinter matplotlib psutil requests numpy
+    sources:
+      - type: dir
+        path: wheels
+
+  - name: speedscan
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 run.sh /app/bin/speedscan
+      - install -Dm644 speedscan.desktop /app/share/applications/com.github.ewertonvasconcelos.speedscan.desktop
+      - cp -r core /app/share/speedscan/
+      - cp -r assets /app/share/speedscan/
+    sources:
+      - type: dir
+        path: .
+      - type: script
+        dest-filename: run.sh
+        commands:
+          - cd /app/share/speedscan
+          - export PYTHONPATH=/app/share/speedscan:$PYTHONPATH
+          - python3 -m speedscan "$@"
+      - type: file
+        path: speedscan.desktop

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=SpeedScan
+Comment=Ferramenta moderna de otimização e manutenção de sistemas
+Exec=speedscan %U
+Icon=com.github.ewertonvasconcelos.speedscan
+Terminal=false
+Categories=System;Performance;Utility;
+Keywords=performance;optimization;diagnostic;
+StartupNotify=true
