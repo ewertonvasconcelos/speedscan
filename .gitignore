@@ -1,26 +1,6 @@
-# Wheel cache
 wheels/
-
-# Python compiled
 __pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual environments
+*.pyc
 .venv/
-venv/
-
-# Builds
 build/
 dist/
-*.AppImage
-build-flatpak-sh*
-
-# Teste/temporarios
-cli.py
-core/arquivo.txt
-*.bak
-.gitignore
-IDEA/
-.vscode/
-.idea/
